@@ -87,14 +87,9 @@ function parseArgs(argv) {
   return { genre, volume, noChime, cmdArgs };
 }
 
-function run() {
-  const { genre, volume, noChime, cmdArgs } = parseArgs(process.argv);
+const { promptInteractive } = require("./interactive");
 
-  if (cmdArgs.length === 0) {
-    printHelp();
-    process.exit(1);
-  }
-
+function executeCommand(cmdArgs, genre, volume, noChime) {
   const player = new AudioPlayer();
   const startTime = Date.now();
   let musicStarted = false;
@@ -144,6 +139,26 @@ function run() {
     player.stop({ playChime: false });
     if (child.pid) child.kill("SIGTERM");
   });
+}
+
+async function run() {
+  const { genre, volume, noChime, cmdArgs } = parseArgs(process.argv);
+
+  if (cmdArgs.length === 0) {
+    if (process.stdin.isTTY) {
+      try {
+        const selection = await promptInteractive();
+        return executeCommand(selection.cmd, selection.genre, volume, noChime);
+      } catch (e) {
+        process.exit(0);
+      }
+    } else {
+      printHelp();
+      process.exit(1);
+    }
+  }
+
+  executeCommand(cmdArgs, genre, volume, noChime);
 }
 
 module.exports = { run, parseArgs };

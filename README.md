@@ -32,6 +32,33 @@ Most audio tools for terminals rely on static MP3 files or complex audio drivers
 
 Run directly with **`npx`** (no installation required!):
 
+### 1. Interactive Launcher Menu
+Just run `npx vibeaudio` with no arguments to get an interactive menu where you can choose your AI and music vibe:
+
+```bash
+npx vibeaudio
+```
+
+```
+🎧 VibeAudio — Interactive AI Launcher
+
+Which AI companion would you like to launch?
+❯ 1. Claude Code        [✓ installed]
+  2. Gemini CLI         [✓ installed]
+  3. Codex CLI
+  4. Aider
+  5. Ollama (Llama 3)
+  6. Custom command...
+
+Choose your sound vibe:
+❯ 1. ☕ Lo-Fi Focus     — Warm Rhodes electric piano & Kalimba drops
+  2. 🌌 Chill Synthwave  — '80s analog chorused pads & pulsing bass
+  3. 🕹️ Cozy 8-Bit      — Filtered retro chiptune arpeggios
+```
+
+### 2. Direct Command Wrapper
+Or wrap any tool directly:
+
 ```bash
 # Wrap Claude Code
 npx vibeaudio claude
