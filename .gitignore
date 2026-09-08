@@ -1,0 +1,6 @@
+node_modules/
+.DS_Store
+*.log
+.vibeaudio_cache/
+test_output/
+*.wav

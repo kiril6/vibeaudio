@@ -1,0 +1,37 @@
+{
+  "name": "vibeaudio",
+  "version": "0.1.0",
+  "description": "Context-aware procedural focus music while your AI coding tools (Claude Code, Gemini, Codex) think.",
+  "bin": {
+    "vibeaudio": "./bin/vibeaudio.js",
+    "vibe": "./bin/vibeaudio.js"
+  },
+  "main": "src/cli.js",
+  "scripts": {
+    "test": "node test/test-synth.js",
+    "start": "node bin/vibeaudio.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "claude-code",
+    "gemini",
+    "codex",
+    "cli",
+    "audio",
+    "lofi",
+    "synthwave",
+    "chiptune",
+    "focus-music",
+    "developer-tools"
+  ],
+  "author": "Kiril Delovski <delovski.office@gmail.com>",
+  "license": "MIT"
+}
