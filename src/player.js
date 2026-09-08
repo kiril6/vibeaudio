@@ -10,9 +10,13 @@ const { spawn, spawnSync } = require("child_process");
 const { generateLofiLoop } = require("./synth/lofi");
 const { generateSynthwaveLoop } = require("./synth/synthwave");
 const { generateChiptuneLoop } = require("./synth/chiptune");
+const { generateElectronicLoop } = require("./synth/electronic");
+const { generateZenLoop } = require("./synth/zen");
+const { generateJazzLoop } = require("./synth/jazz");
 const { generateChime } = require("./synth/chime");
 
 const CACHE_DIR = path.join(os.homedir(), ".vibeaudio", "cache");
+const AVAILABLE_GENRES = ["lofi", "synthwave", "8bit", "electronic", "jazz", "zen"];
 
 function ensureCacheDir() {
   if (!fs.existsSync(CACHE_DIR)) {
@@ -22,7 +26,12 @@ function ensureCacheDir() {
 
 function getAudioPath(genre) {
   ensureCacheDir();
-  const normalizedGenre = (genre || "lofi").toLowerCase();
+  let normalizedGenre = (genre || "lofi").toLowerCase();
+
+  if (normalizedGenre === "random" || normalizedGenre === "shuffle") {
+    normalizedGenre = AVAILABLE_GENRES[Math.floor(Math.random() * AVAILABLE_GENRES.length)];
+  }
+
   const filePath = path.join(CACHE_DIR, `loop_${normalizedGenre}.wav`);
 
   if (!fs.existsSync(filePath)) {
@@ -34,6 +43,18 @@ function getAudioPath(genre) {
       case "8bit":
       case "chiptune":
         buf = generateChiptuneLoop();
+        break;
+      case "electronic":
+      case "downtempo":
+        buf = generateElectronicLoop();
+        break;
+      case "jazz":
+      case "bossa":
+        buf = generateJazzLoop();
+        break;
+      case "zen":
+      case "ambient":
+        buf = generateZenLoop();
         break;
       case "lofi":
       default:

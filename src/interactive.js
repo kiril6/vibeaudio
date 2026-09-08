@@ -27,7 +27,11 @@ const AI_TOOLS = [
 const GENRES = [
   { name: "☕ Lo-Fi Focus", desc: "Warm Rhodes electric piano & Kalimba drops", id: "lofi" },
   { name: "🌌 Chill Synthwave", desc: "'80s analog chorused pads & pulsing bass", id: "synthwave" },
-  { name: "🕹️ Cozy 8-Bit", desc: "Filtered retro chiptune arpeggios", id: "8bit" }
+  { name: "🕹️ Cozy 8-Bit", desc: "Filtered retro chiptune arpeggios", id: "8bit" },
+  { name: "⚡ Melodic Electronic", desc: "Downtempo resonant plucks & tech pulse", id: "electronic" },
+  { name: "🎷 Midnight Jazz", desc: "ii-V-I piano chords & walking upright bass", id: "jazz" },
+  { name: "🎋 Zen Ambient", desc: "Meditative singing bowls & floating celestial pads", id: "zen" },
+  { name: "🎲 Shuffle / Random", desc: "Picks a surprise vibe each time", id: "random" }
 ];
 
 function selectMenu(title, items, renderItem) {

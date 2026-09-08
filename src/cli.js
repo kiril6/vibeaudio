@@ -25,17 +25,20 @@ Procedural focus music while your AI coding tools think.
   vibe --volume 30 npm test
 
 \x1b[1mOPTIONS:\x1b[0m
-  -g, --genre <name>     Select music genre: lofi (default), synthwave, 8bit
+  -g, --genre <name>     Select genre: lofi (default), synthwave, 8bit, electronic, jazz, zen, random
   -v, --volume <0-100>   Set playback volume (default: 40)
       --no-chime         Disable the resolution completion chime
   -h, --help             Show this help message
       --version          Show version
+
+\x1b[1mENVIRONMENT:\x1b[0m
+  VIBE_GENRE=<name>      Set persistent default genre (e.g. export VIBE_GENRE=jazz)
 `);
 }
 
 function parseArgs(argv) {
   const args = argv.slice(2);
-  let genre = "lofi";
+  let genre = (process.env.VIBE_GENRE || "lofi").toLowerCase();
   let volume = 0.40;
   let noChime = false;
   let cmdArgs = [];

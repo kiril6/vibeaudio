@@ -93,17 +93,38 @@ Now, whenever you run `claude`, music automatically plays while it works!
 
 ## 🎨 Music Genres
 
-Switch genres with the `-g` or `--genre` flag:
+VibeAudio includes **6 procedural music styles** synthesized entirely in code:
+
+| Genre | Style | Vibe |
+| :--- | :--- | :--- |
+| `lofi` | ☕ **Lo-Fi Focus** *(Default)* | Warm Rhodes electric piano chords & Kalimba drops |
+| `synthwave` | 🌌 **Chill Synthwave** | '80s analog chorused pads & pulsing retro bass |
+| `8bit` | 🕹️ **Cozy 8-Bit** | Filtered retro chiptune arpeggios & NES triangle bass |
+| `electronic` | ⚡ **Melodic Electronic** | Downtempo resonant plucks & crisp tech pulse |
+| `jazz` | 🎷 **Midnight Jazz** | Classic ii-V-I jazz piano chords & walking upright bass |
+| `zen` | 🎋 **Zen Ambient** | Meditative Tibetan singing bowls & celestial drone (zero rhythm) |
+| `random` | 🎲 **Shuffle Mode** | Picks a surprise genre on every run! |
+
+### Usage Examples:
+```bash
+# Launch with Melodic Electronic
+vibeaudio --genre electronic claude
+
+# Launch with Midnight Jazz
+vibeaudio --genre jazz gemini
+
+# Launch with Zen Ambient (no drums/rhythm)
+vibeaudio --genre zen claude
+
+# Surprise shuffle on every prompt
+vibeaudio --genre random claude
+```
+
+### ⚙️ Set Your Favorite Genre as Default
+Add this to your `~/.zshrc` or `~/.bashrc` to set a persistent default:
 
 ```bash
-# ☕ Lo-Fi Focus (Default): Warm Rhodes electric piano + Kalimba drops
-vibeaudio --genre lofi claude
-
-# 🌌 Chill Synthwave: '80s analog chorused pads + pulsing retro bass
-vibeaudio --genre synthwave claude
-
-# 🕹️ Cozy 8-Bit: Filtered chiptune arpeggios + NES triangle bass
-vibeaudio --genre 8bit claude
+export VIBE_GENRE=jazz     # or synthwave, electronic, zen, random
 ```
 
 ---

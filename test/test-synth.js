@@ -7,6 +7,9 @@ const { noteToFreq, createWavBuffer } = require("../src/synth/generator");
 const { generateLofiLoop } = require("../src/synth/lofi");
 const { generateSynthwaveLoop } = require("../src/synth/synthwave");
 const { generateChiptuneLoop } = require("../src/synth/chiptune");
+const { generateElectronicLoop } = require("../src/synth/electronic");
+const { generateZenLoop } = require("../src/synth/zen");
+const { generateJazzLoop } = require("../src/synth/jazz");
 const { generateChime } = require("../src/synth/chime");
 const { parseArgs } = require("../src/cli");
 
@@ -50,14 +53,32 @@ const chipBuf = generateChiptuneLoop(1.0);
 assert.ok(chipBuf.length > 44, "Chiptune buffer must have audio content");
 console.log(`   ✓ Chiptune engine generated ${chipBuf.length} bytes.`);
 
-// 6. Completion Chime Engine
-console.log("6. Testing Completion Chime Generator...");
+// 6. Melodic Electronic Engine
+console.log("6. Testing Electronic Generator...");
+const elecBuf = generateElectronicLoop(1.0);
+assert.ok(elecBuf.length > 44, "Electronic buffer must have audio content");
+console.log(`   ✓ Electronic engine generated ${elecBuf.length} bytes.`);
+
+// 7. Midnight Jazz Engine
+console.log("7. Testing Jazz Generator...");
+const jazzBuf = generateJazzLoop(1.0);
+assert.ok(jazzBuf.length > 44, "Jazz buffer must have audio content");
+console.log(`   ✓ Jazz engine generated ${jazzBuf.length} bytes.`);
+
+// 8. Zen Ambient Engine
+console.log("8. Testing Zen Ambient Generator...");
+const zenBuf = generateZenLoop(1.0);
+assert.ok(zenBuf.length > 44, "Zen buffer must have audio content");
+console.log(`   ✓ Zen engine generated ${zenBuf.length} bytes.`);
+
+// 9. Completion Chime Engine
+console.log("9. Testing Completion Chime Generator...");
 const chimeBuf = generateChime(1.0);
 assert.ok(chimeBuf.length > 44, "Chime buffer must have audio content");
 console.log(`   ✓ Chime engine generated ${chimeBuf.length} bytes.`);
 
-// 7. CLI Argument Parsing
-console.log("7. Testing CLI Argument Parsing...");
+// 10. CLI Argument Parsing
+console.log("10. Testing CLI Argument Parsing...");
 const parsed = parseArgs(["node", "bin/vibeaudio.js", "-g", "synthwave", "-v", "65", "--no-chime", "claude", "arg1"]);
 assert.strictEqual(parsed.genre, "synthwave");
 assert.strictEqual(parsed.volume, 0.65);
@@ -65,4 +86,4 @@ assert.strictEqual(parsed.noChime, true);
 assert.deepStrictEqual(parsed.cmdArgs, ["claude", "arg1"]);
 console.log("   ✓ CLI argument parser accurately processes flags and child commands.");
 
-console.log("\n\x1b[32mAll 7 tests passed successfully!\x1b[0m");
+console.log("\n\x1b[32mAll 10 tests passed successfully!\x1b[0m");
