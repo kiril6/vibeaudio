@@ -16,6 +16,18 @@ When AI coding agents take 15–45 seconds to reason, read files, and write code
 
 ---
 
+## ✨ What Makes VibeAudio Different
+
+Most audio tools for terminals rely on static MP3 files or complex audio drivers. VibeAudio was built specifically for modern AI workflows with a focus on deep work and zero annoyance:
+
+* 🧮 **Pure Procedural Synthesis (Zero MP3s):** Every note, chord, and pad is generated mathematically in real time with pure code. Zero audio assets to download, and zero loop fatigue.
+* 🛡️ **The 1.5-Second Grace Window:** Fast commands (like `/help` or quick queries) remain 100% silent. Music only begins if the AI takes longer than 1.5 seconds.
+* 🔔 **Audible Completion Chime:** When the AI finishes, the music resolves into a gentle chime. You can tab away to other windows and know the exact moment your answer is ready.
+* 🔌 **Universal Drop-In Wrapper:** Works out-of-the-box with **Claude Code, Gemini CLI, Codex, Aider**, or any terminal command (`vibe <command>`) with zero configuration.
+* 🪶 **Zero Build Dependencies:** Written in pure Node.js with no C++ bindings (`node-gyp`). `npx vibeaudio` runs instantly on any Mac without installation headaches.
+
+---
+
 ## 🚀 Quickstart
 
 Run directly with **`npx`** (no installation required!):
