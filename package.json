@@ -33,5 +33,13 @@
     "developer-tools"
   ],
   "author": "Kiril Delovski <delovski.office@gmail.com>",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kiril6/vibeaudio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kiril6/vibeaudio/issues"
+  },
+  "homepage": "https://github.com/kiril6/vibeaudio#readme"
 }
