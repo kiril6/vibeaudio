@@ -26,7 +26,7 @@ There is no build step, linter, or bundler — it's plain CommonJS Node (`engine
 - `--mcp` flag → `src/mcp.js#startMcpServer()` (stdio JSON-RPC server for desktop apps)
 - a `HOOK_ACTIONS` flag → `runHookAction()` → `src/hooks.js` (Claude Code hooks)
 - `--preview` / `--clear-cache` → one-shot utility paths
-- no command args + interactive TTY → `src/interactive.js#promptInteractive()` (menu to pick AI tool / genre / volume)
+- no command args + interactive TTY → `src/interactive.js#promptInteractive()` (menu to pick AI tool / delivery / genre / volume / reactive)
 - command args given → `executeCommand()` spawns the wrapped command directly
 
 **The wrapper flow** (`src/cli.js#executeCommand`): spawns the child command with `stdio: "inherit"`. A grace timer (default 1500ms, see `--grace`/`VIBE_GRACE_MS`) delays starting audio — if the child exits before the grace window, no music/chime plays at all.
@@ -69,6 +69,8 @@ Because the hook command is an absolute path to this checkout, `installHooks()` 
 Claude Code re-reads `settings.json` on each hook event rather than caching it at startup, so an install or a genre change lands on the user's **next prompt** with no restart — verified by editing the file mid-session and watching the next daemon spawn with the new argv. Don't reintroduce restart instructions. The one lag is the daemon already playing, which keeps its argv until that next prompt replaces it.
 
 Settings writes must stay non-destructive: the file belongs to the user and usually holds other tools' hooks. `isVibeHook()` identifies our entries by the `--hook-start`/`--hook-stop`/`--hook-tool` flags, `setHook()` replaces rather than appends (idempotent reinstall), malformed JSON aborts instead of being overwritten, and the prior file is copied to `settings.json.vibeaudio.bak`.
+
+`promptInteractive()` returns intent (`installHooks`, `reactive`) and never writes config itself — `cli.js#installHooksFromMenu` performs the install so both entry points share one code path and one report. The delivery and reactive questions are asked only for `claude`, since it is the only tool with hooks; asking elsewhere would offer a control that does nothing. An install that throws (npx checkout, malformed settings) is reported and the tool still launches — the user came to start an agent, not to configure one.
 
 **Reactive mode** (`--reactive`, opt-in) adds a `PreToolUse` hook that reads Claude Code's JSON payload from stdin and writes a tier to `~/.vibeaudio/intensity` (`TOOL_TIERS`). The daemon passes `readIntensity` to `AudioPlayer.start()` as the `intensity` option, and `playLoop()` prefers it over the time-based tier, falling back when there's no signal. It stays off by default because music that reacts to every tool call is music the user notices — the opposite of the product's goal. `hookStart`/`hookStop` clear the intensity file so one prompt's activity can't leak into the next.
 

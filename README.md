@@ -146,6 +146,20 @@ Choose your volume level:
   4. 📢 Loud (75%)         — Audible across the room
 ```
 
+Pick **Claude Code** and it asks how the music should run — hooks or just this session — and the hooks branch then offers [reactive mode](#reactive-mode-opt-in) too:
+
+```
+How should the music run?
+❯ 1. Claude Code hooks    — Music follows the agent's thinking. Set once, works with plain `claude`
+  2. This session only    — Music plays while the process lives - fine for one-shot commands
+
+Should the music react to what the agent is doing?
+❯ 1. Steady (recommended) — Intensity follows elapsed time, and stays ignorable
+  2. Reactive             — Intensity follows the tool in use - noticeable, by design
+```
+
+Choosing hooks installs them with the genre and volume you picked, then launches `claude` — the same thing `vibe --genre <g> --volume <n> --reactive --install-hooks` does, without memorising flags. The reactive question is only asked on that branch, because `--reactive` does nothing without hooks.
+
 Installed tools sort to the top. This list is a shortcut, not a compatibility list — **`vibe` wraps any command at all**, and "Custom command..." takes one you type (quoted arguments survive intact). Adding an entry is one line in [`src/interactive.js`](src/interactive.js) if you'd rather your tool be one keystroke.
 
 ### Direct Command Wrapper

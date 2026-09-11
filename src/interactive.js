@@ -174,7 +174,29 @@ const VOLUMES = [
   { name: "📢 Loud (75%)", desc: "Audible across the room", vol: 0.75 }
 ];
 
-async function promptInteractive() {
+// Only Claude Code has a hook system, so it is the only tool where the menu
+// has a real choice to offer. Everything else runs through the wrapper.
+const HOOK_TOOL = "claude";
+
+const DELIVERY = [
+  {
+    id: "hooks",
+    name: "Claude Code hooks",
+    desc: "Music follows the agent's thinking. Set once, works with plain `claude`"
+  },
+  {
+    id: "wrapper",
+    name: "This session only",
+    desc: "Music plays while the process lives - fine for one-shot commands"
+  }
+];
+
+const REACTIVE = [
+  { id: false, name: "Steady (recommended)", desc: "Intensity follows elapsed time, and stays ignorable" },
+  { id: true, name: "Reactive", desc: "Intensity follows the tool in use - noticeable, by design" }
+];
+
+async function promptInteractive({ hooksInstalled = false } = {}) {
   console.log(`\n\x1b[1m\x1b[35m🎧 VibeAudio — Interactive AI Launcher\x1b[0m\n`);
 
   // 1. Select AI Tool
@@ -202,24 +224,54 @@ async function promptInteractive() {
     finalCmd = await promptCustomCommand();
   }
 
-  // 2. Select Music Genre
+  // 2. How should the music be delivered?
+  // Without this the menu asks for a genre and volume that installed hooks
+  // then ignore - three questions asked, one honoured.
+  let delivery = "wrapper";
+  if (selectedTool.check === HOOK_TOOL) {
+    const chosen = await selectMenu(
+      hooksInstalled ? "Hooks are already installed. What now?" : "How should the music run?",
+      DELIVERY,
+      (item, num) => {
+        const label = item.id === "hooks" && hooksInstalled ? `${item.name} (reconfigure)` : item.name;
+        return `${num}. ${label} \x1b[90m— ${item.desc}\x1b[0m`;
+      }
+    );
+    delivery = chosen.id;
+  }
+
+  // 3. Select Music Genre
   const selectedGenre = await selectMenu(
     "Choose your sound vibe:",
     GENRES,
     (item, num) => `${num}. ${item.name} \x1b[90m— ${item.desc}\x1b[0m`
   );
 
-  // 3. Select Volume Preset
+  // 4. Select Volume Preset
   const selectedVolume = await selectMenu(
     "Choose your volume level:",
     VOLUMES,
     (item, num) => `${num}. ${item.name} \x1b[90m— ${item.desc}\x1b[0m`
   );
 
+  // 5. Reactive is a hooks-only feature, so only offer it on that branch -
+  // a control that does nothing is worse than no control.
+  let reactive = false;
+  if (delivery === "hooks") {
+    const chosen = await selectMenu(
+      "Should the music react to what the agent is doing?",
+      REACTIVE,
+      (item, num) => `${num}. ${item.name} \x1b[90m— ${item.desc}\x1b[0m`
+    );
+    reactive = chosen.id;
+  }
+
   return {
     cmd: finalCmd,
     genre: selectedGenre.id,
-    volume: selectedVolume.vol
+    volume: selectedVolume.vol,
+    installHooks: delivery === "hooks",
+    reactive
   };
 }
 

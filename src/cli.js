@@ -238,6 +238,25 @@ function parseArgs(argv) {
 const { promptInteractive } = require("./interactive");
 const { TerminalHud } = require("./hud");
 
+/**
+ * The menu's hooks branch. Same install the --install-hooks flag performs,
+ * reported the same way, so the two entry points can't drift.
+ */
+function installHooksFromMenu(genre, volume, reactive) {
+  const hooks = require("./hooks");
+  const { file, backup } = hooks.installHooks(genre, volume, hooks.settingsPath(), { reactive });
+
+  console.log(`\x1b[32m✔ VibeAudio hooks installed in ${file}\x1b[0m`);
+  if (backup) console.log(`  Previous settings backed up to ${backup}`);
+  console.log(`  UserPromptSubmit → music starts (${genre} @ ${Math.round(volume * 100)}%)`);
+  console.log(`  Stop             → music stops + success chime`);
+  if (reactive) {
+    console.log(`  PreToolUse       → intensity follows the tool in use (reactive mode)`);
+  }
+  console.log(`  Takes effect on your next prompt - no restart needed.`);
+  console.log(`  Remove them any time with: vibe --uninstall-hooks\n`);
+}
+
 function signalExitCode(signal) {
   return 128 + (os.constants.signals[signal] || 0);
 }
@@ -477,8 +496,22 @@ async function run() {
   if (cmdArgs.length === 0) {
     if (process.stdin.isTTY) {
       try {
-        const selection = await promptInteractive();
+        const selection = await promptInteractive({
+          hooksInstalled: hooksAlreadyCover(["claude"])
+        });
         const chosenVol = selection.volume !== undefined ? selection.volume : volume;
+
+        if (selection.installHooks) {
+          // The install can refuse (npx checkout) or abort (malformed
+          // settings). Either way, say so and still launch the tool the user
+          // asked for - they came here to start an agent, not to configure.
+          try {
+            installHooksFromMenu(selection.genre, chosenVol, selection.reactive);
+          } catch (err) {
+            console.error(`\x1b[31m[vibeaudio] ${err.message}\x1b[0m`);
+          }
+        }
+
         return executeCommand(selection.cmd, selection.genre, chosenVol, chimeVolume, grace, noChime, noHud);
       } catch (e) {
         process.exit(0);
