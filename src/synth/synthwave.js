@@ -11,7 +11,7 @@ const {
   createWavBuffer
 } = require("./generator");
 
-function generateSynthwaveLoop(durationSec = 6.8) {
+function generateSynthwaveLoop(durationSec = 6.8, tier = 2) {
   const totalSamples = Math.floor(SAMPLE_RATE * durationSec);
   const left = new Float64Array(totalSamples);
   const right = new Float64Array(totalSamples);
@@ -86,16 +86,22 @@ function generateSynthwaveLoop(durationSec = 6.8) {
   }
 
   // Progression: Dmin -> Bbmaj7 -> Cmaj
-  addPadChord(["D3", "F3", "A3", "D4"], 0.0, 3.2, 0.15);
-  addBass("D2", 0.0, 3.2);
+  const padVel = tier === 1 ? 0.18 : 0.15;
+  addPadChord(["D3", "F3", "A3", "D4"], 0.0, 3.2, padVel);
+  if (tier >= 2) addBass("D2", 0.0, 3.2);
 
-  addPadChord(["A#2", "F3", "A3", "D4"], 3.2, 1.8, 0.15);
-  addBass("A#1", 3.2, 1.8);
+  addPadChord(["A#2", "F3", "A3", "D4"], 3.2, 1.8, padVel);
+  if (tier >= 2) addBass("A#1", 3.2, 1.8);
 
-  addPadChord(["C3", "G3", "C4", "E4"], 5.0, 1.8, 0.15);
-  addBass("C2", 5.0, 1.8);
+  addPadChord(["C3", "G3", "C4", "E4"], 5.0, 1.8, padVel);
+  if (tier >= 2) addBass("C2", 5.0, 1.8);
 
-  addArp(["D5", "F5", "A5", "C6", "D6", "A5", "F5", "E5"], 0.6, 6.0);
+  if (tier >= 2) {
+    const arpNotes = tier === 3 
+      ? ["D5", "A5", "F5", "C6", "D6", "E6", "A5", "F5"]
+      : ["D5", "F5", "A5", "C6", "D6", "A5", "F5", "E5"];
+    addArp(arpNotes, 0.6, 6.0);
+  }
 
   // Stereo ping-pong delay
   const delayL = Math.floor(0.27 * SAMPLE_RATE);

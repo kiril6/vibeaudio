@@ -71,19 +71,38 @@ const zenBuf = generateZenLoop(1.0);
 assert.ok(zenBuf.length > 44, "Zen buffer must have audio content");
 console.log(`   ✓ Zen engine generated ${zenBuf.length} bytes.`);
 
-// 9. Completion Chime Engine
-console.log("9. Testing Completion Chime Generator...");
-const chimeBuf = generateChime(1.0);
-assert.ok(chimeBuf.length > 44, "Chime buffer must have audio content");
-console.log(`   ✓ Chime engine generated ${chimeBuf.length} bytes.`);
+// 9. Outcome Chimes (Success vs Failure)
+console.log("9. Testing Outcome Chimes (Success & Failure)...");
+const { generateSuccessChime, generateFailureChime } = require("../src/synth/chime");
+const successBuf = generateSuccessChime(1.0);
+const failureBuf = generateFailureChime(1.0);
+assert.ok(successBuf.length > 44, "Success chime must have audio content");
+assert.ok(failureBuf.length > 44, "Failure chime must have audio content");
+console.log(`   ✓ Success chime (${successBuf.length}b) and Failure chime (${failureBuf.length}b) generated.`);
 
-// 10. CLI Argument Parsing
-console.log("10. Testing CLI Argument Parsing...");
-const parsed = parseArgs(["node", "bin/vibeaudio.js", "-g", "synthwave", "-v", "65", "--no-chime", "claude", "arg1"]);
+// 10. Adaptive Escalation Tiers
+console.log("10. Testing Adaptive Escalation Tiers...");
+const tier1Buf = generateLofiLoop(1.0, 1);
+const tier3Buf = generateLofiLoop(1.0, 3);
+assert.ok(tier1Buf.length > 44, "Tier 1 loop must have content");
+assert.ok(tier3Buf.length > 44, "Tier 3 loop must have content");
+console.log("   ✓ Adaptive escalation tiers (Tier 1 Ambient -> Tier 3 Peak) generate successfully.");
+
+// 11. Terminal HUD & Waveform
+console.log("11. Testing Terminal HUD & Waveform...");
+const { TerminalHud } = require("../src/hud");
+const hud = new TerminalHud("synthwave");
+assert.strictEqual(hud.genre, "synthwave");
+console.log("   ✓ Terminal HUD initializes correctly.");
+
+// 12. CLI Argument Parsing
+console.log("12. Testing CLI Argument Parsing...");
+const parsed = parseArgs(["node", "bin/vibeaudio.js", "-g", "synthwave", "-v", "65", "--no-chime", "--no-hud", "claude", "arg1"]);
 assert.strictEqual(parsed.genre, "synthwave");
 assert.strictEqual(parsed.volume, 0.65);
 assert.strictEqual(parsed.noChime, true);
+assert.strictEqual(parsed.noHud, true);
 assert.deepStrictEqual(parsed.cmdArgs, ["claude", "arg1"]);
-console.log("   ✓ CLI argument parser accurately processes flags and child commands.");
+console.log("   ✓ CLI argument parser accurately processes flags, HUD, and child commands.");
 
-console.log("\n\x1b[32mAll 10 tests passed successfully!\x1b[0m");
+console.log("\n\x1b[32mAll 12 tests passed successfully!\x1b[0m");

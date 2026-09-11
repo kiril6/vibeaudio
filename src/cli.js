@@ -41,6 +41,7 @@ function parseArgs(argv) {
   let genre = (process.env.VIBE_GENRE || "lofi").toLowerCase();
   let volume = 0.40;
   let noChime = false;
+  let noHud = false;
   let cmdArgs = [];
 
   let i = 0;
@@ -82,18 +83,26 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--no-hud") {
+      noHud = true;
+      i += 1;
+      continue;
+    }
+
     // Everything from here is the child command
     cmdArgs = args.slice(i);
     break;
   }
 
-  return { genre, volume, noChime, cmdArgs };
+  return { genre, volume, noChime, noHud, cmdArgs };
 }
 
 const { promptInteractive } = require("./interactive");
+const { TerminalHud } = require("./hud");
 
-function executeCommand(cmdArgs, genre, volume, noChime) {
+function executeCommand(cmdArgs, genre, volume, noChime, noHud = false) {
   const player = new AudioPlayer();
+  const hud = !noHud ? new TerminalHud(genre) : null;
   const startTime = Date.now();
   let musicStarted = false;
 
@@ -101,6 +110,7 @@ function executeCommand(cmdArgs, genre, volume, noChime) {
   const graceTimer = setTimeout(() => {
     musicStarted = true;
     player.start(genre, volume);
+    if (hud) hud.start();
   }, GRACE_PERIOD_MS);
 
   const command = cmdArgs[0];
@@ -114,13 +124,17 @@ function executeCommand(cmdArgs, genre, volume, noChime) {
   const cleanup = (code = 0) => {
     clearTimeout(graceTimer);
     const elapsed = Date.now() - startTime;
-    const shouldChime = musicStarted && !noChime && code === 0 && elapsed > GRACE_PERIOD_MS;
-    player.stop({ playChime: shouldChime, volume: Math.min(0.5, volume * 0.9) });
+    const outcome = code === 0 ? "success" : "failure";
+    const shouldChime = musicStarted && !noChime && elapsed > GRACE_PERIOD_MS;
+
+    if (hud) hud.stop({ outcome, code });
+    player.stop({ playChime: shouldChime, outcome, volume: Math.min(0.5, volume * 0.9) });
     process.exit(code);
   };
 
   child.on("error", (err) => {
     clearTimeout(graceTimer);
+    if (hud) hud.stop({ outcome: "failure", code: 1 });
     player.stop({ playChime: false });
     console.error(`\x1b[31m[vibeaudio] Failed to start command '${command}':\x1b[0m ${err.message}`);
     process.exit(1);
@@ -133,25 +147,27 @@ function executeCommand(cmdArgs, genre, volume, noChime) {
   // Relay termination signals cleanly
   process.on("SIGINT", () => {
     clearTimeout(graceTimer);
+    if (hud) hud.stop({ outcome: "failure", code: 130 });
     player.stop({ playChime: false });
     if (child.pid) child.kill("SIGINT");
   });
 
   process.on("SIGTERM", () => {
     clearTimeout(graceTimer);
+    if (hud) hud.stop({ outcome: "failure", code: 143 });
     player.stop({ playChime: false });
     if (child.pid) child.kill("SIGTERM");
   });
 }
 
 async function run() {
-  const { genre, volume, noChime, cmdArgs } = parseArgs(process.argv);
+  const { genre, volume, noChime, noHud, cmdArgs } = parseArgs(process.argv);
 
   if (cmdArgs.length === 0) {
     if (process.stdin.isTTY) {
       try {
         const selection = await promptInteractive();
-        return executeCommand(selection.cmd, selection.genre, volume, noChime);
+        return executeCommand(selection.cmd, selection.genre, volume, noChime, noHud);
       } catch (e) {
         process.exit(0);
       }
@@ -161,7 +177,7 @@ async function run() {
     }
   }
 
-  executeCommand(cmdArgs, genre, volume, noChime);
+  executeCommand(cmdArgs, genre, volume, noChime, noHud);
 }
 
 module.exports = { run, parseArgs };

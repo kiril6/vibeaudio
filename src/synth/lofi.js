@@ -9,7 +9,7 @@ const {
   createWavBuffer
 } = require("./generator");
 
-function generateLofiLoop(durationSec = 6.4) {
+function generateLofiLoop(durationSec = 6.4, tier = 2) {
   const totalSamples = Math.floor(SAMPLE_RATE * durationSec);
   const left = new Float64Array(totalSamples);
   const right = new Float64Array(totalSamples);
@@ -70,23 +70,39 @@ function generateLofiLoop(durationSec = 6.4) {
   }
 
   // Chords: Fmaj9 -> Cmaj9
-  addRhodesChord(["F2", "A3", "C4", "E4", "G4"], 0.0, 3.2, 0.19);
-  addRhodesChord(["C2", "G3", "B3", "D4", "E4"], 3.2, 3.2, 0.19);
+  const chordVel = tier === 1 ? 0.16 : tier === 3 ? 0.22 : 0.19;
+  addRhodesChord(["F2", "A3", "C4", "E4", "G4"], 0.0, 3.2, chordVel);
+  addRhodesChord(["C2", "G3", "B3", "D4", "E4"], 3.2, 3.2, chordVel);
 
-  // Soothing Kalimba drops
-  const drops = [
-    { note: "E5", time: 0.5, pan: 0.3 },
-    { note: "G5", time: 1.2, pan: 0.7 },
-    { note: "C6", time: 1.8, pan: 0.4 },
-    { note: "B5", time: 2.5, pan: 0.65 },
-    { note: "E5", time: 3.7, pan: 0.35 },
-    { note: "D5", time: 4.4, pan: 0.65 },
-    { note: "G5", time: 5.1, pan: 0.45 },
-    { note: "C6", time: 5.8, pan: 0.55 }
-  ];
+  // Kalimba drops activate on Tier 2 and Tier 3
+  if (tier >= 2) {
+    const drops = [
+      { note: "E5", time: 0.5, pan: 0.3 },
+      { note: "G5", time: 1.2, pan: 0.7 },
+      { note: "C6", time: 1.8, pan: 0.4 },
+      { note: "B5", time: 2.5, pan: 0.65 },
+      { note: "E5", time: 3.7, pan: 0.35 },
+      { note: "D5", time: 4.4, pan: 0.65 },
+      { note: "G5", time: 5.1, pan: 0.45 },
+      { note: "C6", time: 5.8, pan: 0.55 }
+    ];
 
-  for (const d of drops) {
-    addKalimba(d.note, d.time, d.pan, 0.14);
+    for (const d of drops) {
+      addKalimba(d.note, d.time, d.pan, 0.14);
+    }
+  }
+
+  // Tier 3: Higher octave shimmer drops (richer energy for long prompts)
+  if (tier >= 3) {
+    const shimmer = [
+      { note: "G6", time: 0.8, pan: 0.6 },
+      { note: "E6", time: 2.1, pan: 0.3 },
+      { note: "B6", time: 3.9, pan: 0.7 },
+      { note: "G6", time: 4.9, pan: 0.4 }
+    ];
+    for (const s of shimmer) {
+      addKalimba(s.note, s.time, s.pan, 0.09);
+    }
   }
 
   // Warm stereo delay feedback

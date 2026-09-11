@@ -22,7 +22,9 @@ Most audio tools for terminals rely on static MP3 files or complex audio drivers
 
 * 🧮 **Pure Procedural Synthesis (Zero MP3s):** Every note, chord, and pad is generated mathematically in real time with pure code. Zero audio assets to download, and zero loop fatigue.
 * 🛡️ **The 1.5-Second Grace Window:** Fast commands (like `/help` or quick queries) remain 100% silent. Music only begins if the AI takes longer than 1.5 seconds.
-* 🔔 **Audible Completion Chime:** When the AI finishes, the music resolves into a gentle chime. You can tab away to other windows and know the exact moment your answer is ready.
+* 📈 **Adaptive Time Escalation:** Music builds energy naturally as the prompt runs (Tier 1: 0–15s gentle intro → Tier 2: 15–45s main groove → Tier 3: 45s+ deep focus layer). You can literally hear how deep into the task the AI is.
+* 🔔 **Outcome-Aware Chimes:** Plays a bright ascending chime on success (`exit 0`), and a soft, melancholic descending minor chord on error (`exit 1`).
+* 🌊 **ASCII Waveform HUD:** Real-time animated audio wave and timer in your terminal and window/tab title.
 * 🔌 **Universal Drop-In Wrapper:** Works out-of-the-box with **Claude Code, Gemini CLI, Codex, Aider**, or any terminal command (`vibe <command>`) with zero configuration.
 * 🪶 **Zero Build Dependencies:** Written in pure Node.js with no C++ bindings (`node-gyp`). `npx vibeaudio` runs instantly on any Mac without installation headaches.
 
@@ -133,9 +135,10 @@ export VIBE_GENRE=jazz     # or synthwave, electronic, zen, random
 
 | Flag | Description | Default |
 | :--- | :--- | :--- |
-| `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit` | `lofi` |
+| `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `random` | `lofi` |
 | `-v, --volume <0-100>` | Set playback volume | `40` |
-| `--no-chime` | Disable the completion resolution chime | `false` |
+| `--no-chime` | Disable the resolution completion chime | `false` |
+| `--no-hud` | Disable terminal window/tab title animation | `false` |
 | `-h, --help` | Show help and options | — |
 | `--version` | Show version | — |
 
@@ -145,7 +148,8 @@ export VIBE_GENRE=jazz     # or synthwave, electronic, zen, random
 
 * **1.5-Second Grace Window:** Fast commands (like `/help` or quick queries) never trigger music. Music only starts if the AI takes longer than 1.5 seconds.
 * **Instant Termination:** The exact millisecond the AI command finishes or receives `Ctrl+C`, audio stops immediately.
-* **Resolution Chime:** Plays an audible signal on success so you can tab away to other apps and tab back when you hear the chime.
+* **Outcome-Aware Resolution:** Plays a bright ascending chime on success (`exit 0`), and a soft descending minor tone on failure (`exit 1`) so you know the result even if you're in another room.
+* **Tab-Title Animation:** Keeps an ASCII wave and timer pulsing in your terminal window/tab title while you work.
 * **Pure JavaScript:** Zero C++ build dependencies (`node-gyp`), so `npx` works reliably on any Mac without compile errors.
 
 ---
