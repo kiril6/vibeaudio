@@ -265,6 +265,26 @@ Where the file lives:
 
 Restart the app afterwards. For terminal tools that hold an interactive session open, like Gemini CLI, MCP is the better fit than `vibe gemini`: the wrapper times the *process*, so it would play for the whole session, including while you read and type.
 
+### Changing the genre here
+
+`vibe --genre` doesn't apply — the app launches the server, not you. Two ways instead:
+
+**Just ask.** `vibe_play` takes a genre, so "play some jazz while you work on this" is enough, no config edit and no restart.
+
+**Or set a default in the config's `env` block**, since a GUI app won't inherit `VIBE_GENRE` from your shell. Most clients support `env` alongside `command`/`args`:
+
+```json
+"env": { "VIBE_GENRE": "jazz", "VIBE_VOLUME": "25" }
+```
+
+```toml
+[mcp_servers.vibeaudio.env]
+VIBE_GENRE = "jazz"
+VIBE_VOLUME = "25"
+```
+
+Restart the app afterwards. A genre the assistant passes to `vibe_play` still wins over this default.
+
 #### Exposed MCP Tools:
 * `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `random`; `volume`: `5-100`).
 * `vibe_stop`: Stop music and play the completion chime (`outcome`: `success` or `failure`).
@@ -293,12 +313,21 @@ Aliases also work: `chiptune` → `8bit`, `downtempo` → `electronic`, `bossa` 
 ### Usage Examples:
 ```bash
 vibe --genre electronic claude   # Melodic Electronic
-vibe --genre jazz gemini         # Midnight Jazz
+vibe --genre jazz npm test       # Midnight Jazz
 vibe --genre zen claude          # Zen Ambient (no drums/rhythm)
 vibe --genre random claude       # Surprise vibe each run
 ```
 
 ### ⚙️ Set Your Favorite Genre as Default
+
+How you change it depends on how you run VibeAudio — **a shell `export` only reaches the wrapper**:
+
+| You run it via | Change the genre with |
+| :--- | :--- |
+| **Wrapper** (`vibe <command>`) | `export VIBE_GENRE=jazz` — or `--genre` per run |
+| **Claude Code hooks** | re-run `vibe --genre jazz --install-hooks` — [why](#changing-the-sound-later) |
+| **MCP** (Codex, Claude Desktop, …) | ask the assistant, or the config's `env` block — [how](#changing-the-genre-here) |
+
 ```bash
 export VIBE_GENRE=jazz     # or synthwave, electronic, zen, random
 ```
