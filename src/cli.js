@@ -33,6 +33,7 @@ Procedural focus music while your AI coding tools think.
       --loud                   Preset: 75% volume (hear from across the room)
       --no-chime               Disable the resolution completion chime
       --no-hud                 Disable terminal window/tab title animation
+      --mcp                    Run as Model Context Protocol (MCP) server for Desktop apps
   -h, --help                   Show this help message
       --version                Show version
 
@@ -208,6 +209,11 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, noChime, noHud = fa
 }
 
 async function run() {
+  if (process.argv.includes("--mcp")) {
+    const { startMcpServer } = require("./mcp");
+    return startMcpServer();
+  }
+
   const { genre, volume, chimeVolume, noChime, noHud, cmdArgs } = parseArgs(process.argv);
 
   if (cmdArgs.length === 0) {

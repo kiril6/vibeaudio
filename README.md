@@ -103,6 +103,45 @@ Now, whenever you run `claude`, music automatically plays while it works!
 
 ---
 
+## 🖥️ Desktop GUI Apps (Claude Desktop & Antigravity via MCP)
+
+VibeAudio includes a native **Model Context Protocol (MCP)** server over stdio. This allows desktop AI applications to trigger focus music and completion chimes during reasoning and tool execution.
+
+### Claude Desktop Setup
+Add this to your `claude_desktop_config.json` (on macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "vibeaudio": {
+      "command": "npx",
+      "args": ["vibeaudio", "--mcp"]
+    }
+  }
+}
+```
+
+### Antigravity Setup
+Add this to your Antigravity MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "vibeaudio": {
+      "command": "npx",
+      "args": ["vibeaudio", "--mcp"]
+    }
+  }
+}
+```
+
+#### Exposed MCP Tools:
+* `vibe_play`: Start playing procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `random`; `volume`: `5-100`).
+* `vibe_stop`: Stop music and play completion chime (`outcome`: `success` or `failure`).
+* `vibe_status`: Return current playback state and active tier.
+
+---
+
 ## 🎨 Music Genres
 
 VibeAudio includes **6 procedural music styles** synthesized entirely in code:

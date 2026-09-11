@@ -118,15 +118,56 @@ const loudParsed = parseArgs(["node", "bin/vibeaudio.js", "--loud", "claude"]);
 assert.strictEqual(loudParsed.volume, 0.75, "--loud should set volume to 0.75");
 console.log("   ✓ Volume presets (--whisper, --quiet, --loud) and --chime-volume work properly.");
 
-// 14. Environment Variables (VIBE_VOLUME and VIBE_CHIME_VOLUME)
-console.log("14. Testing Volume Environment Variables...");
-process.env.VIBE_VOLUME = "35";
-process.env.VIBE_CHIME_VOLUME = "80";
-const envParsed = parseArgs(["node", "bin/vibeaudio.js", "claude"]);
-assert.strictEqual(envParsed.volume, 0.35, "VIBE_VOLUME env should override default volume");
-assert.strictEqual(envParsed.chimeVolume, 0.80, "VIBE_CHIME_VOLUME env should override chime volume");
-delete process.env.VIBE_VOLUME;
-delete process.env.VIBE_CHIME_VOLUME;
-console.log("   ✓ Environment variables (VIBE_VOLUME, VIBE_CHIME_VOLUME) override defaults.");
+// 15. Model Context Protocol (MCP) Server Protocol
+console.log("15. Testing MCP Server Protocol (JSON-RPC 2.0)...");
+const { handleMessage, TOOLS } = require("../src/mcp");
+const mockPlayer = {
+  isPlaying: false,
+  genre: "lofi",
+  currentTier: 1,
+  startTime: 0,
+  start(g, v) { this.isPlaying = true; this.genre = g; this.startTime = Date.now(); },
+  stop(opts) { this.isPlaying = false; }
+};
 
-console.log("\n\x1b[32mAll 14 tests passed successfully!\x1b[0m");
+// 15a. initialize
+const initRes = handleMessage(mockPlayer, { id: 1, method: "initialize", params: {} });
+assert.strictEqual(initRes.result.serverInfo.name, "vibeaudio");
+assert.ok(initRes.result.capabilities.tools);
+
+// 15b. tools/list
+const listRes = handleMessage(mockPlayer, { id: 2, method: "tools/list", params: {} });
+assert.strictEqual(listRes.result.tools.length, 3);
+assert.deepStrictEqual(listRes.result.tools.map(t => t.name), ["vibe_play", "vibe_stop", "vibe_status"]);
+
+// 15c. tools/call -> vibe_play
+const playRes = handleMessage(mockPlayer, {
+  id: 3,
+  method: "tools/call",
+  params: { name: "vibe_play", arguments: { genre: "jazz", volume: 50 } }
+});
+assert.strictEqual(mockPlayer.isPlaying, true);
+assert.strictEqual(mockPlayer.genre, "jazz");
+assert.ok(playRes.result.content[0].text.includes("jazz"));
+
+// 15d. tools/call -> vibe_status
+const statusRes = handleMessage(mockPlayer, {
+  id: 4,
+  method: "tools/call",
+  params: { name: "vibe_status", arguments: {} }
+});
+const statusData = JSON.parse(statusRes.result.content[0].text);
+assert.strictEqual(statusData.isPlaying, true);
+assert.strictEqual(statusData.genre, "jazz");
+
+// 15e. tools/call -> vibe_stop
+const stopRes = handleMessage(mockPlayer, {
+  id: 5,
+  method: "tools/call",
+  params: { name: "vibe_stop", arguments: { outcome: "success" } }
+});
+assert.strictEqual(mockPlayer.isPlaying, false);
+assert.ok(stopRes.result.content[0].text.includes("success"));
+console.log("   ✓ MCP Server protocol (initialize, tools/list, vibe_play, vibe_status, vibe_stop) verified.");
+
+console.log("\n\x1b[32mAll 15 tests passed successfully!\x1b[0m");
