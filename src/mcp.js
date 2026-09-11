@@ -76,7 +76,19 @@ function handleMessage(player, msg) {
         serverInfo: {
           name: "vibeaudio",
           version: pkg.version
-        }
+        },
+        // Unlike the CLI's hooks, nothing fires these tools automatically - the
+        // model has to choose to. Without a nudge the server just sits idle, so
+        // state the intended usage pattern where the client will surface it.
+        instructions:
+          "VibeAudio plays background focus music while the user waits on long work.\n" +
+          "Call vibe_play at the start of a task you expect to take more than a few " +
+          "seconds (multi-step work, long file edits, repeated tool calls), then call " +
+          "vibe_stop with outcome 'success' or 'failure' as soon as the task resolves " +
+          "and you are ready to hand back a result.\n" +
+          "Do not use it for quick answers - starting and stopping music around a " +
+          "one-second reply is worse than silence. Leave the genre and volume alone " +
+          "unless the user asks; they are the user's preference, not yours."
       }
     };
   }

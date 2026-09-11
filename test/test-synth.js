@@ -178,6 +178,10 @@ const mockPlayer = {
 const initRes = handleMessage(mockPlayer, { id: 1, method: "initialize", params: {} });
 assert.strictEqual(initRes.result.serverInfo.name, "vibeaudio");
 assert.ok(initRes.result.capabilities.tools);
+// Nothing fires MCP tools automatically, so the usage nudge is the only thing
+// keeping the server from sitting idle. Losing it would be silent.
+assert.ok(/vibe_play/.test(initRes.result.instructions || ""), "initialize must tell the model when to call vibe_play");
+assert.ok(/vibe_stop/.test(initRes.result.instructions || ""), "initialize must tell the model to call vibe_stop");
 
 // 15b. tools/list
 const listRes = handleMessage(mockPlayer, { id: 2, method: "tools/list", params: {} });

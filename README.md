@@ -181,7 +181,9 @@ Step 3 only reclaims disk (the audio cache; ~9 MB per few projects) — it's reg
 
 ## 🖥️ Desktop GUI Apps (Claude Desktop & Antigravity via MCP)
 
-VibeAudio includes a native **Model Context Protocol (MCP)** server over stdio, so desktop AI apps can trigger focus music and completion chimes during reasoning and tool execution.
+Desktop apps have no hook system, so this is the only way in for them: VibeAudio ships a native **Model Context Protocol (MCP)** server over stdio, exposing play/stop as tools the assistant can call.
+
+> **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On the Claude Code CLI, use [hooks](#-claude-code-hooks-no-wrapper-needed) instead.**
 
 Point the config at your clone (swap in your own path):
 
@@ -204,7 +206,7 @@ Point the config at your clone (swap in your own path):
 * `vibe_stop`: Stop music and play the completion chime (`outcome`: `success` or `failure`).
 * `vibe_status`: Return current playback state and active tier.
 
-Playback stops automatically if the desktop client disconnects, and caps out after 15 minutes so a crashed client can never leave music looping.
+Playback stops automatically if the desktop client disconnects, and caps out after 15 minutes — which also covers the likelier case of a model that started the music and never called `vibe_stop`.
 
 ---
 
