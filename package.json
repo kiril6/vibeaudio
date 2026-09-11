@@ -1,6 +1,6 @@
 {
   "name": "vibeaudio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Procedural focus music while your AI coding tools (Claude Code, Gemini, Codex) think — a different arrangement per project.",
   "bin": {
     "vibeaudio": "./bin/vibeaudio.js",

@@ -82,10 +82,27 @@ function warnNoPlayer() {
   );
 }
 
+let sweptLegacyLoops = false;
+
 function ensureCacheDir() {
-  if (fs.existsSync(CACHE_DIR)) return;
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
-  pruneStaleCache();
+  if (!fs.existsSync(CACHE_DIR)) {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    pruneStaleCache();
+    return;
+  }
+
+  // Loops moved into per-seed subdirectories. Anything left at the top level
+  // was written by an older layout of this same version and is now orphaned -
+  // chimes legitimately live here, so only loop_*.wav is swept.
+  if (sweptLegacyLoops) return;
+  sweptLegacyLoops = true;
+  try {
+    for (const name of fs.readdirSync(CACHE_DIR)) {
+      if (/^loop_.*\.wav$/.test(name)) fs.rmSync(path.join(CACHE_DIR, name), { force: true });
+    }
+  } catch (e) {
+    // Best-effort housekeeping.
+  }
 }
 
 /**

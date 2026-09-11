@@ -411,6 +411,12 @@ async function run() {
     return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive });
   }
 
+  if (reactive) {
+    console.error(
+      "\x1b[33m[vibeaudio] --reactive only applies to --install-hooks; ignoring it here.\x1b[0m"
+    );
+  }
+
   if (shouldClear) {
     console.log(`\x1b[32m[vibeaudio] Cleared cache at ${clearCache()}\x1b[0m`);
     return;
