@@ -435,8 +435,11 @@ function runCli(args, killAfterMs = null) {
 
 // Spawn node rather than sleep/true/false: those are Unix shell builtins the
 // Windows CI job has no equivalent for, and node is by definition present.
-const NODE_OK = [process.execPath, "-e", ""];
-const NODE_FAIL = [process.execPath, "-e", "process.exit(1)"];
+// These two run through executeCommand, which spawns with shell:true on
+// Windows - and Node does not quote args for cmd. Keep them free of spaces,
+// quotes and parens, or cmd eats them. (NODE_HANG only runs on posix.)
+const NODE_OK = [process.execPath, "-e", "0"];
+const NODE_FAIL = [process.execPath, "-e", "process.exitCode=1"];
 const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
 
 (async () => {
