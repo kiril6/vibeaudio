@@ -179,6 +179,8 @@ This wires two hooks into `~/.claude/settings.json`:
 
 Then **restart Claude Code**. Just run `claude` normally — no `vibe` prefix.
 
+> **This covers the Claude Code desktop app too**, not only the terminal. Both read the same `~/.claude/settings.json`, so one `--install-hooks` wires up both — no `vibe` prefix, and no MCP setup. (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-desktop-gui-apps-claude-desktop--antigravity-via-mcp).)
+
 ### Changing the sound later
 
 Re-run the install with the settings you want. It replaces the existing entry rather than adding a second one:
@@ -221,7 +223,7 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 
 ## 🖥️ Desktop GUI Apps (Claude Desktop & Antigravity via MCP)
 
-Desktop apps have no hook system, so this is the only way in for them: VibeAudio ships a native **Model Context Protocol (MCP)** server over stdio, exposing play/stop as tools the assistant can call.
+These are chat apps with no hook system, so this is the only way in for them — **not** the Claude Code desktop app, which reads `~/.claude/settings.json` like the CLI and should use [hooks](#-claude-code-hooks-no-wrapper-needed). VibeAudio ships a native **Model Context Protocol (MCP)** server over stdio, exposing play/stop as tools the assistant can call.
 
 > **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On the Claude Code CLI, use [hooks](#-claude-code-hooks-no-wrapper-needed) instead.**
 
