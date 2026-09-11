@@ -8,7 +8,7 @@
 
 **[Install](#-install)** · **[Claude Code hooks](#-claude-code-hooks-no-wrapper-needed)** · **[Genres](#-music-genres)** · **[Flags](#-options--flags)** · **[Troubleshooting](#-troubleshooting)** · **[Uninstall](#-uninstall)**
 
-> **In a hurry?** `npm i -g github:kiril6/vibeaudio` then `vibe --install-hooks`, and restart Claude Code.
+> **In a hurry?** `npm i -g github:kiril6/vibeaudio`, then `vibe --install-hooks`. Your next prompt has music.
 
 ---
 
@@ -86,7 +86,7 @@ That puts `vibe` and `vibeaudio` on your `PATH`. Re-run the same command to upda
 vibe --install-hooks
 ```
 
-Restart Claude Code, then run `claude` normally with no prefix. Music starts when you submit a prompt and stops with a chime when the agent finishes. [Details below.](#-claude-code-hooks-no-wrapper-needed)
+Now run `claude` normally, with no prefix. Music starts when you submit a prompt and stops with a chime when the agent finishes. [Details below.](#-claude-code-hooks-no-wrapper-needed)
 
 **Running one-shot commands?** Wrap them:
 
@@ -179,7 +179,9 @@ This wires two hooks into `~/.claude/settings.json`:
 | `UserPromptSubmit` | Starts a detached background player |
 | `Stop` | Stops it and plays the success chime |
 
-Then **restart Claude Code**. Just run `claude` normally — no `vibe` prefix.
+That's it. Just run `claude` normally — no `vibe` prefix.
+
+> **No restart needed for a session that's already open.** Claude Code reads `settings.json` each time a hook fires, not once at startup, so edits land on your **next prompt**. A daemon already playing keeps its old settings until that prompt replaces it — at most the tail of one turn. (If a brand-new install doesn't seem to take, restarting is the safe fallback.)
 
 > **This covers the Claude Code desktop app too**, not only the terminal. Both read the same `~/.claude/settings.json`, so one `--install-hooks` wires up both — no `vibe` prefix, and no MCP setup. (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-codex-gemini-cli-claude-desktop-antigravity-via-mcp).)
 
@@ -191,7 +193,9 @@ Re-run the install with the settings you want. It replaces the existing entry ra
 vibe --genre electronic --volume 25 --install-hooks
 ```
 
-Restart Claude Code afterwards. Audition first with `vibe --preview electronic`.
+The change applies to your next prompt — no restart. Audition first with `vibe --preview electronic`.
+
+Two things to know: the reinstall **replaces** the whole entry, so flags you don't repeat are dropped (leave off `--reactive` and reactive mode goes away). And music already playing keeps the old genre until the next prompt swaps the daemon — `pkill -f "vibeaudio.js --daemon"` cuts it short.
 
 > **`VIBE_GENRE` / `VIBE_VOLUME` won't change an installed hook.** They're read once, at install time, and written into the hook command — so exporting a new value later does nothing until you reinstall. The same goes for `vibe --genre <name>` on its own: with no command after it that opens the launcher menu, which asks for a genre and uses its own answer. Changing hook music always means re-running `--install-hooks`.
 

@@ -289,7 +289,9 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive }
       if (reactive) {
         console.log(`  PreToolUse       → intensity follows the tool in use (reactive mode)`);
       }
-      console.log(`  Restart Claude Code for the hooks to take effect.`);
+      // Claude Code re-reads settings.json per hook event, so an open session
+      // picks this up on its next prompt - no restart to advertise.
+      console.log(`  Takes effect on your next prompt - no restart needed.`);
       console.log(`  Remove them any time with: vibe --uninstall-hooks`);
       return;
     }
