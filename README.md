@@ -228,6 +228,18 @@ This wires two hooks into `~/.claude/settings.json`:
 
 Then **restart Claude Code**. Just run `claude` normally — no `vibe` prefix.
 
+### Changing the sound later
+
+Re-run the install with the settings you want. It replaces the existing entry rather than adding a second one:
+
+```bash
+vibe --genre electronic --volume 25 --install-hooks
+```
+
+Restart Claude Code afterwards. Audition first with `vibe --preview electronic`.
+
+> **`VIBE_GENRE` / `VIBE_VOLUME` won't change an installed hook.** They're read once, at install time, and written into the hook command — so exporting a new value later does nothing until you reinstall. The same goes for `vibe --genre <name>` on its own: with no command after it that opens the launcher menu, which asks for a genre and uses its own answer. Changing hook music always means re-running `--install-hooks`.
+
 Removing them is one command:
 
 ```bash
