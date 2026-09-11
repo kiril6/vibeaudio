@@ -179,7 +179,7 @@ This wires two hooks into `~/.claude/settings.json`:
 
 Then **restart Claude Code**. Just run `claude` normally — no `vibe` prefix.
 
-> **This covers the Claude Code desktop app too**, not only the terminal. Both read the same `~/.claude/settings.json`, so one `--install-hooks` wires up both — no `vibe` prefix, and no MCP setup. (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-desktop-gui-apps-claude-desktop--antigravity-via-mcp).)
+> **This covers the Claude Code desktop app too**, not only the terminal. Both read the same `~/.claude/settings.json`, so one `--install-hooks` wires up both — no `vibe` prefix, and no MCP setup. (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-codex-gemini-cli-claude-desktop-antigravity-via-mcp).)
 
 ### Changing the sound later
 
@@ -221,27 +221,49 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 
 ---
 
-## 🖥️ Desktop GUI Apps (Claude Desktop & Antigravity via MCP)
+## 🖥️ Everything Else (Codex, Gemini CLI, Claude Desktop, Antigravity… via MCP)
 
-These are chat apps with no hook system, so this is the only way in for them — **not** the Claude Code desktop app, which reads `~/.claude/settings.json` like the CLI and should use [hooks](#-claude-code-hooks-no-wrapper-needed). VibeAudio ships a native **Model Context Protocol (MCP)** server over stdio, exposing play/stop as tools the assistant can call.
+Hooks exist only in Claude Code. Every other AI tool that takes a **Model Context Protocol** server can run VibeAudio the same way: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
 
-> **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On the Claude Code CLI, use [hooks](#-claude-code-hooks-no-wrapper-needed) instead.**
+> **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On Claude Code — terminal or desktop app — use [hooks](#-claude-code-hooks-no-wrapper-needed) instead.**
 
-Point the config at your clone (swap in your own path):
+Use an **absolute path**, not the bare `vibe` command: GUI apps launched from Finder don't inherit your shell's `PATH`, and version managers like `fnm` or `nvm` put `vibe` on a per-shell path that won't resolve. Print yours with:
+
+```bash
+echo "$(npm root -g)/vibeaudio/bin/vibeaudio.js"
+```
+
+Most apps use this JSON shape:
 
 ```json
 {
   "mcpServers": {
     "vibeaudio": {
       "command": "node",
-      "args": ["/absolute/path/to/vibeaudio/bin/vibeaudio.js", "--mcp"]
+      "args": ["/absolute/path/from/the/command/above", "--mcp"]
     }
   }
 }
 ```
 
-* **Claude Desktop** (macOS): `~/Library/Application Support/Claude/claude_desktop_config.json`
-* **Antigravity:** your Antigravity MCP configuration file
+**Codex** uses TOML instead, in `~/.codex/config.toml` (the CLI and the Codex desktop app share this file):
+
+```toml
+[mcp_servers.vibeaudio]
+command = "node"
+args = ["/absolute/path/from/the/command/above", "--mcp"]
+```
+
+Where the file lives:
+
+| Tool | Config file |
+| :--- | :--- |
+| **Codex** (CLI + desktop app) | `~/.codex/config.toml` — TOML block above |
+| **Gemini CLI** | `~/.gemini/settings.json` |
+| **Claude Desktop** (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| **Antigravity, Cursor, VS Code, Zed, …** | that app's own MCP settings — same JSON shape |
+
+Restart the app afterwards. For terminal tools that hold an interactive session open, like Gemini CLI, MCP is the better fit than `vibe gemini`: the wrapper times the *process*, so it would play for the whole session, including while you read and type.
 
 #### Exposed MCP Tools:
 * `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `random`; `volume`: `5-100`).
@@ -361,7 +383,7 @@ rm -rf ~/.vibeaudio             # 3. optional: cached audio + daemon state
 
 > **Order matters.** `npm rm -g` deletes the binary but not your `~/.claude/settings.json`. Removing the package first strands hook entries that point at a path that no longer exists, and Claude Code will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json` by hand.
 
-Step 3 only reclaims disk (the audio cache; ~9 MB per few projects) — it's regenerated on next use, so skip it if you're reinstalling. If you added the [MCP server](#-desktop-gui-apps-claude-desktop--antigravity-via-mcp) to a desktop app, drop the `vibeaudio` entry from that app's config too. Nothing else is written outside these paths.
+Step 3 only reclaims disk (the audio cache; ~9 MB per few projects) — it's regenerated on next use, so skip it if you're reinstalling. If you added the [MCP server](#-everything-else-codex-gemini-cli-claude-desktop-antigravity-via-mcp) to a desktop app, drop the `vibeaudio` entry from that app's config too. Nothing else is written outside these paths.
 
 ---
 
