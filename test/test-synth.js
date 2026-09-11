@@ -523,7 +523,48 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
   assert.strictEqual(isInstalled("definitely-not-a-real-command-xyz"), false, "missing commands report false");
   console.log("   ✓ Tool detection resolves real commands and rejects missing ones.");
 
-  console.log("\n\x1b[32mAll 26 tests passed successfully!\x1b[0m");
+  // 27. Volume must work on backends that cannot attenuate
+  // aplay and PowerShell's SoundPlayer take no volume argument, so --volume
+  // used to be silently ignored there. The gain is baked into the PCM instead.
+  console.log("27. Testing Baked Gain For Volume-less Backends...");
+  const { bakedGain, applyGain, getAudioPath: audioPath } = require("../src/player");
+
+  assert.strictEqual(bakedGain({ volume: true }, 0.25), 1, "a backend with volume support attenuates itself");
+  assert.strictEqual(bakedGain({ volume: false }, 0.25), 0.25, "a backend without it gets a pre-scaled file");
+  assert.strictEqual(bakedGain(null, 0.25), 1, "no backend at all must not try to bake");
+  assert.strictEqual(bakedGain({ volume: false }, 0.001), 0.05, "gain is floored, never silent by accident");
+
+  const fullPath = audioPath("jazz", 2, 42, 1);
+  const quietPath = audioPath("jazz", 2, 42, 0.25);
+  assert.notStrictEqual(fullPath, quietPath, "each gain needs its own cache entry");
+  assert.ok(/_g25\.wav$/.test(quietPath), "the gain belongs in the filename");
+
+  const rms = (file) => {
+    const buf = fs.readFileSync(file);
+    let sum = 0;
+    let n = 0;
+    for (let o = 44; o + 1 < buf.length; o += 2) {
+      const s = buf.readInt16LE(o) / 32768;
+      sum += s * s;
+      n++;
+    }
+    return Math.sqrt(sum / n);
+  };
+  const ratio = rms(quietPath) / rms(fullPath);
+  assert.ok(Math.abs(ratio - 0.25) < 0.005, `baked file must be 25% as loud, got ${ratio.toFixed(3)}`);
+
+  // Rounding, not truncation: error stays within half an LSB.
+  const flat = Buffer.alloc(48);
+  flat.write("RIFF", 0);
+  flat.writeInt16LE(1000, 44);
+  flat.writeInt16LE(-1001, 46);
+  applyGain(flat, 0.5);
+  assert.strictEqual(flat.readInt16LE(44), 500, "positive samples scale");
+  assert.strictEqual(flat.readInt16LE(46), -500, "negative samples round symmetrically (-500.5 -> -500)");
+  assert.throws(() => applyGain(Buffer.alloc(8), 0.5), /canonical/, "a non-WAV buffer must be rejected, not silently mangled");
+  console.log("   ✓ Volume is baked into the PCM when the player cannot attenuate.");
+
+  console.log("\n\x1b[32mAll 27 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);

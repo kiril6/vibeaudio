@@ -59,8 +59,10 @@ export VIBE_SEED=7               # pin the same sound everywhere
 | Platform | Player used | Volume control | Notes |
 | :--- | :--- | :--- | :--- |
 | **macOS** | `afplay` | ✅ | Ships with the system — nothing to install. |
-| **Linux** | `paplay`, `ffplay`, or `aplay` | ✅ except `aplay` | Install `pulseaudio-utils`, `ffmpeg`, or `alsa-utils`. |
-| **Windows** | PowerShell `SoundPlayer` | ❌ | Plays at system volume; `--volume` is ignored. |
+| **Linux** | `paplay`, `ffplay`, or `aplay` | ✅ | Install `pulseaudio-utils`, `ffmpeg`, or `alsa-utils`. |
+| **Windows** | PowerShell `SoundPlayer` | ✅ | Nothing to install. |
+
+`aplay` and PowerShell's `SoundPlayer` take no volume argument, so `--volume` is applied by rendering the loop pre-attenuated instead — same result, one cached file per volume you use.
 
 If no player is found, VibeAudio prints a one-line notice and runs your command **silently** — it never blocks the tool you actually wanted to run.
 
@@ -411,7 +413,7 @@ vibe --clear-cache
 ```
 
 **Volume flag does nothing**
-You're on Windows, or Linux with only `aplay` available; neither supports attenuation. Install `ffmpeg` or `pulseaudio-utils` on Linux for volume control.
+Shouldn't happen any more — where the player can't attenuate (`aplay`, PowerShell), the gain is baked into the audio instead. If you changed `--volume` and hear no difference, you're most likely on hooks, which ignore the wrapper's flags: re-run `vibe --volume 25 --install-hooks`.
 
 ---
 
