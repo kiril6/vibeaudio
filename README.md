@@ -1,5 +1,7 @@
 # 🎧 VibeAudio
 
+[![test](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml/badge.svg)](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml)
+
 > **Procedural focus music while your AI coding tools think.**
 > Every project gets its own arrangement. Zero dependencies, zero audio files.
 > Works with Claude Code, Gemini CLI, Codex, Aider, and any terminal command.
