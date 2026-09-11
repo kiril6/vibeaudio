@@ -8,10 +8,53 @@ const {
   noteToFreq,
   analogSaw,
   triangle,
+  makeRng,
+  pick,
   createWavBuffer
 } = require("./generator");
 
-function generateSynthwaveLoop(durationSec = 6.8, tier = 2) {
+// Three progressions in D minor, each paired with the arpeggio figures that
+// sit on top of it (index 0 for tier 2, index 1 for the busier tier 3).
+const PROGRESSIONS = [
+  {
+    steps: [
+      { pad: ["D3", "F3", "A3", "D4"], bass: "D2" },
+      { pad: ["A#2", "F3", "A3", "D4"], bass: "A#1" },
+      { pad: ["C3", "G3", "C4", "E4"], bass: "C2" }
+    ],
+    arps: [
+      ["D5", "F5", "A5", "C6", "D6", "A5", "F5", "E5"],
+      ["D5", "A5", "F5", "C6", "D6", "E6", "A5", "F5"]
+    ]
+  },
+  {
+    steps: [
+      { pad: ["A2", "E3", "A3", "C4"], bass: "A1" },
+      { pad: ["F3", "A3", "C4", "F4"], bass: "F2" },
+      { pad: ["G3", "A#3", "D4", "G4"], bass: "G2" }
+    ],
+    arps: [
+      ["A4", "C5", "E5", "A5", "G5", "E5", "C5", "D5"],
+      ["A4", "E5", "C5", "A5", "G5", "D6", "E5", "C5"]
+    ]
+  },
+  {
+    steps: [
+      { pad: ["F3", "A3", "C4", "F4"], bass: "F2" },
+      { pad: ["C3", "G3", "C4", "E4"], bass: "C2" },
+      { pad: ["D3", "F3", "A3", "D4"], bass: "D2" }
+    ],
+    arps: [
+      ["F5", "A5", "C6", "A5", "D6", "C6", "A5", "G5"],
+      ["F5", "C6", "A5", "D6", "E6", "C6", "A5", "F5"]
+    ]
+  }
+];
+
+function generateSynthwaveLoop(durationSec = 6.8, tier = 2, seed = 0) {
+  const variant = pick(makeRng(seed), PROGRESSIONS);
+  const progression = variant.steps;
+  const arps = variant.arps;
   const totalSamples = Math.floor(SAMPLE_RATE * durationSec);
   const left = new Float64Array(totalSamples);
   const right = new Float64Array(totalSamples);
@@ -85,22 +128,20 @@ function generateSynthwaveLoop(durationSec = 6.8, tier = 2) {
     }
   }
 
-  // Progression: Dmin -> Bbmaj7 -> Cmaj
   const padVel = tier === 1 ? 0.18 : 0.15;
-  addPadChord(["D3", "F3", "A3", "D4"], 0.0, 3.2, padVel);
-  if (tier >= 2) addBass("D2", 0.0, 3.2);
+  const slots = [
+    { start: 0.0, dur: 3.2 },
+    { start: 3.2, dur: 1.8 },
+    { start: 5.0, dur: 1.8 }
+  ];
 
-  addPadChord(["A#2", "F3", "A3", "D4"], 3.2, 1.8, padVel);
-  if (tier >= 2) addBass("A#1", 3.2, 1.8);
-
-  addPadChord(["C3", "G3", "C4", "E4"], 5.0, 1.8, padVel);
-  if (tier >= 2) addBass("C2", 5.0, 1.8);
+  progression.forEach((step, i) => {
+    addPadChord(step.pad, slots[i].start, slots[i].dur, padVel);
+    if (tier >= 2) addBass(step.bass, slots[i].start, slots[i].dur);
+  });
 
   if (tier >= 2) {
-    const arpNotes = tier === 3 
-      ? ["D5", "A5", "F5", "C6", "D6", "E6", "A5", "F5"]
-      : ["D5", "F5", "A5", "C6", "D6", "A5", "F5", "E5"];
-    addArp(arpNotes, 0.6, 6.0);
+    addArp(tier === 3 ? arps[1] : arps[0], 0.6, 6.0);
   }
 
   // Stereo ping-pong delay

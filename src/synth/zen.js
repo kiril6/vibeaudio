@@ -7,18 +7,36 @@ const {
   SAMPLE_RATE,
   noteToFreq,
   sine,
+  makeRng,
+  pick,
+  ornamentRng,
   createWavBuffer
 } = require("./generator");
 
-function generateZenLoop(durationSec = 7.2) {
+// Curated pad pairs, all within D major so any choice stays consonant with
+// the bowls below.
+const PAD_PAIRS = [
+  [["D3", "A3", "F#4", "B4"], ["G2", "D3", "B3", "E4"]],
+  [["A2", "E3", "C#4", "F#4"], ["D3", "A3", "F#4", "B4"]],
+  [["B2", "F#3", "D4", "A4"], ["G2", "D3", "B3", "E4"]]
+];
+
+// D major pentatonic - the safest set to strike a bowl on over any pad above.
+const BOWL_NOTES = ["D4", "E4", "F#4", "A4", "B4", "D5"];
+
+function generateZenLoop(durationSec = 7.2, tier = 2, seed = 0) {
+  const rng = makeRng(seed);
+  const pads = pick(rng, PAD_PAIRS);
+
   const totalSamples = Math.floor(SAMPLE_RATE * durationSec);
   const left = new Float64Array(totalSamples);
   const right = new Float64Array(totalSamples);
+  const padVel = tier === 1 ? 0.10 : tier === 3 ? 0.14 : 0.12;
 
   // 1. Slow Celestial Morphing Ambient Pads (D Major / Pentatonic)
   const padChords = [
-    { notes: ["D3", "A3", "F#4", "B4"], start: 0.0, dur: 4.0 },
-    { notes: ["G2", "D3", "B3", "E4"], start: 3.6, dur: 4.0 }
+    { notes: pads[0], start: 0.0, dur: 4.0 },
+    { notes: pads[1], start: 3.6, dur: 4.0 }
   ];
 
   for (const chord of padChords) {
@@ -41,8 +59,8 @@ function generateZenLoop(durationSec = 7.2) {
         const sL = sine(f * 0.998 * t);
         const sR = sine(f * 1.002 * t);
 
-        left[idx] += sL * env * 0.12;
-        right[idx] += sR * env * 0.12;
+        left[idx] += sL * env * padVel;
+        right[idx] += sR * env * padVel;
       }
     }
   }
@@ -75,11 +93,34 @@ function generateZenLoop(durationSec = 7.2) {
     }
   }
 
-  // Soft bowl strikes floating in space
-  addSingingBowl(noteToFreq("D4"), 0.4, 0.35);
-  addSingingBowl(noteToFreq("A4"), 2.2, 0.65);
-  addSingingBowl(noteToFreq("F#4"), 4.0, 0.40);
-  addSingingBowl(noteToFreq("D5"), 5.6, 0.60);
+  // Drawn regardless of tier so every tier ornaments the same piece.
+  const orn = ornamentRng(seed);
+  const strikes = [0.4, 4.0, 2.2, 5.6].map((time) => ({
+    note: pick(orn, BOWL_NOTES),
+    time,
+    pan: 0.35 + orn() * 0.3
+  }));
+
+  // Tier 1 floats on sparse bowls; higher tiers fill the space
+  addSingingBowl(noteToFreq(strikes[0].note), strikes[0].time, strikes[0].pan);
+  addSingingBowl(noteToFreq(strikes[1].note), strikes[1].time, strikes[1].pan);
+
+  if (tier >= 2) {
+    addSingingBowl(noteToFreq(strikes[2].note), strikes[2].time, strikes[2].pan);
+    addSingingBowl(noteToFreq(strikes[3].note), strikes[3].time, strikes[3].pan);
+  }
+
+  // Tier 3: deep sustained drone underneath for long prompts
+  if (tier >= 3) {
+    const droneF = noteToFreq("D2");
+    for (let i = 0; i < totalSamples; i++) {
+      const t = i / SAMPLE_RATE;
+      const swell = 0.6 + 0.4 * Math.sin(2 * Math.PI * 0.07 * t);
+      const sample = (sine(droneF * t) * 0.8 + sine(droneF * 2.0 * t) * 0.2) * swell * 0.07;
+      left[i] += sample;
+      right[i] += sample;
+    }
+  }
 
   // 3. Deep Stereo Spatial Reverberation
   const delayL = Math.floor(0.42 * SAMPLE_RATE);

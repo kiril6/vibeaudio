@@ -8,10 +8,33 @@ const {
   noteToFreq,
   softPulse,
   triangle,
+  makeRng,
+  pick,
   createWavBuffer
 } = require("./generator");
 
-function generateChiptuneLoop(durationSec = 7.5) {
+// Each variant pairs a melodic contour with the chord/bass cycle it sits over,
+// so the lead always agrees with the arpeggio underneath it.
+const VARIANTS = [
+  {
+    motif: ["E5", "G5", "A5", "C6", "B5", "G5", "E5", "F5", "A5", "C6", "D6", "B5"],
+    chords: [["C4", "E4", "G4", "C5"], ["G3", "B3", "D4", "G4"], ["A3", "C4", "E4", "A4"], ["F3", "A3", "C4", "F4"]],
+    bass: ["C3", "G2", "A2", "F2"]
+  },
+  {
+    motif: ["A5", "C6", "B5", "A5", "G5", "E5", "G5", "A5", "F5", "A5", "G5", "E5"],
+    chords: [["A3", "C4", "E4", "A4"], ["F3", "A3", "C4", "F4"], ["C4", "E4", "G4", "C5"], ["G3", "B3", "D4", "G4"]],
+    bass: ["A2", "F2", "C3", "G2"]
+  },
+  {
+    motif: ["G5", "A5", "B5", "D6", "C6", "A5", "G5", "E5", "G5", "B5", "C6", "A5"],
+    chords: [["G3", "B3", "D4", "G4"], ["C4", "E4", "G4", "C5"], ["F3", "A3", "C4", "F4"], ["A3", "C4", "E4", "A4"]],
+    bass: ["G2", "C3", "F2", "A2"]
+  }
+];
+
+function generateChiptuneLoop(durationSec = 7.5, tier = 2, seed = 0) {
+  const variant = pick(makeRng(seed), VARIANTS);
   const bpm = 128;
   const secPerBeat = 60.0 / bpm;
   const totalBeats = Math.floor(durationSec / secPerBeat);
@@ -21,36 +44,22 @@ function generateChiptuneLoop(durationSec = 7.5) {
   const left = new Float64Array(totalSamples);
   const right = new Float64Array(totalSamples);
 
-  // 1. Melody Events (note, startBeat, durBeats)
-  const melodyEvents = [
-    { note: "E5", start: 0.0, dur: 0.45 },
-    { note: "G5", start: 0.5, dur: 0.45 },
-    { note: "A5", start: 1.0, dur: 0.45 },
-    { note: "C6", start: 1.5, dur: 0.70 },
-    { note: "B5", start: 2.5, dur: 0.45 },
-    { note: "G5", start: 3.0, dur: 0.45 },
-    { note: "E5", start: 3.5, dur: 0.45 },
-    { note: "F5", start: 4.0, dur: 0.45 },
-    { note: "A5", start: 4.5, dur: 0.45 },
-    { note: "C6", start: 5.0, dur: 0.45 },
-    { note: "D6", start: 5.5, dur: 0.70 },
-    { note: "B5", start: 6.5, dur: 0.45 },
-    { note: "C6", start: 7.0, dur: 0.80 },
-    { note: "G5", start: 8.0, dur: 0.45 },
-    { note: "E5", start: 8.5, dur: 0.45 },
-    { note: "F5", start: 9.0, dur: 0.45 },
-    { note: "A5", start: 9.5, dur: 0.70 },
-    { note: "G5", start: 10.5, dur: 0.45 },
-    { note: "D5", start: 11.0, dur: 0.45 },
-    { note: "C5", start: 11.5, dur: 0.70 },
-    { note: "E5", start: 12.5, dur: 0.45 },
-    { note: "D5", start: 13.0, dur: 0.45 },
-    { note: "C5", start: 13.5, dur: 0.45 },
-    { note: "B4", start: 14.0, dur: 0.45 },
-    { note: "C5", start: 14.5, dur: 0.85 }
+  // 1. Melody Events - the rhythm stays fixed, the seed picks the contour.
+  const RHYTHM = [
+    [0.0, 0.45], [0.5, 0.45], [1.0, 0.45], [1.5, 0.70], [2.5, 0.45],
+    [3.0, 0.45], [3.5, 0.45], [4.0, 0.45], [4.5, 0.45], [5.0, 0.45],
+    [5.5, 0.70], [6.5, 0.45], [7.0, 0.80], [8.0, 0.45], [8.5, 0.45],
+    [9.0, 0.45], [9.5, 0.70], [10.5, 0.45], [11.0, 0.45], [11.5, 0.70],
+    [12.5, 0.45], [13.0, 0.45], [13.5, 0.45], [14.0, 0.45], [14.5, 0.85]
   ];
+  const melodyEvents = RHYTHM.map(([start, dur], i) => ({
+    note: variant.motif[i % variant.motif.length],
+    start,
+    dur
+  }));
 
-  for (const m of melodyEvents) {
+  // Melody lead joins at Tier 2 (Tier 1 stays on arpeggio + bass only)
+  for (const m of tier >= 2 ? melodyEvents : []) {
     const f = noteToFreq(m.note);
     const startIdx = Math.floor(m.start * secPerBeat * SAMPLE_RATE);
     const numSamples = Math.floor(m.dur * secPerBeat * SAMPLE_RATE);
@@ -69,12 +78,7 @@ function generateChiptuneLoop(durationSec = 7.5) {
   }
 
   // 2. Chords for Retro Arpeggiation
-  const chords = [
-    ["C4", "E4", "G4", "C5"],
-    ["G3", "B3", "D4", "G4"],
-    ["A3", "C4", "E4", "A4"],
-    ["F3", "A3", "C4", "F4"]
-  ];
+  const chords = variant.chords;
   const arpSpeed = 0.075;
 
   for (let i = 0; i < totalSamples; i++) {
@@ -84,14 +88,21 @@ function generateChiptuneLoop(durationSec = 7.5) {
     const chord = chords[chordIdx];
     const noteIdx = Math.floor(t / arpSpeed) % chord.length;
     const f = noteToFreq(chord[noteIdx]);
-    const sample = softPulse(f * t, 0.5) * 0.075;
+    const sample = softPulse(f * t, 0.5) * (tier === 1 ? 0.09 : 0.075);
 
     left[i] += sample * 0.85;
     right[i] += sample * 0.85;
+
+    // Tier 3: octave-up shimmer arpeggio doubling
+    if (tier >= 3) {
+      const shimmer = softPulse(f * 2.0 * t, 0.35) * 0.03;
+      left[i] += shimmer * 1.1;
+      right[i] += shimmer * 0.9;
+    }
   }
 
   // 3. NES Triangle Bass
-  const bassNotes = ["C3", "G2", "A2", "F2"];
+  const bassNotes = variant.bass;
   for (let i = 0; i < totalSamples; i++) {
     const t = i / SAMPLE_RATE;
     const beat = Math.floor(t / secPerBeat);

@@ -6,10 +6,27 @@
 const {
   SAMPLE_RATE,
   noteToFreq,
+  makeRng,
+  pick,
+  ornamentRng,
   createWavBuffer
 } = require("./generator");
 
-function generateLofiLoop(durationSec = 6.4, tier = 2) {
+// Hand-written variants, all diatonic to C major so any pairing stays
+// consonant. The seed chooses one; it never invents harmony.
+const PROGRESSIONS = [
+  [["F2", "A3", "C4", "E4", "G4"], ["C2", "G3", "B3", "D4", "E4"]], // Fmaj9 -> Cmaj9
+  [["D2", "F3", "A3", "C4", "E4"], ["G2", "B3", "D4", "F4", "A4"]], // Dm9  -> G11
+  [["A2", "C3", "E3", "G3", "B3"], ["F2", "A3", "C4", "E4", "G4"]]  // Am9  -> Fmaj9
+];
+
+// Upper-register C-major tones for the kalimba to land on.
+const DROP_NOTES = ["C5", "D5", "E5", "G5", "A5", "B5", "C6"];
+const SHIMMER_NOTES = ["E6", "G6", "A6", "B6"];
+
+function generateLofiLoop(durationSec = 6.4, tier = 2, seed = 0) {
+  const rng = makeRng(seed);
+  const progression = pick(rng, PROGRESSIONS);
   const totalSamples = Math.floor(SAMPLE_RATE * durationSec);
   const left = new Float64Array(totalSamples);
   const right = new Float64Array(totalSamples);
@@ -69,24 +86,26 @@ function generateLofiLoop(durationSec = 6.4, tier = 2) {
     }
   }
 
-  // Chords: Fmaj9 -> Cmaj9
   const chordVel = tier === 1 ? 0.16 : tier === 3 ? 0.22 : 0.19;
-  addRhodesChord(["F2", "A3", "C4", "E4", "G4"], 0.0, 3.2, chordVel);
-  addRhodesChord(["C2", "G3", "B3", "D4", "E4"], 3.2, 3.2, chordVel);
+  const half = durationSec / 2;
+  addRhodesChord(progression[0], 0.0, half, chordVel);
+  addRhodesChord(progression[1], half, half, chordVel);
+
+  // Drawn regardless of tier so every tier ornaments the same piece.
+  const orn = ornamentRng(seed);
+  const drops = [0.5, 1.2, 1.8, 2.5, 3.7, 4.4, 5.1, 5.8].map((time) => ({
+    note: pick(orn, DROP_NOTES),
+    time,
+    pan: 0.3 + orn() * 0.4
+  }));
+  const shimmer = [0.8, 2.1, 3.9, 4.9].map((time) => ({
+    note: pick(orn, SHIMMER_NOTES),
+    time,
+    pan: 0.3 + orn() * 0.4
+  }));
 
   // Kalimba drops activate on Tier 2 and Tier 3
   if (tier >= 2) {
-    const drops = [
-      { note: "E5", time: 0.5, pan: 0.3 },
-      { note: "G5", time: 1.2, pan: 0.7 },
-      { note: "C6", time: 1.8, pan: 0.4 },
-      { note: "B5", time: 2.5, pan: 0.65 },
-      { note: "E5", time: 3.7, pan: 0.35 },
-      { note: "D5", time: 4.4, pan: 0.65 },
-      { note: "G5", time: 5.1, pan: 0.45 },
-      { note: "C6", time: 5.8, pan: 0.55 }
-    ];
-
     for (const d of drops) {
       addKalimba(d.note, d.time, d.pan, 0.14);
     }
@@ -94,12 +113,6 @@ function generateLofiLoop(durationSec = 6.4, tier = 2) {
 
   // Tier 3: Higher octave shimmer drops (richer energy for long prompts)
   if (tier >= 3) {
-    const shimmer = [
-      { note: "G6", time: 0.8, pan: 0.6 },
-      { note: "E6", time: 2.1, pan: 0.3 },
-      { note: "B6", time: 3.9, pan: 0.7 },
-      { note: "G6", time: 4.9, pan: 0.4 }
-    ];
     for (const s of shimmer) {
       addKalimba(s.note, s.time, s.pan, 0.09);
     }

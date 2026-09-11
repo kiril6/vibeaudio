@@ -110,6 +110,40 @@ function selectMenu(title, items, renderItem) {
   });
 }
 
+/**
+ * Splits a command line into argv, keeping quoted arguments intact so
+ * `claude --append-system-prompt "be brief"` stays three tokens, not four.
+ * Tokens are passed to spawn() as argv, never through a shell.
+ */
+function tokenizeCommand(input) {
+  const tokens = [];
+  let current = "";
+  let started = false;
+  let quote = null;
+
+  for (const ch of input.trim()) {
+    if (quote) {
+      if (ch === quote) quote = null;
+      else current += ch;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+      started = true;
+    } else if (/\s/.test(ch)) {
+      if (started) {
+        tokens.push(current);
+        current = "";
+        started = false;
+      }
+    } else {
+      current += ch;
+      started = true;
+    }
+  }
+
+  if (started) tokens.push(current);
+  return tokens;
+}
+
 function promptCustomCommand() {
   return new Promise((resolve) => {
     const rl = readline.createInterface({
@@ -119,7 +153,7 @@ function promptCustomCommand() {
 
     rl.question("\x1b[1mEnter command to wrap with music:\x1b[0m ", (answer) => {
       rl.close();
-      const parts = answer.trim().split(/\s+/).filter(Boolean);
+      const parts = tokenizeCommand(answer);
       resolve(parts.length > 0 ? parts : ["echo", "No command specified"]);
     });
   });
@@ -176,4 +210,4 @@ async function promptInteractive() {
   };
 }
 
-module.exports = { promptInteractive };
+module.exports = { promptInteractive, tokenizeCommand };

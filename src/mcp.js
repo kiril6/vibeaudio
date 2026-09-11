@@ -8,6 +8,10 @@ const readline = require("readline");
 const { AudioPlayer, AVAILABLE_GENRES } = require("./player");
 const pkg = require("../package.json");
 
+// A desktop client that crashes never sends vibe_stop, so playback needs its
+// own ceiling rather than looping forever.
+const MAX_PLAYBACK_MS = 15 * 60 * 1000;
+
 const TOOLS = [
   {
     name: "vibe_play",
@@ -104,17 +108,18 @@ function handleMessage(player, msg) {
       const volNum = args.volume !== undefined ? args.volume : (process.env.VIBE_VOLUME ? parseInt(process.env.VIBE_VOLUME, 10) : 40);
       const volume = Math.max(5, Math.min(100, volNum)) / 100.0;
 
-      player.start(genre, volume);
+      const started = player.start(genre, volume, { maxDurationMs: MAX_PLAYBACK_MS });
+      const text = started
+        ? `Started playing ${player.genre} procedural focus music at ${Math.round(volume * 100)}% volume.`
+        : player.isPlaying
+          ? `Already playing ${player.genre} at ${Math.round(player.volume * 100)}% volume — nothing changed.`
+          : "No supported audio player found on this system; playback is unavailable.";
+
       return {
         jsonrpc: "2.0",
         id,
         result: {
-          content: [
-            {
-              type: "text",
-              text: `Started playing ${genre} procedural focus music at ${Math.round(volume * 100)}% volume.`
-            }
-          ]
+          content: [{ type: "text", text }]
         }
       };
     }
@@ -123,7 +128,7 @@ function handleMessage(player, msg) {
       const outcome = args.outcome || "success";
       const playChime = args.playChime !== false;
 
-      player.stop({ playChime, outcome });
+      const wasPlaying = player.stop({ playChime, outcome });
       return {
         jsonrpc: "2.0",
         id,
@@ -131,7 +136,7 @@ function handleMessage(player, msg) {
           content: [
             {
               type: "text",
-              text: `Stopped music. ${playChime ? `Played ${outcome} resolution chime.` : ""}`
+              text: `${wasPlaying ? "Stopped music." : "Nothing was playing."}${playChime ? ` Played ${outcome} resolution chime.` : ""}`
             }
           ]
         }
@@ -207,6 +212,12 @@ function startMcpServer() {
     } catch (err) {
       process.stderr.write(`[vibeaudio] Failed to parse JSON-RPC line: ${err.message}\n`);
     }
+  });
+
+  // Client disconnected - never leave audio looping behind.
+  rl.on("close", () => {
+    player.stop({ playChime: false });
+    process.exit(0);
   });
 
   process.on("SIGINT", () => {

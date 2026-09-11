@@ -2,11 +2,23 @@
  * VibeAudio CLI Wrapper Implementation
  */
 
-const { spawn } = require("child_process");
-const { AudioPlayer } = require("./player");
+const os = require("os");
+const { spawn, spawnSync } = require("child_process");
+const {
+  AudioPlayer,
+  getAudioPath,
+  clearCache,
+  detectPlayer,
+  resolveGenre,
+  isKnownGenre,
+  wavDurationMs,
+  AVAILABLE_GENRES
+} = require("./player");
 const pkg = require("../package.json");
 
-const GRACE_PERIOD_MS = 1500; // 1.5 second silence grace window
+const DEFAULT_GRACE_PERIOD_MS = 1500; // 1.5 second silence grace window
+
+const HOOK_ACTIONS = ["--install-hooks", "--uninstall-hooks", "--hook-start", "--hook-stop", "--daemon"];
 
 function printHelp() {
   console.log(`
@@ -23,17 +35,24 @@ Procedural focus music while your AI coding tools think.
   vibe --genre synthwave claude
   vibe --genre 8bit sleep 5
   vibe --volume 30 npm test
+  vibe --preview jazz
 
 \x1b[1mOPTIONS:\x1b[0m
   -g, --genre <name>           Select genre: lofi (default), synthwave, 8bit, electronic, jazz, zen, random
   -v, --volume <0-100>         Set playback volume (default: 40)
   -cv, --chime-volume <0-100>   Set independent completion chime volume
+      --grace <ms>             Silence window before music starts, in ms (default: ${DEFAULT_GRACE_PERIOD_MS})
+      --seed <n>               Force a specific arrangement (default: derived from the project directory)
       --whisper                Preset: 15% volume (late night / headphones)
       --quiet                  Preset: 25% volume (focus / open office)
       --loud                   Preset: 75% volume (hear from across the room)
       --no-chime               Disable the resolution completion chime
       --no-hud                 Disable terminal window/tab title animation
+      --preview <genre>        Play one loop of a genre and exit
+      --clear-cache            Delete cached audio, then exit
       --mcp                    Run as Model Context Protocol (MCP) server for Desktop apps
+      --install-hooks          Wire music into Claude Code hooks (no wrapper needed)
+      --uninstall-hooks        Remove the Claude Code hooks again
   -h, --help                   Show this help message
       --version                Show version
 
@@ -41,6 +60,8 @@ Procedural focus music while your AI coding tools think.
   VIBE_GENRE=<name>            Set persistent default genre (e.g. export VIBE_GENRE=jazz)
   VIBE_VOLUME=<0-100>          Set persistent default volume (e.g. export VIBE_VOLUME=25)
   VIBE_CHIME_VOLUME=<0-100>    Set persistent chime volume (e.g. export VIBE_CHIME_VOLUME=60)
+  VIBE_GRACE_MS=<ms>           Set persistent grace window in ms (e.g. export VIBE_GRACE_MS=3000)
+  VIBE_SEED=<n>                Pin the arrangement instead of deriving it from the directory
 `);
 }
 
@@ -54,8 +75,14 @@ function parseArgs(argv) {
   const envChimeVol = process.env.VIBE_CHIME_VOLUME ? parseInt(process.env.VIBE_CHIME_VOLUME, 10) : NaN;
   let chimeVolume = !isNaN(envChimeVol) ? Math.max(5, Math.min(100, envChimeVol)) / 100.0 : null;
 
+  const envGrace = process.env.VIBE_GRACE_MS ? parseInt(process.env.VIBE_GRACE_MS, 10) : NaN;
+  let grace = !isNaN(envGrace) ? Math.max(0, envGrace) : DEFAULT_GRACE_PERIOD_MS;
+
   let noChime = false;
   let noHud = false;
+  let preview = null;
+  let clearCacheFlag = false;
+  let hookAction = null;
   let cmdArgs = [];
 
   let i = 0;
@@ -102,6 +129,44 @@ function parseArgs(argv) {
       }
     }
 
+    if (arg === "--grace") {
+      if (i + 1 < args.length) {
+        const parsed = parseInt(args[i + 1], 10);
+        if (!isNaN(parsed)) {
+          grace = Math.max(0, parsed);
+        }
+        i += 2;
+        continue;
+      }
+    }
+
+    if (arg === "--seed") {
+      if (i + 1 < args.length) {
+        const parsed = parseInt(args[i + 1], 10);
+        if (!isNaN(parsed)) process.env.VIBE_SEED = String(parsed >>> 0);
+        i += 2;
+        continue;
+      }
+    }
+
+    if (arg === "--preview") {
+      preview = i + 1 < args.length ? args[i + 1].toLowerCase() : genre;
+      i += 2;
+      continue;
+    }
+
+    if (arg === "--clear-cache") {
+      clearCacheFlag = true;
+      i += 1;
+      continue;
+    }
+
+    if (HOOK_ACTIONS.includes(arg)) {
+      hookAction = arg.slice(2);
+      i += 1;
+      continue;
+    }
+
     if (arg === "--whisper") {
       volume = 0.15;
       i += 1;
@@ -137,24 +202,106 @@ function parseArgs(argv) {
     break;
   }
 
-  return { genre, volume, chimeVolume, noChime, noHud, cmdArgs };
+  if (!isKnownGenre(genre)) {
+    console.error(
+      `\x1b[33m[vibeaudio] Unknown genre '${genre}' — falling back to lofi.\x1b[0m\n` +
+        `  Available: ${AVAILABLE_GENRES.join(", ")}, random`
+    );
+    genre = "lofi";
+  }
+
+  return {
+    genre,
+    volume,
+    chimeVolume,
+    grace,
+    noChime,
+    noHud,
+    preview,
+    clearCache: clearCacheFlag,
+    hookAction,
+    cmdArgs
+  };
 }
 
 const { promptInteractive } = require("./interactive");
 const { TerminalHud } = require("./hud");
 
-function executeCommand(cmdArgs, genre, volume, chimeVolume, noChime, noHud = false) {
+function signalExitCode(signal) {
+  return 128 + (os.constants.signals[signal] || 0);
+}
+
+function previewGenre(genre, volume) {
+  if (!isKnownGenre(genre)) {
+    console.error(`\x1b[31m[vibeaudio] Unknown genre '${genre}'.\x1b[0m Available: ${AVAILABLE_GENRES.join(", ")}, random`);
+    process.exit(1);
+  }
+
+  const backend = detectPlayer();
+  if (!backend) {
+    console.error("\x1b[31m[vibeaudio] No supported audio player found — cannot preview.\x1b[0m");
+    process.exit(1);
+  }
+
+  const resolved = resolveGenre(genre);
+  const audioFile = getAudioPath(resolved, 2);
+  const seconds = ((wavDurationMs(audioFile) || 6500) / 1000).toFixed(1);
+
+  console.log(`\x1b[36m♫ Previewing \x1b[1m${resolved}\x1b[0m\x1b[36m (tier 2, ${seconds}s) — Ctrl+C to stop\x1b[0m`);
+  spawnSync(backend.cmd, backend.args(audioFile, volume), { stdio: "ignore" });
+}
+
+function runHookAction(action, { genre, volume, chimeVolume, noChime }) {
+  const hooks = require("./hooks");
+
+  switch (action) {
+    case "daemon":
+      return hooks.runDaemon(genre, volume);
+
+    case "hook-start":
+      hooks.hookStart(genre, volume);
+      return;
+
+    case "hook-stop":
+      hooks.hookStop({ outcome: "success", volume, chimeVolume, noChime });
+      return;
+
+    case "install-hooks": {
+      const { file, backup } = hooks.installHooks(genre, volume);
+      console.log(`\x1b[32m✔ VibeAudio hooks installed in ${file}\x1b[0m`);
+      if (backup) console.log(`  Previous settings backed up to ${backup}`);
+      console.log(`  UserPromptSubmit → music starts (${genre} @ ${Math.round(volume * 100)}%)`);
+      console.log(`  Stop             → music stops + success chime`);
+      console.log(`  Restart Claude Code for the hooks to take effect.`);
+      console.log(`  Remove them any time with: vibe --uninstall-hooks`);
+      return;
+    }
+
+    case "uninstall-hooks": {
+      const { file, removed } = hooks.uninstallHooks();
+      console.log(
+        removed > 0
+          ? `\x1b[32m✔ Removed ${removed} VibeAudio hook(s) from ${file}\x1b[0m`
+          : `\x1b[90mNo VibeAudio hooks found in ${file}\x1b[0m`
+      );
+      return;
+    }
+  }
+}
+
+function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRACE_PERIOD_MS, noChime, noHud = false) {
   const player = new AudioPlayer();
   const hud = !noHud ? new TerminalHud(genre) : null;
   const startTime = Date.now();
   let musicStarted = false;
+  let finished = false;
 
-  // 1.5-second grace window before triggering audio
+  // Grace window before triggering audio (silences fast commands)
   const graceTimer = setTimeout(() => {
     musicStarted = true;
     player.start(genre, volume);
     if (hud) hud.start();
-  }, GRACE_PERIOD_MS);
+  }, grace);
 
   const command = cmdArgs[0];
   const commandArgs = cmdArgs.slice(1);
@@ -164,13 +311,19 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, noChime, noHud = fa
     shell: process.platform === "win32"
   });
 
-  const cleanup = (code = 0) => {
+  // Runs exactly once: both the signal path and the close path lead here.
+  const cleanup = (code, signal = null) => {
+    if (finished) return;
+    finished = true;
     clearTimeout(graceTimer);
-    const elapsed = Date.now() - startTime;
-    const outcome = code === 0 ? "success" : "failure";
-    const shouldChime = musicStarted && !noChime && elapsed > GRACE_PERIOD_MS;
 
-    if (hud) hud.stop({ outcome, code });
+    const elapsed = Date.now() - startTime;
+    const interrupted = signal === "SIGINT" || signal === "SIGTERM";
+    const outcome = code === 0 ? "success" : "failure";
+    // A deliberate abort is not an outcome worth chiming about.
+    const shouldChime = musicStarted && !noChime && !interrupted && elapsed > grace;
+
+    if (hud) hud.stop({ outcome, code, interrupted });
     player.stop({
       playChime: shouldChime,
       outcome,
@@ -181,6 +334,8 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, noChime, noHud = fa
   };
 
   child.on("error", (err) => {
+    if (finished) return;
+    finished = true;
     clearTimeout(graceTimer);
     if (hud) hud.stop({ outcome: "failure", code: 1 });
     player.stop({ playChime: false });
@@ -188,24 +343,26 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, noChime, noHud = fa
     process.exit(1);
   });
 
-  child.on("close", (code) => {
-    cleanup(code !== null ? code : 0);
+  // A signal-killed child reports code === null; mapping that to 0 would claim
+  // success for an aborted run.
+  child.on("close", (code, signal) => {
+    if (signal) cleanup(signalExitCode(signal), signal);
+    else cleanup(code !== null ? code : 0);
   });
 
-  // Relay termination signals cleanly
-  process.on("SIGINT", () => {
-    clearTimeout(graceTimer);
-    if (hud) hud.stop({ outcome: "failure", code: 130 });
-    player.stop({ playChime: false });
-    if (child.pid) child.kill("SIGINT");
-  });
+  // Relay termination signals, then let the child's exit drive cleanup.
+  const relaySignal = (signal) => {
+    if (!child.pid || finished) {
+      cleanup(signalExitCode(signal), signal);
+      return;
+    }
+    child.kill(signal);
+    const fallback = setTimeout(() => cleanup(signalExitCode(signal), signal), 2000);
+    if (fallback.unref) fallback.unref();
+  };
 
-  process.on("SIGTERM", () => {
-    clearTimeout(graceTimer);
-    if (hud) hud.stop({ outcome: "failure", code: 143 });
-    player.stop({ playChime: false });
-    if (child.pid) child.kill("SIGTERM");
-  });
+  process.on("SIGINT", () => relaySignal("SIGINT"));
+  process.on("SIGTERM", () => relaySignal("SIGTERM"));
 }
 
 async function run() {
@@ -214,14 +371,38 @@ async function run() {
     return startMcpServer();
   }
 
-  const { genre, volume, chimeVolume, noChime, noHud, cmdArgs } = parseArgs(process.argv);
+  const {
+    genre,
+    volume,
+    chimeVolume,
+    grace,
+    noChime,
+    noHud,
+    preview,
+    clearCache: shouldClear,
+    hookAction,
+    cmdArgs
+  } = parseArgs(process.argv);
+
+  if (hookAction) {
+    return runHookAction(hookAction, { genre, volume, chimeVolume, noChime });
+  }
+
+  if (shouldClear) {
+    console.log(`\x1b[32m[vibeaudio] Cleared cache at ${clearCache()}\x1b[0m`);
+    return;
+  }
+
+  if (preview) {
+    return previewGenre(preview, volume);
+  }
 
   if (cmdArgs.length === 0) {
     if (process.stdin.isTTY) {
       try {
         const selection = await promptInteractive();
         const chosenVol = selection.volume !== undefined ? selection.volume : volume;
-        return executeCommand(selection.cmd, selection.genre, chosenVol, chimeVolume, noChime, noHud);
+        return executeCommand(selection.cmd, selection.genre, chosenVol, chimeVolume, grace, noChime, noHud);
       } catch (e) {
         process.exit(0);
       }
@@ -231,7 +412,7 @@ async function run() {
     }
   }
 
-  executeCommand(cmdArgs, genre, volume, chimeVolume, noChime, noHud);
+  executeCommand(cmdArgs, genre, volume, chimeVolume, grace, noChime, noHud);
 }
 
 module.exports = { run, parseArgs };

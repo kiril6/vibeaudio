@@ -25,22 +25,20 @@ class TerminalHud {
     this.timer = null;
     this.startTime = 0;
     this.frameIdx = 0;
+    this.started = false;
+    this.stopped = false;
   }
 
   start() {
     this.startTime = Date.now();
+    this.started = true;
 
-    // Initial banner
-    if (process.stdout.isTTY) {
-      process.stdout.write(`\x1b[90m[ 🎧 VibeAudio: \x1b[36m${this.genre}\x1b[90m • Adaptive Procedural Audio Active ]\x1b[0m\n`);
-    }
-
-    // Animate terminal window/tab title every 120ms
+    // The wrapped tool may own the screen by now (full-screen TUIs like claude
+    // or aider), so the title bar is the only safe place to draw.
     this.timer = setInterval(() => {
       this.frameIdx = (this.frameIdx + 1) % WAVES.length;
       const wave = WAVES[this.frameIdx];
-      const elapsed = Date.now() - this.startTime;
-      const timeStr = formatTime(elapsed);
+      const timeStr = formatTime(Date.now() - this.startTime);
 
       // Set terminal window & tab title (works in Mac Terminal, iTerm2, VS Code, Warp)
       if (process.stdout.isTTY) {
@@ -49,27 +47,31 @@ class TerminalHud {
     }, 120);
   }
 
-  stop({ outcome = "success", code = 0 } = {}) {
+  stop({ outcome = "success", code = 0, interrupted = false } = {}) {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
     }
 
-    const elapsed = Date.now() - this.startTime;
-    const timeStr = (elapsed / 1000).toFixed(1);
+    // Nothing was ever drawn (fast command), or cleanup ran twice.
+    if (!this.started || this.stopped) return;
+    this.stopped = true;
+
+    const timeStr = ((Date.now() - this.startTime) / 1000).toFixed(1);
 
     // Reset terminal window/tab title
     if (process.stdout.isTTY) {
       process.stdout.write(`\x1b]0;\x07`);
     }
 
-    // Print outcome resolution indicator
-    if (process.stdout.isTTY && elapsed > 1500) {
-      if (code === 0) {
-        process.stdout.write(`\n\x1b[32m✔ [VibeAudio] Done in ${timeStr}s • Ascending resolution chime\x1b[0m\n`);
-      } else {
-        process.stdout.write(`\n\x1b[33m✖ [VibeAudio] Command exited with code ${code} in ${timeStr}s • Descending minor tone\x1b[0m\n`);
-      }
+    if (!process.stdout.isTTY) return;
+
+    if (interrupted) {
+      process.stdout.write(`\n\x1b[90m■ [VibeAudio] Interrupted after ${timeStr}s\x1b[0m\n`);
+    } else if (code === 0) {
+      process.stdout.write(`\n\x1b[32m✔ [VibeAudio] Done in ${timeStr}s • Ascending resolution chime\x1b[0m\n`);
+    } else {
+      process.stdout.write(`\n\x1b[33m✖ [VibeAudio] Command exited with code ${code} in ${timeStr}s • Descending minor tone\x1b[0m\n`);
     }
   }
 }
