@@ -18,7 +18,14 @@ const pkg = require("../package.json");
 
 const DEFAULT_GRACE_PERIOD_MS = 1500; // 1.5 second silence grace window
 
-const HOOK_ACTIONS = ["--install-hooks", "--uninstall-hooks", "--hook-start", "--hook-stop", "--daemon"];
+const HOOK_ACTIONS = [
+  "--install-hooks",
+  "--uninstall-hooks",
+  "--hook-start",
+  "--hook-stop",
+  "--hook-tool",
+  "--daemon"
+];
 
 function printHelp() {
   console.log(`
@@ -52,6 +59,7 @@ Procedural focus music while your AI coding tools think.
       --clear-cache            Delete cached audio, then exit
       --mcp                    Run as Model Context Protocol (MCP) server for Desktop apps
       --install-hooks          Wire music into Claude Code hooks (no wrapper needed)
+      --reactive               With --install-hooks: intensity follows the tool in use
       --uninstall-hooks        Remove the Claude Code hooks again
   -h, --help                   Show this help message
       --version                Show version
@@ -83,6 +91,7 @@ function parseArgs(argv) {
   let preview = null;
   let clearCacheFlag = false;
   let hookAction = null;
+  let reactive = false;
   let cmdArgs = [];
 
   let i = 0;
@@ -167,6 +176,12 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--reactive") {
+      reactive = true;
+      i += 1;
+      continue;
+    }
+
     if (arg === "--whisper") {
       volume = 0.15;
       i += 1;
@@ -220,6 +235,7 @@ function parseArgs(argv) {
     preview,
     clearCache: clearCacheFlag,
     hookAction,
+    reactive,
     cmdArgs
   };
 }
@@ -251,27 +267,33 @@ function previewGenre(genre, volume) {
   spawnSync(backend.cmd, backend.args(audioFile, volume), { stdio: "ignore" });
 }
 
-function runHookAction(action, { genre, volume, chimeVolume, noChime }) {
+function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive }) {
   const hooks = require("./hooks");
 
   switch (action) {
     case "daemon":
-      return hooks.runDaemon(genre, volume);
+      return hooks.runDaemon(genre, volume, { reactive });
 
     case "hook-start":
-      hooks.hookStart(genre, volume);
+      hooks.hookStart(genre, volume, { reactive });
       return;
 
     case "hook-stop":
       hooks.hookStop({ outcome: "success", volume, chimeVolume, noChime });
       return;
 
+    case "hook-tool":
+      return hooks.hookTool();
+
     case "install-hooks": {
-      const { file, backup } = hooks.installHooks(genre, volume);
+      const { file, backup } = hooks.installHooks(genre, volume, hooks.settingsPath(), { reactive });
       console.log(`\x1b[32m✔ VibeAudio hooks installed in ${file}\x1b[0m`);
       if (backup) console.log(`  Previous settings backed up to ${backup}`);
       console.log(`  UserPromptSubmit → music starts (${genre} @ ${Math.round(volume * 100)}%)`);
       console.log(`  Stop             → music stops + success chime`);
+      if (reactive) {
+        console.log(`  PreToolUse       → intensity follows the tool in use (reactive mode)`);
+      }
       console.log(`  Restart Claude Code for the hooks to take effect.`);
       console.log(`  Remove them any time with: vibe --uninstall-hooks`);
       return;
@@ -381,11 +403,12 @@ async function run() {
     preview,
     clearCache: shouldClear,
     hookAction,
+    reactive,
     cmdArgs
   } = parseArgs(process.argv);
 
   if (hookAction) {
-    return runHookAction(hookAction, { genre, volume, chimeVolume, noChime });
+    return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive });
   }
 
   if (shouldClear) {

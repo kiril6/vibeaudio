@@ -256,6 +256,7 @@ class AudioPlayer {
     this.genre = "lofi";
     this.volume = 0.42;
     this.seed = projectSeed();
+    this.intensity = null;
     this.currentTier = 1;
     this.nextTimer = null;
     this.watchdog = null;
@@ -265,7 +266,7 @@ class AudioPlayer {
    * Returns true if playback actually started. Restarts when called with
    * different settings while playing, so a genre switch is not silently dropped.
    */
-  start(genre = "lofi", volume = 0.42, { maxDurationMs = null } = {}) {
+  start(genre = "lofi", volume = 0.42, { maxDurationMs = null, intensity = null } = {}) {
     const resolved = resolveGenre(genre);
     const targetVolume = Math.max(0.05, Math.min(1.0, volume));
 
@@ -284,6 +285,7 @@ class AudioPlayer {
     this.genre = resolved;
     this.volume = targetVolume;
     this.seed = projectSeed();
+    this.intensity = intensity;
 
     installExitHook();
     activePlayers.add(this);
@@ -304,8 +306,10 @@ class AudioPlayer {
     // 0 - 15s  -> Tier 1 (Ambient intro / gentle pads)
     // 15 - 45s -> Tier 2 (Main progression & bassline)
     // 45s+     -> Tier 3 (Deep focus / peak energy)
+    // An intensity source (reactive mode) overrides this when it has a signal.
     const elapsed = Date.now() - this.startTime;
-    this.currentTier = elapsed > TIER_3_AFTER_MS ? 3 : elapsed > TIER_2_AFTER_MS ? 2 : 1;
+    const byTime = elapsed > TIER_3_AFTER_MS ? 3 : elapsed > TIER_2_AFTER_MS ? 2 : 1;
+    this.currentTier = (this.intensity && this.intensity()) || byTime;
 
     const audioFile = getAudioPath(this.genre, this.currentTier, this.seed);
     const backend = detectPlayer();

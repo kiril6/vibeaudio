@@ -57,7 +57,9 @@ When adding a genre, follow that shape, honour both `tier` and `seed`, and wire 
 
 **Claude Code hooks** (`src/hooks.js`): `--install-hooks` merges `UserPromptSubmit` → `--hook-start` and `Stop` → `--hook-stop` into `~/.claude/settings.json`. Because hooks fire as short-lived processes, playback lives in a detached daemon (`--daemon`, an internal mode) tracked by `~/.vibeaudio/daemon.pid`; `--hook-start` respawns it and `--hook-stop` SIGTERMs it, then plays the chime in the hook process itself.
 
-Settings writes must stay non-destructive: the file belongs to the user and usually holds other tools' hooks. `isVibeHook()` identifies our entries by the `--hook-start`/`--hook-stop` flags, `setHook()` replaces rather than appends (idempotent reinstall), malformed JSON aborts instead of being overwritten, and the prior file is copied to `settings.json.vibeaudio.bak`.
+Settings writes must stay non-destructive: the file belongs to the user and usually holds other tools' hooks. `isVibeHook()` identifies our entries by the `--hook-start`/`--hook-stop`/`--hook-tool` flags, `setHook()` replaces rather than appends (idempotent reinstall), malformed JSON aborts instead of being overwritten, and the prior file is copied to `settings.json.vibeaudio.bak`.
+
+**Reactive mode** (`--reactive`, opt-in) adds a `PreToolUse` hook that reads Claude Code's JSON payload from stdin and writes a tier to `~/.vibeaudio/intensity` (`TOOL_TIERS`). The daemon passes `readIntensity` to `AudioPlayer.start()` as the `intensity` option, and `playLoop()` prefers it over the time-based tier, falling back when there's no signal. It stays off by default because music that reacts to every tool call is music the user notices — the opposite of the product's goal. `hookStart`/`hookStop` clear the intensity file so one prompt's activity can't leak into the next.
 
 **HUD** (`src/hud.js`): animates an ASCII waveform in the terminal **title bar only** — the wrapped tool may own the screen by the time music starts, so drawing inline would corrupt a full-screen TUI. `stop()` is inert unless `start()` ran and is idempotent, since `cleanup()` can be reached from more than one path.
 

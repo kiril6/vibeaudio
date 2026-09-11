@@ -199,6 +199,24 @@ Removing them is one command:
 vibe --uninstall-hooks
 ```
 
+### Reactive mode (opt-in)
+
+```bash
+vibe --reactive --install-hooks
+```
+
+Adds a `PreToolUse` hook so intensity follows **what the agent is doing**, not just how long it's taken:
+
+| Agent is… | Tools | Tier |
+| :--- | :--- | :--- |
+| Reading and searching | `Read`, `Grep`, `Glob`, `WebFetch` | 1 — sparse |
+| Changing code | `Edit`, `Write`, `NotebookEdit` | 2 — groove enters |
+| Running things | `Bash`, `Task` | 3 — peak |
+
+Changes land at the next loop boundary, so it shifts musically rather than cutting mid-bar. Without a tool signal it falls back to time-based escalation.
+
+**This is off by default on purpose.** Music that moves every time the agent switches tools is music you *notice* — which is the opposite of what focus audio is for. Try it, but if you catch yourself listening to it instead of reading, reinstall without `--reactive` (which removes the `PreToolUse` hook again).
+
 **Safety notes:** installing merges into your existing settings rather than replacing them — other tools' hooks are left untouched, your previous file is copied to `settings.json.vibeaudio.bak`, and re-running the install updates the entry instead of adding a duplicate. Uninstall removes only VibeAudio's own entries. If `settings.json` isn't valid JSON, VibeAudio refuses to write rather than clobbering it. The background player is capped at 15 minutes, so a missed `Stop` hook can't leave music looping.
 
 ---
@@ -252,6 +270,7 @@ export VIBE_GENRE=jazz     # or synthwave, electronic, zen, random
 | `--clear-cache` | Delete all cached audio, then exit | — |
 | `--mcp` | Run as an MCP stdio server for desktop apps | — |
 | `--install-hooks` | Wire music into Claude Code hooks (no wrapper needed) | — |
+| `--reactive` | With `--install-hooks`: intensity follows the tool in use | off |
 | `--uninstall-hooks` | Remove the Claude Code hooks again | — |
 | `-h, --help` | Show help and options | — |
 | `--version` | Show version | — |
