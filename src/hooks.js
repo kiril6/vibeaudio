@@ -180,7 +180,30 @@ function loadSettings(file) {
   }
 }
 
+/**
+ * Hooks record an absolute path to this CLI, so installing from a throwaway
+ * `npx` checkout writes a path npm will eventually evict — leaving every
+ * prompt firing a hook that silently fails. Refuse rather than plant that.
+ */
+function ephemeralInstallReason(entry = CLI_ENTRY) {
+  const dir = entry.split(path.sep);
+  if (dir.includes("_npx")) return "npx";
+  if (dir.includes(".npm-cache") || dir.includes("_cacache")) return "npm cache";
+  return null;
+}
+
 function installHooks(genre = "lofi", volume = 0.4, file = settingsPath(), { reactive = false } = {}) {
+  const ephemeral = ephemeralInstallReason();
+  if (ephemeral) {
+    throw new Error(
+      `refusing to install hooks from a temporary ${ephemeral} checkout — the path ` +
+      `(${CLI_ENTRY}) is deleted when the cache is cleared, which would leave Claude Code ` +
+      `running a broken hook on every prompt.\n\n` +
+      `Install it for real first, then re-run:\n\n` +
+      `  npm i -g github:kiril6/vibeaudio\n  vibe --install-hooks\n`
+    );
+  }
+
   fs.mkdirSync(path.dirname(file), { recursive: true });
 
   const { settings, raw } = loadSettings(file);
@@ -236,6 +259,7 @@ module.exports = {
   readIntensity,
   stopDaemon,
   installHooks,
+  ephemeralInstallReason,
   uninstallHooks,
   settingsPath,
   isVibeHook,

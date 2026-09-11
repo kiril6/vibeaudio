@@ -60,22 +60,52 @@ If no player is found, VibeAudio prints a one-line notice and runs your command 
 
 ---
 
-## 🚀 Quickstart
+## 🚀 Install
 
-Run straight from GitHub — no install, no clone:
+One line. No clone, no build step, no dependencies to resolve:
 
 ```bash
-npx github:kiril6/vibeaudio claude
+npm i -g github:kiril6/vibeaudio
 ```
 
-> **Note:** VibeAudio is not published to npm yet, so `npx vibeaudio` won't resolve. Use the `github:` form above, or install globally from a clone (below).
+That puts `vibe` and `vibeaudio` on your `PATH`. Re-run the same command to update; `npm rm -g vibeaudio` removes it.
+
+> **Note:** VibeAudio isn't on the npm registry yet, so plain `npx vibeaudio` won't resolve — use the `github:` form above.
+
+### Then pick how it runs
+
+**Using Claude Code interactively?** Install the hooks — this is the mode that actually tracks thinking:
+
+```bash
+vibe --install-hooks
+```
+
+Restart Claude Code, then run `claude` normally with no prefix. Music starts when you submit a prompt and stops with a chime when the agent finishes. [Details below.](#-claude-code-hooks-no-wrapper-needed)
+
+**Running one-shot commands?** Wrap them:
+
+```bash
+vibe npm test
+vibe claude -p "explain this repo"
+```
+
+> **Which one you want:** the wrapper plays music for as long as the wrapped process lives. That's exactly right for a command that exits when its work is done — and wrong for an interactive REPL like `claude`, where the process stays alive while you read and type, so the music never stops. Hooks know when the agent is actually thinking; the wrapper can only time the process.
+
+### Try it without installing
+
+```bash
+npx github:kiril6/vibeaudio --preview jazz   # hear a loop
+npx github:kiril6/vibeaudio npm test          # wrap one command
+```
+
+`npx` runs from a temporary cache that npm eventually deletes, so `--install-hooks` refuses to run this way — it would write a path into your Claude Code settings that later vanishes. Install globally first.
 
 ### Interactive Launcher Menu
 
 Run with no command to get a menu for picking your AI, vibe, and volume:
 
 ```bash
-npx github:kiril6/vibeaudio
+vibe
 ```
 
 ```
@@ -108,9 +138,9 @@ Choose your volume level:
 ### Direct Command Wrapper
 
 ```bash
-npx github:kiril6/vibeaudio claude      # wrap Claude Code
-npx github:kiril6/vibeaudio gemini      # wrap Gemini CLI
-npx github:kiril6/vibeaudio sleep 5     # test with a 5-second sleep
+vibe npm test           # music for the length of the test run
+vibe gemini -p "..."    # one-shot prompt
+vibe sleep 5            # test with a 5-second sleep
 ```
 
 ### Audition a Genre
@@ -118,14 +148,10 @@ npx github:kiril6/vibeaudio sleep 5     # test with a 5-second sleep
 Hear one loop without wrapping anything:
 
 ```bash
-npx github:kiril6/vibeaudio --preview jazz
+vibe --preview jazz
 ```
 
----
-
-## 📦 Install Globally
-
-For daily use, install from a clone so it launches with zero startup delay:
+### Developing on it
 
 ```bash
 git clone https://github.com/kiril6/vibeaudio.git
@@ -133,16 +159,7 @@ cd vibeaudio
 npm link
 ```
 
-That puts both `vibe` and `vibeaudio` on your `PATH`.
-
-### Pro Tip: The 1-Line Shell Alias
-Add this to your `~/.zshrc` or `~/.bashrc`:
-
-```bash
-alias claude="vibe claude"
-alias gemini="vibe gemini"
-```
-Now, whenever you run `claude`, music automatically plays while it works.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the dev loop.
 
 ---
 
@@ -217,7 +234,7 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 
 **This is off by default on purpose.** Music that moves every time the agent switches tools is music you *notice* — which is the opposite of what focus audio is for. Try it, but if you catch yourself listening to it instead of reading, reinstall without `--reactive` (which removes the `PreToolUse` hook again).
 
-**Safety notes:** installing merges into your existing settings rather than replacing them — other tools' hooks are left untouched, your previous file is copied to `settings.json.vibeaudio.bak`, and re-running the install updates the entry instead of adding a duplicate. Uninstall removes only VibeAudio's own entries. If `settings.json` isn't valid JSON, VibeAudio refuses to write rather than clobbering it. The background player is capped at 15 minutes, so a missed `Stop` hook can't leave music looping.
+**Safety notes:** installing is refused from a temporary `npx` checkout, since the hook records an absolute path that npm's cache eviction would later delete. Installing merges into your existing settings rather than replacing them — other tools' hooks are left untouched, your previous file is copied to `settings.json.vibeaudio.bak`, and re-running the install updates the entry instead of adding a duplicate. Uninstall removes only VibeAudio's own entries. If `settings.json` isn't valid JSON, VibeAudio refuses to write rather than clobbering it. The background player is capped at 15 minutes, so a missed `Stop` hook can't leave music looping.
 
 ---
 

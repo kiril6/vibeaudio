@@ -37,8 +37,9 @@ Procedural focus music while your AI coding tools think.
   vibeaudio [options] <command> [args...]
 
 \x1b[1mEXAMPLES:\x1b[0m
-  vibe claude
-  vibe gemini
+  vibe --install-hooks           \x1b[90m# best for interactive Claude Code — music follows thinking\x1b[0m
+  vibe npm test                  \x1b[90m# wrap any command that exits when it's done\x1b[0m
+  vibe claude -p "explain this"
   vibe --genre synthwave claude
   vibe --genre 8bit sleep 5
   vibe --volume 30 npm test
@@ -408,7 +409,13 @@ async function run() {
   } = parseArgs(process.argv);
 
   if (hookAction) {
-    return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive });
+    try {
+      return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive });
+    } catch (e) {
+      // Settings problems are the user's to fix — report them, don't stack-trace.
+      console.error(`\x1b[31m[vibeaudio] ${e.message}\x1b[0m`);
+      process.exit(1);
+    }
   }
 
   if (reactive) {
