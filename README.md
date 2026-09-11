@@ -1,7 +1,8 @@
 # 🎧 VibeAudio
 
-> **Context-aware procedural focus music while your AI coding tools think.**
-> Zero dependencies. Zero setup. Works with Claude Code, Gemini CLI, Codex, Aider, and any terminal command.
+> **Procedural focus music while your AI coding tools think.**
+> Every project gets its own arrangement. Zero dependencies, zero audio files.
+> Works with Claude Code, Gemini CLI, Codex, Aider, and any terminal command.
 
 ---
 
@@ -11,14 +12,15 @@ When AI coding agents take 15–45 seconds to reason, read files, and write code
 
 **VibeAudio fixes dead air:**
 1. **Procedural Focus Music:** While your AI agent is thinking, VibeAudio plays warm, gentle procedural music in the background.
-2. **Zero Fatigue:** Built on soothing Lo-Fi Rhodes chords, analog Synthwave pads, or filtered 8-bit retro vibes.
+2. **Built to be ignorable:** Soothing Lo-Fi Rhodes chords, analog Synthwave pads, or filtered 8-bit retro vibes — quiet, unhurried, and the same every time you open a given project, so it fades into the background instead of pulling your ear back.
 3. **The "Done" Chime:** When the AI finishes, the music stops and a delicate glassy chime signals that your output is ready to read.
 
 ---
 
 ## ✨ What Makes VibeAudio Different
 
-* 🧮 **Pure Procedural Synthesis (Zero MP3s):** Every note, chord, and pad is generated mathematically in code — no audio assets to download, nothing to install but Node.
+* 🧮 **Pure Procedural Synthesis (Zero MP3s):** Every note, chord, and pad is generated mathematically in code — no audio assets to download, no npm dependencies.
+* 🎼 **A different arrangement per project:** Your working directory seeds the progression, bass line and melody, so each repo has its own sound (and keeps it).
 * 🛡️ **The Grace Window:** Fast commands (like `/help` or quick queries) remain 100% silent. Music only begins if the AI takes longer than 1.5 seconds (tunable with `--grace`).
 * 📈 **Adaptive Time Escalation:** The arrangement gains layers as the prompt runs (Tier 1: 0–15s gentle intro → Tier 2: 15–45s main groove → Tier 3: 45s+ deep focus layer). You can literally hear how deep into the task the AI is.
 * 🔔 **Outcome-Aware Chimes:** A bright ascending chime on success (`exit 0`), a soft descending minor chord on error. Abort with `Ctrl+C` and you get silence — no false "done" signal.
