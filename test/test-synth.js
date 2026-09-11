@@ -105,4 +105,28 @@ assert.strictEqual(parsed.noHud, true);
 assert.deepStrictEqual(parsed.cmdArgs, ["claude", "arg1"]);
 console.log("   ✓ CLI argument parser accurately processes flags, HUD, and child commands.");
 
-console.log("\n\x1b[32mAll 12 tests passed successfully!\x1b[0m");
+// 13. Volume Presets & Independent Chime Volume
+console.log("13. Testing Volume Presets & Independent Chime Volume...");
+const quietParsed = parseArgs(["node", "bin/vibeaudio.js", "--quiet", "-cv", "70", "gemini"]);
+assert.strictEqual(quietParsed.volume, 0.25, "--quiet should set volume to 0.25");
+assert.strictEqual(quietParsed.chimeVolume, 0.70, "-cv should set chimeVolume to 0.70");
+
+const whisperParsed = parseArgs(["node", "bin/vibeaudio.js", "--whisper", "claude"]);
+assert.strictEqual(whisperParsed.volume, 0.15, "--whisper should set volume to 0.15");
+
+const loudParsed = parseArgs(["node", "bin/vibeaudio.js", "--loud", "claude"]);
+assert.strictEqual(loudParsed.volume, 0.75, "--loud should set volume to 0.75");
+console.log("   ✓ Volume presets (--whisper, --quiet, --loud) and --chime-volume work properly.");
+
+// 14. Environment Variables (VIBE_VOLUME and VIBE_CHIME_VOLUME)
+console.log("14. Testing Volume Environment Variables...");
+process.env.VIBE_VOLUME = "35";
+process.env.VIBE_CHIME_VOLUME = "80";
+const envParsed = parseArgs(["node", "bin/vibeaudio.js", "claude"]);
+assert.strictEqual(envParsed.volume, 0.35, "VIBE_VOLUME env should override default volume");
+assert.strictEqual(envParsed.chimeVolume, 0.80, "VIBE_CHIME_VOLUME env should override chime volume");
+delete process.env.VIBE_VOLUME;
+delete process.env.VIBE_CHIME_VOLUME;
+console.log("   ✓ Environment variables (VIBE_VOLUME, VIBE_CHIME_VOLUME) override defaults.");
+
+console.log("\n\x1b[32mAll 14 tests passed successfully!\x1b[0m");

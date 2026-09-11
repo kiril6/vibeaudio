@@ -53,9 +53,19 @@ Which AI companion would you like to launch?
   6. Custom command...
 
 Choose your sound vibe:
-❯ 1. ☕ Lo-Fi Focus     — Warm Rhodes electric piano & Kalimba drops
-  2. 🌌 Chill Synthwave  — '80s analog chorused pads & pulsing bass
-  3. 🕹️ Cozy 8-Bit      — Filtered retro chiptune arpeggios
+❯ 1. ☕ Lo-Fi Focus        — Warm Rhodes electric piano & Kalimba drops
+  2. 🌌 Chill Synthwave    — '80s analog chorused pads & pulsing bass
+  3. 🕹️ Cozy 8-Bit         — Filtered retro chiptune arpeggios
+  4. ⚡ Melodic Electronic  — Downtempo resonant plucks & tech pulse
+  5. 🎷 Midnight Jazz      — ii-V-I piano chords & walking upright bass
+  6. 🎋 Zen Ambient        — Meditative singing bowls & celestial pads
+  7. 🎲 Shuffle / Random   — Picks a surprise vibe each time
+
+Choose your volume level:
+❯ 1. ☕ Normal (40%)       — Balanced focus background [Default]
+  2. 🤫 Quiet (25%)        — Discreet focus / open office
+  3. 🌙 Whisper (15%)      — Ultra-gentle / headphones / late night
+  4. 📢 Loud (75%)         — Audible across the room
 ```
 
 ### 2. Direct Command Wrapper
@@ -137,10 +147,23 @@ export VIBE_GENRE=jazz     # or synthwave, electronic, zen, random
 | :--- | :--- | :--- |
 | `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `random` | `lofi` |
 | `-v, --volume <0-100>` | Set playback volume | `40` |
+| `-cv, --chime-volume <0-100>` | Set independent completion chime volume | `volume * 1.1` |
+| `--whisper` | Quick preset: 15% volume (headphones / late night) | — |
+| `--quiet` | Quick preset: 25% volume (focus / open office) | — |
+| `--loud` | Quick preset: 75% volume (hear from across the room) | — |
 | `--no-chime` | Disable the resolution completion chime | `false` |
 | `--no-hud` | Disable terminal window/tab title animation | `false` |
 | `-h, --help` | Show help and options | — |
 | `--version` | Show version | — |
+
+### ⚙️ Environment Variables
+Set persistent defaults in your `~/.zshrc` or `~/.bashrc`:
+
+```bash
+export VIBE_GENRE=jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, random
+export VIBE_VOLUME=25           # Background music at 25%
+export VIBE_CHIME_VOLUME=70     # Crisp completion chime at 70%
+```
 
 ---
 

@@ -136,7 +136,7 @@ class AudioPlayer {
     loop();
   }
 
-  stop({ playChime = true, outcome = "success", volume = 0.35 } = {}) {
+  stop({ playChime = true, outcome = "success", volume = 0.35, chimeVolume = null } = {}) {
     this.isPlaying = false;
 
     if (this.currentProc) {
@@ -150,7 +150,8 @@ class AudioPlayer {
 
     if (playChime) {
       const chimeFile = getChimePath(outcome);
-      const volStr = String(Math.max(0.05, Math.min(1.0, volume)));
+      const targetVol = chimeVolume !== null ? chimeVolume : Math.min(0.65, Math.max(0.35, volume * 1.1));
+      const volStr = String(Math.max(0.05, Math.min(1.0, targetVol)));
       try {
         spawnSync("afplay", ["-v", volStr, chimeFile], { stdio: "ignore", timeout: 2500 });
       } catch (e) {

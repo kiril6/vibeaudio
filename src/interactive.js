@@ -125,6 +125,13 @@ function promptCustomCommand() {
   });
 }
 
+const VOLUMES = [
+  { name: "☕ Normal (40%)", desc: "Balanced focus background [Default]", vol: 0.40 },
+  { name: "🤫 Quiet (25%)", desc: "Discreet focus / open office", vol: 0.25 },
+  { name: "🌙 Whisper (15%)", desc: "Ultra-gentle / headphones / late night", vol: 0.15 },
+  { name: "📢 Loud (75%)", desc: "Audible across the room", vol: 0.75 }
+];
+
 async function promptInteractive() {
   console.log(`\n\x1b[1m\x1b[35m🎧 VibeAudio — Interactive AI Launcher\x1b[0m\n`);
 
@@ -155,9 +162,17 @@ async function promptInteractive() {
     (item, num) => `${num}. ${item.name} \x1b[90m— ${item.desc}\x1b[0m`
   );
 
+  // 3. Select Volume Preset
+  const selectedVolume = await selectMenu(
+    "Choose your volume level:",
+    VOLUMES,
+    (item, num) => `${num}. ${item.name} \x1b[90m— ${item.desc}\x1b[0m`
+  );
+
   return {
     cmd: finalCmd,
-    genre: selectedGenre.id
+    genre: selectedGenre.id,
+    volume: selectedVolume.vol
   };
 }
 

@@ -25,21 +25,34 @@ Procedural focus music while your AI coding tools think.
   vibe --volume 30 npm test
 
 \x1b[1mOPTIONS:\x1b[0m
-  -g, --genre <name>     Select genre: lofi (default), synthwave, 8bit, electronic, jazz, zen, random
-  -v, --volume <0-100>   Set playback volume (default: 40)
-      --no-chime         Disable the resolution completion chime
-  -h, --help             Show this help message
-      --version          Show version
+  -g, --genre <name>           Select genre: lofi (default), synthwave, 8bit, electronic, jazz, zen, random
+  -v, --volume <0-100>         Set playback volume (default: 40)
+  -cv, --chime-volume <0-100>   Set independent completion chime volume
+      --whisper                Preset: 15% volume (late night / headphones)
+      --quiet                  Preset: 25% volume (focus / open office)
+      --loud                   Preset: 75% volume (hear from across the room)
+      --no-chime               Disable the resolution completion chime
+      --no-hud                 Disable terminal window/tab title animation
+  -h, --help                   Show this help message
+      --version                Show version
 
 \x1b[1mENVIRONMENT:\x1b[0m
-  VIBE_GENRE=<name>      Set persistent default genre (e.g. export VIBE_GENRE=jazz)
+  VIBE_GENRE=<name>            Set persistent default genre (e.g. export VIBE_GENRE=jazz)
+  VIBE_VOLUME=<0-100>          Set persistent default volume (e.g. export VIBE_VOLUME=25)
+  VIBE_CHIME_VOLUME=<0-100>    Set persistent chime volume (e.g. export VIBE_CHIME_VOLUME=60)
 `);
 }
 
 function parseArgs(argv) {
   const args = argv.slice(2);
   let genre = (process.env.VIBE_GENRE || "lofi").toLowerCase();
-  let volume = 0.40;
+
+  const envVol = process.env.VIBE_VOLUME ? parseInt(process.env.VIBE_VOLUME, 10) : NaN;
+  let volume = !isNaN(envVol) ? Math.max(5, Math.min(100, envVol)) / 100.0 : 0.40;
+
+  const envChimeVol = process.env.VIBE_CHIME_VOLUME ? parseInt(process.env.VIBE_CHIME_VOLUME, 10) : NaN;
+  let chimeVolume = !isNaN(envChimeVol) ? Math.max(5, Math.min(100, envChimeVol)) / 100.0 : null;
+
   let noChime = false;
   let noHud = false;
   let cmdArgs = [];
@@ -77,6 +90,35 @@ function parseArgs(argv) {
       }
     }
 
+    if (arg === "-cv" || arg === "--chime-volume") {
+      if (i + 1 < args.length) {
+        const parsed = parseInt(args[i + 1], 10);
+        if (!isNaN(parsed)) {
+          chimeVolume = Math.max(5, Math.min(100, parsed)) / 100.0;
+        }
+        i += 2;
+        continue;
+      }
+    }
+
+    if (arg === "--whisper") {
+      volume = 0.15;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--quiet") {
+      volume = 0.25;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--loud") {
+      volume = 0.75;
+      i += 1;
+      continue;
+    }
+
     if (arg === "--no-chime") {
       noChime = true;
       i += 1;
@@ -94,13 +136,13 @@ function parseArgs(argv) {
     break;
   }
 
-  return { genre, volume, noChime, noHud, cmdArgs };
+  return { genre, volume, chimeVolume, noChime, noHud, cmdArgs };
 }
 
 const { promptInteractive } = require("./interactive");
 const { TerminalHud } = require("./hud");
 
-function executeCommand(cmdArgs, genre, volume, noChime, noHud = false) {
+function executeCommand(cmdArgs, genre, volume, chimeVolume, noChime, noHud = false) {
   const player = new AudioPlayer();
   const hud = !noHud ? new TerminalHud(genre) : null;
   const startTime = Date.now();
@@ -128,7 +170,12 @@ function executeCommand(cmdArgs, genre, volume, noChime, noHud = false) {
     const shouldChime = musicStarted && !noChime && elapsed > GRACE_PERIOD_MS;
 
     if (hud) hud.stop({ outcome, code });
-    player.stop({ playChime: shouldChime, outcome, volume: Math.min(0.5, volume * 0.9) });
+    player.stop({
+      playChime: shouldChime,
+      outcome,
+      volume: Math.min(0.5, volume * 0.9),
+      chimeVolume
+    });
     process.exit(code);
   };
 
@@ -161,13 +208,14 @@ function executeCommand(cmdArgs, genre, volume, noChime, noHud = false) {
 }
 
 async function run() {
-  const { genre, volume, noChime, noHud, cmdArgs } = parseArgs(process.argv);
+  const { genre, volume, chimeVolume, noChime, noHud, cmdArgs } = parseArgs(process.argv);
 
   if (cmdArgs.length === 0) {
     if (process.stdin.isTTY) {
       try {
         const selection = await promptInteractive();
-        return executeCommand(selection.cmd, selection.genre, volume, noChime, noHud);
+        const chosenVol = selection.volume !== undefined ? selection.volume : volume;
+        return executeCommand(selection.cmd, selection.genre, chosenVol, chimeVolume, noChime, noHud);
       } catch (e) {
         process.exit(0);
       }
@@ -177,7 +225,7 @@ async function run() {
     }
   }
 
-  executeCommand(cmdArgs, genre, volume, noChime, noHud);
+  executeCommand(cmdArgs, genre, volume, chimeVolume, noChime, noHud);
 }
 
 module.exports = { run, parseArgs };
