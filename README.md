@@ -68,7 +68,7 @@ One line. No clone, no build step, no dependencies to resolve:
 npm i -g github:kiril6/vibeaudio
 ```
 
-That puts `vibe` and `vibeaudio` on your `PATH`. Re-run the same command to update; `npm rm -g vibeaudio` removes it.
+That puts `vibe` and `vibeaudio` on your `PATH`. Re-run the same command to update, or see [Uninstall](#uninstall) to remove it cleanly.
 
 > **Note:** VibeAudio isn't on the npm registry yet, so plain `npx vibeaudio` won't resolve — use the `github:` form above.
 
@@ -162,6 +162,20 @@ npm link
 ```
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the dev loop.
+
+### Uninstall
+
+**Remove the hooks first, while `vibe` still exists:**
+
+```bash
+vibe --uninstall-hooks          # 1. unwire Claude Code
+npm rm -g vibeaudio             # 2. remove the CLI
+rm -rf ~/.vibeaudio             # 3. optional: cached audio + daemon state
+```
+
+> **Order matters.** `npm rm -g` deletes the binary but not your `~/.claude/settings.json`. Removing the package first strands hook entries that point at a path that no longer exists, and Claude Code will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json` by hand.
+
+Step 3 only reclaims disk (the audio cache; ~9 MB per few projects) — it's regenerated on next use, so skip it if you're reinstalling. If you added the MCP server to a desktop app (see *Desktop GUI Apps* below), drop the `vibeaudio` entry from that app's config too. Nothing else is written outside these paths.
 
 ---
 
