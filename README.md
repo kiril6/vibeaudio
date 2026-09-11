@@ -94,9 +94,11 @@ vibe claude -p "explain this repo"
 ### Try it without installing
 
 ```bash
-npx github:kiril6/vibeaudio --preview jazz   # hear a loop
-npx github:kiril6/vibeaudio npm test          # wrap one command
+npx github:kiril6/vibeaudio --preview jazz   # hear a loop right now
+npx github:kiril6/vibeaudio sleep 8          # hear the wrapper: music, then the done chime
 ```
+
+> **Heard nothing?** Music only starts once the wrapped command has run longer than the 1.5s grace window — that's [the point](#-what-makes-vibeaudio-different), so quick commands stay silent. `sleep 8` is the reliable demo; something like `npm test` is silent if the tests finish fast or the command errors out immediately.
 
 `npx` runs from a temporary cache that npm eventually deletes, so `--install-hooks` refuses to run this way — it would write a path into your Claude Code settings that later vanishes. Install globally first.
 
