@@ -18,10 +18,15 @@ function isInstalled(cmd) {
   }
 }
 
+// Convenience only - the wrapper runs any command, and "Custom command..."
+// is the escape hatch for anything not listed. Entries are sorted so what is
+// actually installed floats to the top, which is what lets this list grow
+// without turning into a wall of things the user does not have.
 const AI_TOOLS = [
   { name: "Claude Code", cmd: ["claude"], check: "claude" },
   { name: "Gemini CLI", cmd: ["gemini"], check: "gemini" },
   { name: "Codex CLI", cmd: ["codex"], check: "codex" },
+  { name: "GitHub Copilot CLI", cmd: ["copilot"], check: "copilot" },
   { name: "Aider", cmd: ["aider"], check: "aider" },
   { name: "Ollama (Llama 3)", cmd: ["ollama", "run", "llama3"], check: "ollama" },
   { name: "Custom command...", cmd: null }
@@ -177,6 +182,11 @@ async function promptInteractive() {
     ...t,
     installed: t.check ? isInstalled(t.check) : null
   }));
+
+  // Installed tools first, "Custom command..." last, each group keeping the
+  // order above. A stable sort is required for that, which Node guarantees.
+  const rank = (t) => (t.installed === true ? 0 : t.installed === false ? 1 : 2);
+  toolsWithStatus.sort((a, b) => rank(a) - rank(b));
 
   const selectedTool = await selectMenu(
     "Which AI companion would you like to launch?",

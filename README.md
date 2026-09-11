@@ -120,12 +120,13 @@ vibe
 🎧 VibeAudio — Interactive AI Launcher
 
 Which AI companion would you like to launch?
-❯ 1. Claude Code        [✓ installed]
-  2. Gemini CLI         [✓ installed]
-  3. Codex CLI
-  4. Aider
-  5. Ollama (Llama 3)
-  6. Custom command...
+❯ 1. Claude Code          [✓ installed]
+  2. Gemini CLI           [✓ installed]
+  3. Codex CLI            [✓ installed]
+  4. GitHub Copilot CLI   [✓ installed]
+  5. Aider                (not found in PATH)
+  6. Ollama (Llama 3)     (not found in PATH)
+  7. Custom command...
 
 Choose your sound vibe:
 ❯ 1. ☕ Lo-Fi Focus        — Warm Rhodes electric piano & Kalimba drops
@@ -142,6 +143,8 @@ Choose your volume level:
   3. 🌙 Whisper (15%)      — Ultra-gentle / headphones / late night
   4. 📢 Loud (75%)         — Audible across the room
 ```
+
+Installed tools sort to the top. This list is a shortcut, not a compatibility list — **`vibe` wraps any command at all**, and "Custom command..." takes one you type (quoted arguments survive intact). Adding an entry is one line in [`src/interactive.js`](src/interactive.js) if you'd rather your tool be one keystroke.
 
 ### Direct Command Wrapper
 
@@ -194,6 +197,12 @@ vibe --genre electronic --volume 25 --install-hooks
 ```
 
 The change applies to your next prompt — no restart. Audition first with `vibe --preview electronic`.
+
+**The flags compose** — set everything you want in one command, including [reactive mode](#reactive-mode-opt-in):
+
+```bash
+vibe --genre jazz --volume 25 --reactive --install-hooks
+```
 
 Two things to know: the reinstall **replaces** the whole entry, so flags you don't repeat are dropped (leave off `--reactive` and reactive mode goes away). And music already playing keeps the old genre until the next prompt swaps the daemon — `pkill -f "vibeaudio.js --daemon"` cuts it short.
 
