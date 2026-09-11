@@ -55,9 +55,13 @@ Three rules hold across every generator:
 
 When adding a genre, follow that shape, honour both `tier` and `seed`, and wire it into `player.js`'s `generateLoop` switch and `AVAILABLE_GENRES`.
 
-**MCP server** (`src/mcp.js`): exposes `vibe_play` / `vibe_stop` / `vibe_status` tools over stdio JSON-RPC for Claude Desktop / Antigravity, backed by the same `AudioPlayer` class as the CLI wrapper. Because a crashed client never sends `vibe_stop`, playback is capped by `MAX_PLAYBACK_MS` and also stops on stdin close. Tool responses report what actually happened (`start()`/`stop()` return booleans) rather than assuming success.
+**MCP server** (`src/mcp.js`): exposes `vibe_play` / `vibe_stop` / `vibe_status` tools over stdio JSON-RPC for every client without a hook system (Codex, Gemini CLI, Cursor, Claude Desktop, Antigravity), backed by the same `AudioPlayer` class as the CLI wrapper. Nothing fires these tools automatically — the model chooses to — so the *when to call this* guidance lives in the tool descriptions, which every client shows the model, as well as in the `instructions` field, which the spec makes optional. Because a crashed client never sends `vibe_stop`, playback is capped by `MAX_PLAYBACK_MS` and also stops on stdin close. Tool responses report what actually happened (`start()`/`stop()` return booleans) rather than assuming success.
 
 **Claude Code hooks** (`src/hooks.js`): `--install-hooks` merges `UserPromptSubmit` → `--hook-start` and `Stop` → `--hook-stop` into `~/.claude/settings.json`. Because hooks fire as short-lived processes, playback lives in a detached daemon (`--daemon`, an internal mode) tracked by `~/.vibeaudio/daemon.pid`; `--hook-start` respawns it and `--hook-stop` SIGTERMs it, then plays the chime in the hook process itself.
+
+`stopDaemon()` must confirm the pid before signalling it (`isOurDaemon()`, a `ps` command-line check). A pid file outlives a daemon that died without cleanup and the OS recycles pids, so an unverified kill eventually SIGTERMs an unrelated process — and `hookStart` calls `stopDaemon` on **every prompt**. It fails closed: an unverifiable pid is left alone, because a daemon we don't kill stops itself at `MAX_DAEMON_MS` while killing a stranger's process has no such ceiling. The check is posix-only; win32 trusts the pid.
+
+Tests that touch the daemon must run in a child process with `HOME`/`USERPROFILE` overridden, never by setting `process.env.HOME` in the suite: `hooks.js` resolves `PID_FILE` from `os.homedir()` at require time, so an in-process override silently operates on the real `~/.vibeaudio` and clobbers a live daemon's pid file.
 
 Because the hook command is an absolute path to this checkout, `installHooks()` first calls `ephemeralInstallReason()` and refuses when it's running from an `npx` cache — otherwise npm's eventual cache eviction leaves Claude Code firing a broken hook on every prompt. The guard runs before any write. `src/cli.js` wraps the whole `runHookAction()` dispatch in a try/catch so these (and malformed-settings aborts) print one line and exit 1 instead of a stack trace.
 
@@ -71,3 +75,5 @@ Settings writes must stay non-destructive: the file belongs to the user and usua
 
 - Every module in `src/synth/` is pure — no I/O, just math producing sample arrays — keep it that way so `test/test-synth.js` can assert on generator output directly.
 - CLI flags/env vars are parsed once in `src/cli.js#parseArgs`, which is unit-tested directly (imported into `test/test-synth.js`) — extend that function's `while` loop for new flags rather than parsing args elsewhere.
+- Volume arrives as a string from env/flags and as a number from MCP, so every entry point goes through `player.js#normalizeVolume`. A second hand-rolled clamp is how `VIBE_VOLUME=loud` reached the player as `NaN`.
+- `test/test-synth.js` runs on Linux, macOS and Windows in CI. Spawn `process.execPath` rather than `sleep`/`true`/`false`, and guard posix-only assertions on `process.platform`.

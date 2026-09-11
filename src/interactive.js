@@ -6,9 +6,12 @@
 const { execSync } = require("child_process");
 const readline = require("readline");
 
+// Windows has no `which`; without this every tool shows as missing there.
+const LOOKUP_CMD = process.platform === "win32" ? "where" : "which";
+
 function isInstalled(cmd) {
   try {
-    execSync(`which ${cmd}`, { stdio: "ignore" });
+    execSync(`${LOOKUP_CMD} ${cmd}`, { stdio: "ignore" });
     return true;
   } catch (e) {
     return false;
@@ -210,4 +213,4 @@ async function promptInteractive() {
   };
 }
 
-module.exports = { promptInteractive, tokenizeCommand };
+module.exports = { promptInteractive, tokenizeCommand, isInstalled };

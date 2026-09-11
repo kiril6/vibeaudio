@@ -13,6 +13,7 @@ const {
   detectPlayer,
   resolveGenre,
   isKnownGenre,
+  normalizeVolume,
   wavDurationMs,
   AVAILABLE_GENRES
 } = require("./player");
@@ -80,11 +81,8 @@ function parseArgs(argv) {
   const args = argv.slice(2);
   let genre = (process.env.VIBE_GENRE || "lofi").toLowerCase();
 
-  const envVol = process.env.VIBE_VOLUME ? parseInt(process.env.VIBE_VOLUME, 10) : NaN;
-  let volume = !isNaN(envVol) ? Math.max(5, Math.min(100, envVol)) / 100.0 : 0.40;
-
-  const envChimeVol = process.env.VIBE_CHIME_VOLUME ? parseInt(process.env.VIBE_CHIME_VOLUME, 10) : NaN;
-  let chimeVolume = !isNaN(envChimeVol) ? Math.max(5, Math.min(100, envChimeVol)) / 100.0 : null;
+  let volume = normalizeVolume(process.env.VIBE_VOLUME, 0.40);
+  let chimeVolume = normalizeVolume(process.env.VIBE_CHIME_VOLUME, null);
 
   const envGrace = process.env.VIBE_GRACE_MS ? parseInt(process.env.VIBE_GRACE_MS, 10) : NaN;
   let grace = !isNaN(envGrace) ? Math.max(0, envGrace) : DEFAULT_GRACE_PERIOD_MS;
@@ -121,10 +119,7 @@ function parseArgs(argv) {
 
     if (arg === "-v" || arg === "--volume") {
       if (i + 1 < args.length) {
-        const parsed = parseInt(args[i + 1], 10);
-        if (!isNaN(parsed)) {
-          volume = Math.max(5, Math.min(100, parsed)) / 100.0;
-        }
+        volume = normalizeVolume(args[i + 1], volume);
         i += 2;
         continue;
       }
@@ -132,10 +127,7 @@ function parseArgs(argv) {
 
     if (arg === "-cv" || arg === "--chime-volume") {
       if (i + 1 < args.length) {
-        const parsed = parseInt(args[i + 1], 10);
-        if (!isNaN(parsed)) {
-          chimeVolume = Math.max(5, Math.min(100, parsed)) / 100.0;
-        }
+        chimeVolume = normalizeVolume(args[i + 1], chimeVolume);
         i += 2;
         continue;
       }

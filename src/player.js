@@ -146,6 +146,19 @@ function isKnownGenre(genre) {
   );
 }
 
+/**
+ * Volume reaches us as a string from env vars and CLI flags, and as a number
+ * from MCP tool arguments. One parser for all three: without it each caller
+ * writes its own clamp, and the one that forgets the NaN guard hands the
+ * player `NaN` for VIBE_VOLUME=loud.
+ */
+function normalizeVolume(raw, fallback = 0.4) {
+  if (raw === undefined || raw === null || raw === "") return fallback;
+  const parsed = parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(5, Math.min(100, parsed)) / 100.0;
+}
+
 function resolveGenre(genre) {
   const normalized = (genre || "lofi").toLowerCase();
   if (normalized === "random" || normalized === "shuffle") {
@@ -398,6 +411,7 @@ module.exports = {
   detectPlayer,
   resolveGenre,
   isKnownGenre,
+  normalizeVolume,
   projectSeed,
   wavDurationMs,
   AVAILABLE_GENRES,

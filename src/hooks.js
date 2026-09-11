@@ -10,7 +10,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { spawn } = require("child_process");
+const { spawn, execFileSync } = require("child_process");
 const { AudioPlayer } = require("./player");
 
 const STATE_DIR = path.join(os.homedir(), ".vibeaudio");
@@ -89,10 +89,36 @@ function readPid() {
   }
 }
 
+/**
+ * A pid file outlives its daemon whenever the daemon dies without cleanup
+ * (SIGKILL, crash, reboot), and the OS recycles pids - so the number alone is
+ * not proof of what it now names. hookStart calls stopDaemon on every prompt,
+ * so an unverified kill would eventually SIGTERM an unrelated process.
+ *
+ * Failing closed is the safe direction here: a daemon we decline to kill stops
+ * itself at MAX_DAEMON_MS, while killing a stranger's process has no such
+ * ceiling.
+ *
+ * ponytail: posix only. Windows has no cheap command-line lookup, so the pid
+ * is trusted there as before; revisit if hooks see real Windows use.
+ */
+function isOurDaemon(pid) {
+  if (process.platform === "win32") return true;
+  try {
+    const out = execFileSync("ps", ["-p", String(pid), "-o", "args="], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    });
+    return out.includes("vibeaudio") && out.includes("--daemon");
+  } catch (e) {
+    return false; // No such process, or ps unavailable - either way, do not kill.
+  }
+}
+
 function stopDaemon() {
   const pid = readPid();
   fs.rmSync(PID_FILE, { force: true });
-  if (pid === null) return false;
+  if (pid === null || !isOurDaemon(pid)) return false;
 
   try {
     process.kill(pid, "SIGTERM");
@@ -258,6 +284,7 @@ module.exports = {
   toolTier,
   readIntensity,
   stopDaemon,
+  isOurDaemon,
   installHooks,
   ephemeralInstallReason,
   uninstallHooks,

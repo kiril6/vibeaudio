@@ -82,11 +82,13 @@ npm version patch          # or minor / major
 # 2. Push the commit and tag
 git push --follow-tags
 
-# 3. Publish to the public registry
-npm publish --access public --registry=https://registry.npmjs.org
+# 3. Publish
+npm publish
 ```
 
-Pick the bump by semver: patch = fix, minor = feature, major = breaking. Note the explicit `--registry` — if your global npm config points at a private feed, a bare `npm publish` will push there instead.
+Pick the bump by semver: patch = fix, minor = feature, major = breaking.
+
+`package.json` pins `publishConfig.registry` to the public registry, so this stays right even when your global npm config points at a private company feed — a bare `npm publish` would otherwise push there. Compare with `npm config get registry` if yours differs.
 
 ## Reporting bugs
 

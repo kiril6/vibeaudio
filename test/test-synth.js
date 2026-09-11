@@ -117,6 +117,16 @@ assert.strictEqual(whisperParsed.volume, 0.15, "--whisper should set volume to 0
 
 const loudParsed = parseArgs(["node", "bin/vibeaudio.js", "--loud", "claude"]);
 assert.strictEqual(loudParsed.volume, 0.75, "--loud should set volume to 0.75");
+// Regression: MCP parsed volume itself and skipped the NaN guard, so
+// VIBE_VOLUME=loud reached the player as NaN and afplay got `-v NaN`.
+const { normalizeVolume } = require("../src/player");
+assert.strictEqual(normalizeVolume("50", 0.4), 0.5, "string percent parses");
+assert.strictEqual(normalizeVolume(50, 0.4), 0.5, "MCP sends a number, not a string");
+assert.strictEqual(normalizeVolume("loud", 0.4), 0.4, "unparseable value must fall back, not yield NaN");
+assert.strictEqual(normalizeVolume(undefined, 0.4), 0.4, "missing value falls back");
+assert.strictEqual(normalizeVolume(undefined, null), null, "chime volume keeps its null default");
+assert.strictEqual(normalizeVolume("200", 0.4), 1, "clamps to 100");
+assert.strictEqual(normalizeVolume("-5", 0.4), 0.05, "clamps to the 5 floor");
 console.log("   ✓ Volume presets (--whisper, --quiet, --loud) and --chime-volume work properly.");
 
 // 14. Adaptive Escalation Is Audible In Every Genre
@@ -423,13 +433,94 @@ function runCli(args, killAfterMs = null) {
   });
 }
 
-(async () => {
-  assert.strictEqual(await runCli(["true"]), 0, "successful command must exit 0");
-  assert.strictEqual(await runCli(["false"]), 1, "failing command must propagate exit 1");
-  assert.strictEqual(await runCli(["sleep", "30"], 400), 130, "SIGINT must exit 130, not 0");
-  console.log("   ✓ Success (0), failure (1) and interrupt (130) exit codes all propagate.");
+// Spawn node rather than sleep/true/false: those are Unix shell builtins the
+// Windows CI job has no equivalent for, and node is by definition present.
+const NODE_OK = [process.execPath, "-e", ""];
+const NODE_FAIL = [process.execPath, "-e", "process.exit(1)"];
+const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
 
-  console.log("\n\x1b[32mAll 24 tests passed successfully!\x1b[0m");
+(async () => {
+  assert.strictEqual(await runCli(NODE_OK), 0, "successful command must exit 0");
+  assert.strictEqual(await runCli(NODE_FAIL), 1, "failing command must propagate exit 1");
+  if (process.platform === "win32") {
+    // Windows has no POSIX signals; SIGINT to a detached child is not the
+    // same mechanism, so the 130 mapping is a Unix-only guarantee.
+    console.log("   ✓ Success (0) and failure (1) exit codes propagate (signal test skipped on Windows).");
+  } else {
+    assert.strictEqual(await runCli(NODE_HANG, 400), 130, "SIGINT must exit 130, not 0");
+    console.log("   ✓ Success (0), failure (1) and interrupt (130) exit codes all propagate.");
+  }
+
+  // 25. A recycled pid must never be signalled
+  // Regression: stopDaemon killed whatever pid the file named. A pid file
+  // outlives a daemon that died without cleanup, and pids get recycled, so
+  // that eventually SIGTERMs an unrelated process - on every prompt.
+  //
+  // hooks.js resolves PID_FILE from os.homedir() at require time, so the fake
+  // home has to be set before the module loads: this runs in a child process
+  // rather than reaching into the real ~/.vibeaudio.
+  console.log("25. Testing Daemon PID Ownership Guard...");
+  const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-pid-"));
+  const probe = `
+    const fs = require("fs"), path = require("path");
+    const { spawn } = require("child_process");
+    const hooks = require(process.argv[1]);
+    const stranger = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"], { stdio: "ignore" });
+    fs.mkdirSync(path.dirname(hooks.PID_FILE), { recursive: true });
+    fs.writeFileSync(hooks.PID_FILE, String(stranger.pid));
+    const claimedKill = hooks.stopDaemon();
+    setTimeout(() => {
+      let alive = true;
+      try { process.kill(stranger.pid, 0); } catch (e) { alive = false; }
+      console.log(JSON.stringify({
+        home: hooks.PID_FILE,
+        isOurs: hooks.isOurDaemon(stranger.pid),
+        claimedKill,
+        strangerAlive: alive,
+        pidFileCleared: !fs.existsSync(hooks.PID_FILE)
+      }));
+      stranger.kill();
+      process.exit(0);
+    }, 200);
+  `;
+  const probeOut = await new Promise((resolve) => {
+    const child = spawn(
+      process.execPath,
+      ["-e", probe, path.join(__dirname, "..", "src", "hooks.js")],
+      { env: { ...process.env, HOME: fakeHome, USERPROFILE: fakeHome }, stdio: ["ignore", "pipe", "inherit"] }
+    );
+    let out = "";
+    child.stdout.on("data", (c) => (out += c));
+    child.on("close", () => resolve(JSON.parse(out)));
+  });
+
+  assert.ok(
+    probeOut.home.startsWith(fakeHome),
+    `the probe must operate on a throwaway home, not ${probeOut.home}`
+  );
+  assert.ok(probeOut.pidFileCleared, "the stale pid file is still cleared");
+
+  // isOurDaemon trusts the pid on Windows for want of a cheap command-line
+  // lookup, so the ownership guarantee itself is Unix-only.
+  if (process.platform === "win32") {
+    console.log("   ✓ Stale pid file cleared (ownership guard is Unix-only, skipped here).");
+  } else {
+    assert.strictEqual(probeOut.isOurs, false, "an unrelated process is not our daemon");
+    assert.strictEqual(probeOut.claimedKill, false, "stopDaemon must not claim a kill it did not make");
+    assert.ok(probeOut.strangerAlive, "stopDaemon must not kill a process that is not its daemon");
+    console.log("   ✓ A stale pid file cannot make stopDaemon signal an unrelated process.");
+  }
+
+  fs.rmSync(fakeHome, { recursive: true, force: true });
+
+  // 26. Command lookup must work off Unix too
+  console.log("26. Testing Command Lookup...");
+  const { isInstalled } = require("../src/interactive");
+  assert.strictEqual(isInstalled("node"), true, "node is on PATH in any environment running this suite");
+  assert.strictEqual(isInstalled("definitely-not-a-real-command-xyz"), false, "missing commands report false");
+  console.log("   ✓ Tool detection resolves real commands and rejects missing ones.");
+
+  console.log("\n\x1b[32mAll 26 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);

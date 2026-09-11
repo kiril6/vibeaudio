@@ -5,7 +5,7 @@
  */
 
 const readline = require("readline");
-const { AudioPlayer, AVAILABLE_GENRES } = require("./player");
+const { AudioPlayer, AVAILABLE_GENRES, normalizeVolume } = require("./player");
 const pkg = require("../package.json");
 
 // A desktop client that crashes never sends vibe_stop, so playback needs its
@@ -15,7 +15,12 @@ const MAX_PLAYBACK_MS = 15 * 60 * 1000;
 const TOOLS = [
   {
     name: "vibe_play",
-    description: "Start playing procedural focus music in the background while processing or thinking.",
+    description:
+      "Start background focus music for the user while you work. Call this at the " +
+      "START of a task you expect to take more than a few seconds - multi-step work, " +
+      "long file edits, repeated tool calls, anything the user will wait through. " +
+      "Always pair it with vibe_stop when the task resolves. Skip it for quick " +
+      "answers: music around a one-second reply is worse than silence.",
     inputSchema: {
       type: "object",
       properties: {
@@ -35,7 +40,11 @@ const TOOLS = [
   },
   {
     name: "vibe_stop",
-    description: "Stop background focus music and play an outcome-aware resolution chime.",
+    description:
+      "Stop the focus music and play a completion chime. Call this as soon as the " +
+      "task resolves and you are ready to hand back a result, including when it " +
+      "failed - pass outcome 'failure' so the chime says so. Never leave music " +
+      "playing after a vibe_play task is done.",
     inputSchema: {
       type: "object",
       properties: {
@@ -53,7 +62,10 @@ const TOOLS = [
   },
   {
     name: "vibe_status",
-    description: "Check current VibeAudio playback status (playing, genre, current tier).",
+    description:
+      "Check whether focus music is currently playing, and in which genre and " +
+      "intensity tier. Use it to avoid starting a second track, or to confirm " +
+      "nothing was left running.",
     inputSchema: {
       type: "object",
       properties: {}
@@ -117,8 +129,10 @@ function handleMessage(player, msg) {
 
     if (name === "vibe_play") {
       const genre = args.genre || process.env.VIBE_GENRE || "lofi";
-      const volNum = args.volume !== undefined ? args.volume : (process.env.VIBE_VOLUME ? parseInt(process.env.VIBE_VOLUME, 10) : 40);
-      const volume = Math.max(5, Math.min(100, volNum)) / 100.0;
+      // Both the tool argument and the env default go through the same parser
+      // as the CLI, so a mistyped VIBE_VOLUME falls back instead of reaching
+      // the player as NaN.
+      const volume = normalizeVolume(args.volume, normalizeVolume(process.env.VIBE_VOLUME, 0.4));
 
       const started = player.start(genre, volume, { maxDurationMs: MAX_PLAYBACK_MS });
       const text = started

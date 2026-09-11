@@ -1,0 +1,39 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # The README claims macOS, Linux and Windows support; run all three so the
+    # claim is tested rather than asserted. Runners have no audio device, which
+    # is fine: playback is optional by design and the suite asserts on generated
+    # buffers, parsing and process behaviour, never on sound.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [18, 20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # No dependencies to install - that is the point of the project.
+      - run: npm test
+
+  package:
+    # Catches a broken bin shebang or a files[] entry that stops shipping.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm pack --dry-run
+      - run: node bin/vibeaudio.js --version
+      - run: node bin/vibeaudio.js --help
