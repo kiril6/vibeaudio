@@ -4,6 +4,10 @@
 > Every project gets its own arrangement. Zero dependencies, zero audio files.
 > Works with Claude Code, Gemini CLI, Codex, Aider, and any terminal command.
 
+**[Install](#-install)** · **[Claude Code hooks](#-claude-code-hooks-no-wrapper-needed)** · **[Genres](#-music-genres)** · **[Flags](#-options--flags)** · **[Troubleshooting](#-troubleshooting)** · **[Uninstall](#-uninstall)**
+
+> **In a hurry?** `npm i -g github:kiril6/vibeaudio` then `vibe --install-hooks`, and restart Claude Code.
+
 ---
 
 ## ⚡ The Problem
@@ -68,7 +72,7 @@ One line. No clone, no build step, no dependencies to resolve:
 npm i -g github:kiril6/vibeaudio
 ```
 
-That puts `vibe` and `vibeaudio` on your `PATH`. Re-run the same command to update, or see [Uninstall](#uninstall) to remove it cleanly.
+That puts `vibe` and `vibeaudio` on your `PATH`. Re-run the same command to update, or see [Uninstall](#-uninstall) to remove it cleanly.
 
 > **Note:** VibeAudio isn't on the npm registry yet, so plain `npx vibeaudio` won't resolve — use the `github:` form above.
 
@@ -153,66 +157,13 @@ Hear one loop without wrapping anything:
 vibe --preview jazz
 ```
 
-### Developing on it
-
-```bash
-git clone https://github.com/kiril6/vibeaudio.git
-cd vibeaudio
-npm link
-```
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the dev loop.
-
-### Uninstall
-
-**Remove the hooks first, while `vibe` still exists:**
-
-```bash
-vibe --uninstall-hooks          # 1. unwire Claude Code
-npm rm -g vibeaudio             # 2. remove the CLI
-rm -rf ~/.vibeaudio             # 3. optional: cached audio + daemon state
-```
-
-> **Order matters.** `npm rm -g` deletes the binary but not your `~/.claude/settings.json`. Removing the package first strands hook entries that point at a path that no longer exists, and Claude Code will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json` by hand.
-
-Step 3 only reclaims disk (the audio cache; ~9 MB per few projects) — it's regenerated on next use, so skip it if you're reinstalling. If you added the MCP server to a desktop app (see *Desktop GUI Apps* below), drop the `vibeaudio` entry from that app's config too. Nothing else is written outside these paths.
-
----
-
-## 🖥️ Desktop GUI Apps (Claude Desktop & Antigravity via MCP)
-
-Desktop apps have no hook system, so this is the only way in for them: VibeAudio ships a native **Model Context Protocol (MCP)** server over stdio, exposing play/stop as tools the assistant can call.
-
-> **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On the Claude Code CLI, use [hooks](#-claude-code-hooks-no-wrapper-needed) instead.**
-
-Point the config at your clone (swap in your own path):
-
-```json
-{
-  "mcpServers": {
-    "vibeaudio": {
-      "command": "node",
-      "args": ["/absolute/path/to/vibeaudio/bin/vibeaudio.js", "--mcp"]
-    }
-  }
-}
-```
-
-* **Claude Desktop** (macOS): `~/Library/Application Support/Claude/claude_desktop_config.json`
-* **Antigravity:** your Antigravity MCP configuration file
-
-#### Exposed MCP Tools:
-* `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `random`; `volume`: `5-100`).
-* `vibe_stop`: Stop music and play the completion chime (`outcome`: `success` or `failure`).
-* `vibe_status`: Return current playback state and active tier.
-
-Playback stops automatically if the desktop client disconnects, and caps out after 15 minutes — which also covers the likelier case of a model that started the music and never called `vibe_stop`.
-
 ---
 
 ## 🪝 Claude Code Hooks (no wrapper needed)
 
 Wrapping (`vibe claude`) infers "the AI is thinking" from how long the process runs. Hooks know for certain — so music starts the moment you submit a prompt and stops the moment the agent finishes, with no grace-window guessing and no aliases.
+
+Once hooks are installed they take over: running `vibe claude` anyway plays no music of its own and says so, rather than layering a session-long loop on top of the hooks' per-prompt one.
 
 ```bash
 vibe --install-hooks                        # uses your default genre/volume
@@ -268,6 +219,37 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 
 ---
 
+## 🖥️ Desktop GUI Apps (Claude Desktop & Antigravity via MCP)
+
+Desktop apps have no hook system, so this is the only way in for them: VibeAudio ships a native **Model Context Protocol (MCP)** server over stdio, exposing play/stop as tools the assistant can call.
+
+> **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On the Claude Code CLI, use [hooks](#-claude-code-hooks-no-wrapper-needed) instead.**
+
+Point the config at your clone (swap in your own path):
+
+```json
+{
+  "mcpServers": {
+    "vibeaudio": {
+      "command": "node",
+      "args": ["/absolute/path/to/vibeaudio/bin/vibeaudio.js", "--mcp"]
+    }
+  }
+}
+```
+
+* **Claude Desktop** (macOS): `~/Library/Application Support/Claude/claude_desktop_config.json`
+* **Antigravity:** your Antigravity MCP configuration file
+
+#### Exposed MCP Tools:
+* `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `random`; `volume`: `5-100`).
+* `vibe_stop`: Stop music and play the completion chime (`outcome`: `success` or `failure`).
+* `vibe_status`: Return current playback state and active tier.
+
+Playback stops automatically if the desktop client disconnects, and caps out after 15 minutes — which also covers the likelier case of a model that started the music and never called `vibe_stop`.
+
+---
+
 ## 🎨 Music Genres
 
 VibeAudio includes **6 procedural music styles** synthesized entirely in code:
@@ -305,7 +287,7 @@ export VIBE_GENRE=jazz     # or synthwave, electronic, zen, random
 | :--- | :--- | :--- |
 | `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `random` | `lofi` |
 | `-v, --volume <0-100>` | Set playback volume | `40` |
-| `-cv, --chime-volume <0-100>` | Set independent completion chime volume | `volume * 1.1` |
+| `-cv, --chime-volume <0-100>` | Set independent completion chime volume | `volume × 1.1`, kept within 35–65 |
 | `--grace <ms>` | Silence window before music starts | `1500` |
 | `--seed <n>` | Force a specific arrangement | derived from the project directory |
 | `--whisper` | Quick preset: 15% volume (headphones / late night) | — |
@@ -365,9 +347,34 @@ You're on Windows, or Linux with only `aplay` available; neither supports attenu
 
 ---
 
+## 🧹 Uninstall
+
+**Remove the hooks first, while `vibe` still exists:**
+
+```bash
+vibe --uninstall-hooks          # 1. unwire Claude Code
+npm rm -g vibeaudio             # 2. remove the CLI
+rm -rf ~/.vibeaudio             # 3. optional: cached audio + daemon state
+```
+
+> **Order matters.** `npm rm -g` deletes the binary but not your `~/.claude/settings.json`. Removing the package first strands hook entries that point at a path that no longer exists, and Claude Code will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json` by hand.
+
+Step 3 only reclaims disk (the audio cache; ~9 MB per few projects) — it's regenerated on next use, so skip it if you're reinstalling. If you added the [MCP server](#-desktop-gui-apps-claude-desktop--antigravity-via-mcp) to a desktop app, drop the `vibeaudio` entry from that app's config too. Nothing else is written outside these paths.
+
+---
+
 ## 🤝 Contributing
 
 Contributions welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the ground rules (zero runtime dependencies, no build step, pure synth modules) and the dev loop. Found a bug? [Open an issue](https://github.com/kiril6/vibeaudio/issues/new) with your **OS**, **Node version**, and which audio player you have installed.
+
+Working on it locally:
+
+```bash
+git clone https://github.com/kiril6/vibeaudio.git
+cd vibeaudio
+npm link        # puts your clone's `vibe` on PATH
+npm test
+```
 
 ---
 
