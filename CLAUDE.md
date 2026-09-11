@@ -31,6 +31,8 @@ There is no build step, linter, or bundler — it's plain CommonJS Node (`engine
 
 **The wrapper flow** (`src/cli.js#executeCommand`): spawns the child command with `stdio: "inherit"`. A grace timer (default 1500ms, see `--grace`/`VIBE_GRACE_MS`) delays starting audio — if the child exits before the grace window, no music/chime plays at all.
 
+The wrapper measures **child process lifetime**, which equals working time only for commands that exit when their work is done. An interactive REPL stays alive while the user reads and types, so `hooksAlreadyCover()` suppresses the wrapper's music entirely when the child is `claude` (without `-p`/`--print`) and our hooks are installed — otherwise `vibe claude` layers a session-long stream over the hook daemon's per-prompt one. With no hooks installed, that same case prints a one-line pointer to `--install-hooks` rather than silently doing the wrong thing. This matters because the interactive menu (`vibe` with no args) launches Claude Code through exactly this path.
+
 Exit handling is the subtle part, and two invariants must hold:
 - **`cleanup()` runs exactly once**, guarded by a `finished` flag. Both the signal path and the `close` path route through it; without the guard the HUD prints twice and the player is stopped twice (the second stop re-enabling the chime the first one suppressed).
 - **A signal-killed child reports `code === null`.** `close` must map that through `signalExitCode(signal)` to `128 + signum`, never to `0` — otherwise an aborted run claims success, plays the success chime, and lets `vibe claude && deploy` chain after a `Ctrl+C`. Interrupts also suppress the chime entirely.

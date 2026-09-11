@@ -383,6 +383,30 @@ assert.ok(
 );
 console.log("   ✓ Temporary npx checkouts are refused before settings are written.");
 
+// 23c. The wrapper must stand down when hooks already cover Claude Code.
+// Otherwise `vibe claude` layers a session-long stream over the hook daemon's.
+console.log("23c. Testing Wrapper/Hook Overlap Guard...");
+const { hooksAlreadyCover } = require("../src/cli");
+const coverFile = path.join(os.tmpdir(), `vibeaudio-cover-${process.pid}.json`);
+
+fs.writeFileSync(coverFile, "{}");
+installHooksFn("lofi", 0.4, coverFile);
+assert.strictEqual(hooksAlreadyCover(["claude"], coverFile), true, "wrapper must defer to installed hooks");
+assert.strictEqual(
+  hooksAlreadyCover(["/opt/homebrew/bin/claude"], coverFile), true,
+  "an absolute path to claude must still be recognised"
+);
+assert.strictEqual(hooksAlreadyCover(["npm", "test"], coverFile), false, "other commands keep the wrapper");
+assert.strictEqual(hooksAlreadyCover(["gemini"], coverFile), false, "hooks are Claude Code only");
+
+uninstallHooks(coverFile);
+assert.strictEqual(hooksAlreadyCover(["claude"], coverFile), false, "without hooks the wrapper takes over again");
+
+fs.writeFileSync(coverFile, "{ not json");
+assert.strictEqual(hooksAlreadyCover(["claude"], coverFile), false, "unreadable settings must not crash the wrapper");
+fs.unlinkSync(coverFile);
+console.log("   ✓ Wrapper defers to installed hooks and keeps working without them.");
+
 // 24. Exit Codes Propagate (end-to-end)
 // Regression: a signal-killed child reported code null, which was mapped to 0 -
 // an aborted run claimed success and played the success chime.

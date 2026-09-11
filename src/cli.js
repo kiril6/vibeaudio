@@ -3,6 +3,8 @@
  */
 
 const os = require("os");
+const fs = require("fs");
+const path = require("path");
 const { spawn, spawnSync } = require("child_process");
 const {
   AudioPlayer,
@@ -312,15 +314,60 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive }
   }
 }
 
+/**
+ * Claude Code fires our hooks itself, so wrapping it would layer a second
+ * stream over the hook daemon's - and the wrapper's stream is the wrong one:
+ * it times the REPL's whole session rather than the model's thinking, so it
+ * never stops while you read or type.
+ */
+function hooksAlreadyCover(cmdArgs, settingsFile = null) {
+  if (path.basename(cmdArgs[0]) !== "claude") return false;
+
+  try {
+    const hooks = require("./hooks");
+    const file = settingsFile || hooks.settingsPath();
+    if (!fs.existsSync(file)) return false;
+
+    const settings = JSON.parse(fs.readFileSync(file, "utf8"));
+    return Object.values(settings.hooks || {}).some((entries) =>
+      (entries || []).some(hooks.isVibeHook)
+    );
+  } catch (e) {
+    // Unreadable settings are the hook installer's problem to report, not ours.
+    return false;
+  }
+}
+
 function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRACE_PERIOD_MS, noChime, noHud = false) {
   const player = new AudioPlayer();
-  const hud = !noHud ? new TerminalHud(genre) : null;
+  const hookDriven = hooksAlreadyCover(cmdArgs);
+  const hud = !noHud && !hookDriven ? new TerminalHud(genre) : null;
   const startTime = Date.now();
   let musicStarted = false;
   let finished = false;
 
+  // `claude -p` exits when its work does, so the wrapper is right there. An
+  // interactive session is the case where process lifetime isn't thinking time.
+  const interactiveAgent =
+    path.basename(cmdArgs[0]) === "claude" &&
+    !cmdArgs.slice(1).some((a) => a === "-p" || a === "--print");
+
+  if (hookDriven) {
+    console.error(
+      "\x1b[90m[vibeaudio] Claude Code hooks are installed — letting them drive the music, " +
+      "so it follows the agent's thinking instead of this session's length.\n" +
+      "           Change the sound with: vibe --genre <name> --volume <n> --install-hooks\x1b[0m"
+    );
+  } else if (interactiveAgent) {
+    console.error(
+      "\x1b[33m[vibeaudio] Wrapping an interactive session: music plays until you quit, " +
+      "not just while the agent thinks.\n" +
+      "           For music that tracks thinking, run: vibe --install-hooks\x1b[0m"
+    );
+  }
+
   // Grace window before triggering audio (silences fast commands)
-  const graceTimer = setTimeout(() => {
+  const graceTimer = hookDriven ? null : setTimeout(() => {
     musicStarted = true;
     player.start(genre, volume);
     if (hud) hud.start();
@@ -451,4 +498,4 @@ async function run() {
   executeCommand(cmdArgs, genre, volume, chimeVolume, grace, noChime, noHud);
 }
 
-module.exports = { run, parseArgs };
+module.exports = { run, parseArgs, hooksAlreadyCover };
