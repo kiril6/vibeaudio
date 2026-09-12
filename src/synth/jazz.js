@@ -8,7 +8,6 @@ const {
   noteToFreq,
   sine,
   triangle,
-  softPulse,
   makeRng,
   pick,
   ornamentRng,
@@ -40,7 +39,6 @@ const STAB_NOTES = ["D5", "E5", "G5", "A5", "B5"];
 function generateJazzLoop(durationSec = 6.26, tier = 2, seed = 0) {
   const rng = makeRng(seed);
   const changes = pick(rng, CHANGES);
-  const orn = ornamentRng(seed);
   const bpm = 92;
   const secPerBeat = 60.0 / bpm;
   const totalBeats = Math.floor(durationSec / secPerBeat);
@@ -106,6 +104,15 @@ function generateJazzLoop(durationSec = 6.26, tier = 2, seed = 0) {
   }
 
   // 3. Brushed Jazz Swing Cymbal Pattern (Spang-a-lang ride cymbal swing) - joins at Tier 2
+  //
+  // The brush noise has a stream of its own rather than sharing the file's.
+  // It is the only layer here that draws at all, and it draws from inside a
+  // tier gate - so a shared stream would sit one tier-dependent number of
+  // draws ahead of anything added after it, and tier 1 would quietly stop
+  // being the same piece as tier 3. Scoping it makes that impossible rather
+  // than merely untrue today. Same seed and same draw order as before, so the
+  // audio is unchanged.
+  const brushRng = ornamentRng(seed);
   for (let i = 0; tier >= 2 && i < totalSamples; i++) {
     const t = i / SAMPLE_RATE;
     const beatPos = (t / secPerBeat) % 1.0;
@@ -116,7 +123,7 @@ function generateJazzLoop(durationSec = 6.26, tier = 2, seed = 0) {
     if (isBeat || isSwingTap) {
       const relT = isBeat ? beatPos : beatPos - 0.64;
       const env = Math.max(0.0, 1.0 - relT / 0.04);
-      const n = (orn() * 2.0 - 1.0) * env * (isBeat ? 0.04 : 0.025);
+      const n = (brushRng() * 2.0 - 1.0) * env * (isBeat ? 0.04 : 0.025);
       left[i] += n * 0.7;
       right[i] += n * 1.2;
     }
