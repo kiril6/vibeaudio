@@ -137,7 +137,8 @@ Choose your sound vibe:
   4. ⚡ Melodic Electronic  — Downtempo resonant plucks & tech pulse
   5. 🎷 Midnight Jazz      — ii-V-I piano chords & walking upright bass
   6. 🎋 Zen Ambient        — Meditative singing bowls & celestial pads
-  7. 🎲 Shuffle / Random   — Picks a surprise vibe each time
+  7. 🌫️ Deep Drone         — Held tone & filtered noise — no melody at all
+  8. 🎲 Shuffle / Random   — Picks a surprise vibe each time
 
 Choose your volume level:
 ❯ 1. ☕ Normal (40%)       — Balanced focus background [Default]
@@ -321,7 +322,7 @@ VIBE_VOLUME = "25"
 Restart the app afterwards. A genre the assistant passes to `vibe_play` still wins over this default.
 
 #### Exposed MCP Tools:
-* `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `random`; `volume`: `5-100`).
+* `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `drone`, `random`; `volume`: `5-100`).
 * `vibe_stop`: Stop music and play the completion chime (`outcome`: `success` or `failure`).
 * `vibe_status`: Return current playback state and active tier.
 
@@ -341,9 +342,12 @@ VibeAudio includes **6 procedural music styles** synthesized entirely in code:
 | `electronic` | ⚡ **Melodic Electronic** | Downtempo resonant plucks & crisp tech pulse |
 | `jazz` | 🎷 **Midnight Jazz** | Classic ii-V-I jazz piano chords & walking upright bass |
 | `zen` | 🎋 **Zen Ambient** | Meditative Tibetan singing bowls & celestial drone (zero rhythm) |
+| `drone` | 🌫️ **Deep Drone** | A held tone and filtered noise — **no melody at all** |
 | `random` | 🎲 **Shuffle Mode** | Picks a surprise genre for the run |
 
-Aliases also work: `chiptune` → `8bit`, `downtempo` → `electronic`, `bossa` → `jazz`, `ambient` → `zen`.
+Aliases also work: `chiptune` → `8bit`, `downtempo` → `electronic`, `bossa` → `jazz`, `ambient` → `zen`, `noise`/`focus` → `drone`.
+
+> **If any melody distracts you, use `drone`.** Every other genre plays something — notes, a progression, a bass line — and some people can't read while that happens. `drone` holds one low tone under a slow-breathing noise bed and never moves: closer to a fan or rainfall than to music. Tiers add weight rather than movement.
 
 ### Usage Examples:
 ```bash
@@ -364,7 +368,7 @@ How you change it depends on how you run VibeAudio — **a shell `export` only r
 | **MCP** (Codex, Claude Desktop, …) | ask the assistant, or the config's `env` block — [how](#changing-the-genre-here) |
 
 ```bash
-export VIBE_GENRE=jazz     # or synthwave, electronic, zen, random
+export VIBE_GENRE=jazz     # or synthwave, electronic, zen, drone, random
 ```
 
 ---
@@ -373,7 +377,7 @@ export VIBE_GENRE=jazz     # or synthwave, electronic, zen, random
 
 | Flag | Description | Default |
 | :--- | :--- | :--- |
-| `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `random` | `lofi` |
+| `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `drone`, `random` | `lofi` |
 | `-v, --volume <0-100>` | Set playback volume | `40` |
 | `-cv, --chime-volume <0-100>` | Set independent completion chime volume | `volume × 1.1`, kept within 35–65 |
 | `--grace <ms>` | Silence window before music starts | `1500` |
@@ -396,7 +400,7 @@ export VIBE_GENRE=jazz     # or synthwave, electronic, zen, random
 Set persistent defaults in your `~/.zshrc` or `~/.bashrc`:
 
 ```bash
-export VIBE_GENRE=jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, random
+export VIBE_GENRE=jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, drone, random
 export VIBE_VOLUME=25           # Background music at 25%
 export VIBE_CHIME_VOLUME=70     # Crisp completion chime at 70%
 export VIBE_GRACE_MS=3000       # Wait 3s of thinking before any music

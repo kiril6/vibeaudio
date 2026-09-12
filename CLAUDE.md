@@ -54,7 +54,9 @@ Three rules hold across every generator:
 - **The seed selects among curated variants, never invents harmony.** Each genre carries hand-written progressions diatonic to its key, with the bass line that spells those changes. Randomising notes freely produces bad bars; this cannot.
 - **Ornaments draw from `ornamentRng(seed)` in a fixed order, regardless of tier.** Gating a layer behind `tier >= 2` must not shift the choices other layers make, or tiers would stop being the same piece with more of it.
 
-When adding a genre, follow that shape, honour both `tier` and `seed`, and wire it into `player.js`'s `generateLoop` switch and `AVAILABLE_GENRES`.
+When adding a genre, follow that shape, honour both `tier` and `seed`, and wire it into `player.js`'s `generateLoop` switch and `AVAILABLE_GENRES`. Match its level to the existing ones (jazz sits at peak 0.64 / RMS 0.108) — a new generator is easy to write 3x too loud, and volume is applied after this, so a hot render just clips earlier.
+
+`drone.js` is the one non-melodic genre: a held tone plus a swept noise bed, for people who cannot read past a melody. Its tiers add weight rather than movement, and its noise rng stream is drawn identically at every tier so the same seed keeps the same bed as the music escalates.
 
 **MCP server** (`src/mcp.js`): exposes `vibe_play` / `vibe_stop` / `vibe_status` tools over stdio JSON-RPC for every client without a hook system (Codex, Gemini CLI, Cursor, Claude Desktop, Antigravity), backed by the same `AudioPlayer` class as the CLI wrapper. Nothing fires these tools automatically — the model chooses to — so the *when to call this* guidance lives in the tool descriptions, which every client shows the model, as well as in the `instructions` field, which the spec makes optional. Because a crashed client never sends `vibe_stop`, playback is capped by `MAX_PLAYBACK_MS` and also stops on stdin close. Tool responses report what actually happened (`start()`/`stop()` return booleans) rather than assuming success.
 

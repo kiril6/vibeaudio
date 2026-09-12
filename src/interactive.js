@@ -39,6 +39,7 @@ const GENRES = [
   { name: "⚡ Melodic Electronic", desc: "Downtempo resonant plucks & tech pulse", id: "electronic" },
   { name: "🎷 Midnight Jazz", desc: "ii-V-I piano chords & walking upright bass", id: "jazz" },
   { name: "🎋 Zen Ambient", desc: "Meditative singing bowls & floating celestial pads", id: "zen" },
+  { name: "🌫️ Deep Drone", desc: "Held tone & filtered noise — no melody at all", id: "drone" },
   { name: "🎲 Shuffle / Random", desc: "Picks a surprise vibe each time", id: "random" }
 ];
 
