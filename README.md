@@ -4,7 +4,7 @@
 
 > **Procedural focus music while your AI coding tools think.**
 > Every project gets its own arrangement. Zero dependencies, zero audio files.
-> Works with Claude Code, Gemini CLI, Codex, Aider, and any terminal command.
+> Works with Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Aider — and any terminal command.
 
 **[Install](#-install)** · **[Claude Code hooks](#-claude-code-hooks-no-wrapper-needed)** · **[Genres](#-music-genres)** · **[Flags](#-options--flags)** · **[Troubleshooting](#-troubleshooting)** · **[Uninstall](#-uninstall)**
 
@@ -31,7 +31,7 @@ When AI coding agents take 15–45 seconds to reason, read files, and write code
 * 📈 **Adaptive Time Escalation:** The arrangement gains layers as the prompt runs (Tier 1: 0–15s gentle intro → Tier 2: 15–45s main groove → Tier 3: 45s+ deep focus layer). You can literally hear how deep into the task the AI is.
 * 🔔 **Outcome-Aware Chimes:** A bright ascending chime on success (`exit 0`), a soft descending minor chord on error. Abort with `Ctrl+C` and you get silence — no false "done" signal.
 * 🌊 **Terminal Title HUD:** A live ASCII wave and elapsed timer in your terminal window/tab title, which stays out of the way of full-screen TUIs.
-* 🔌 **Universal Drop-In Wrapper:** Works with **Claude Code, Gemini CLI, Codex, Aider**, or any terminal command (`vibe <command>`).
+* 🔌 **Universal Drop-In Wrapper:** Works with **Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Aider**, or any terminal command (`vibe <command>`) — the launcher lists the common ones, but nothing is hard-coded.
 * 🪶 **Zero Build Dependencies:** Pure Node.js, no C++ bindings (`node-gyp`), no compile step.
 
 ### 🎼 Every project gets its own arrangement
@@ -438,14 +438,25 @@ Shouldn't happen any more — where the player can't attenuate (`aplay`, PowerSh
 **Remove the hooks first, while `vibe` still exists:**
 
 ```bash
-vibe --uninstall-hooks          # 1. unwire Claude Code
+vibe --uninstall-hooks          # 1. unwire Claude Code, and stop any player still running
 npm rm -g vibeaudio             # 2. remove the CLI
 rm -rf ~/.vibeaudio             # 3. optional: cached audio + daemon state
 ```
 
+Step 1 also **stops a background player that's still going**. That matters: once the hooks are gone nothing will ever send the `Stop` event, and after step 2 there's no `vibe` left to stop it with — music would simply play on until its 15-minute cap. If you ever need to do it by hand: `pkill -f "vibeaudio.js --daemon"`.
+
 > **Order matters.** `npm rm -g` deletes the binary but not your `~/.claude/settings.json`. Removing the package first strands hook entries that point at a path that no longer exists, and Claude Code will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json` by hand.
 
-Step 3 only reclaims disk (the audio cache; ~9 MB per few projects) — it's regenerated on next use, so skip it if you're reinstalling. If you added the [MCP server](#-everything-else-codex-gemini-cli-claude-desktop-antigravity-via-mcp) to a desktop app, drop the `vibeaudio` entry from that app's config too. Nothing else is written outside these paths.
+Step 3 only reclaims disk — the audio cache, pruned to the 3 most recent projects (5.2 MB here for two) — and it's regenerated on next use, so skip it if you're reinstalling.
+
+**Two things are deliberately left behind:**
+
+| Leftover | Why, and how to remove it |
+| :--- | :--- |
+| `~/.claude/settings.json.vibeaudio.bak` | Your settings as they were before the first install — a safety net we won't delete for you. `rm` it once you're happy the real file is correct. |
+| `vibeaudio` entries in other apps' MCP configs | VibeAudio never edits those files, so it can't clean them either. Drop the entry from [whichever config you added it to](#-everything-else-codex-gemini-cli-claude-desktop-antigravity-via-mcp). |
+
+Apart from those two, the three commands above remove everything VibeAudio writes.
 
 ---
 

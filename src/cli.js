@@ -317,11 +317,27 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive }
 
     case "uninstall-hooks": {
       const { file, removed } = hooks.uninstallHooks();
+
+      // Nothing will ever send the Stop event once the hooks are gone, so a
+      // daemon left running would play on unsupervised until its 15-minute
+      // cap - and `npm rm -g` right after this would take away the only
+      // thing that could stop it. Done here rather than in uninstallHooks()
+      // so that function stays a pure settings edit for tests.
+      const stopped = hooks.stopDaemon();
+
       console.log(
         removed > 0
           ? `\x1b[32m✔ Removed ${removed} VibeAudio hook(s) from ${file}\x1b[0m`
           : `\x1b[90mNo VibeAudio hooks found in ${file}\x1b[0m`
       );
+      if (stopped) console.log(`  Stopped the background player that was still running.`);
+
+      // The backup is the user's safety net, so point at it rather than
+      // deleting it for them - but only when one actually exists.
+      const backupFile = `${file}.vibeaudio.bak`;
+      if (fs.existsSync(backupFile)) {
+        console.log(`  Your pre-VibeAudio settings backup is kept at ${backupFile}`);
+      }
       return;
     }
   }

@@ -643,7 +643,46 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ Reactive is offered on the hooks branch, withheld from the wrapper, and dead questions are skipped when hooks already own the music.");
   }
 
-  console.log("\n\x1b[32mAll 28 tests passed successfully!\x1b[0m");
+  // 29. Uninstalling must not strand a running player
+  // Once the hooks are gone nothing sends Stop, and npm rm -g takes away the
+  // only thing that could stop it - so the daemon would play to its 15min cap.
+  console.log("29. Testing Uninstall Stops The Daemon...");
+  if (process.platform === "win32") {
+    console.log("   ✓ Skipped on Windows (daemon ownership check is Unix-only).");
+  } else {
+    const uninstallHome = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-uninst-"));
+    const probeSrc = `
+      const hooks = require(process.argv[1]);
+      hooks.installHooks("lofi", 0.05, hooks.settingsPath());
+      const pid = hooks.hookStart("lofi", 0.05);
+      setTimeout(() => {
+        require("child_process").execFileSync(process.execPath, [process.argv[2], "--uninstall-hooks"], { stdio: "ignore" });
+        setTimeout(() => {
+          let alive = true;
+          try { process.kill(pid, 0); } catch (e) { alive = false; }
+          console.log(JSON.stringify({ alive }));
+          if (alive) { try { process.kill(pid, "SIGTERM"); } catch (e) {} }
+          process.exit(0);
+        }, 400);
+      }, 700);
+    `;
+    const result = await new Promise((resolve) => {
+      const child = spawn(
+        process.execPath,
+        ["-e", probeSrc, path.join(__dirname, "..", "src", "hooks.js"), CLI],
+        { env: { ...process.env, HOME: uninstallHome, USERPROFILE: uninstallHome }, stdio: ["ignore", "pipe", "inherit"] }
+      );
+      let out = "";
+      child.stdout.on("data", (c) => (out += c));
+      child.on("close", () => resolve(JSON.parse(out)));
+    });
+
+    assert.strictEqual(result.alive, false, "--uninstall-hooks must stop the running daemon");
+    fs.rmSync(uninstallHome, { recursive: true, force: true });
+    console.log("   ✓ Uninstalling the hooks also stops the player they started.");
+  }
+
+  console.log("\n\x1b[32mAll 29 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);
