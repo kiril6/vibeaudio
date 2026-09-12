@@ -1230,8 +1230,13 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       // Header data size vs. actual bytes: a torn file disagrees with itself.
       `const b=f.readFileSync(fp);process.stdout.write(JSON.stringify([b.length,b.readUInt32LE(40)+44]));`;
 
+    // Six, not four: detection here is probabilistic - a racer only notices a
+    // non-atomic write if it happens to read while one is in flight. Measured
+    // at 4 racers it caught a deliberately non-atomic implementation in 9 runs
+    // out of 10, so more racers is a cheap way to shrink that last tenth. The
+    // leftover-tmp assertion below is the deterministic half of this test.
     const racers = await Promise.all(
-      [0, 1, 2, 3].map(
+      [0, 1, 2, 3, 4, 5].map(
         () =>
           new Promise((resolve, reject) => {
             const proc = spawn(process.execPath, ["-e", racer], { stdio: ["ignore", "pipe", "inherit"] });

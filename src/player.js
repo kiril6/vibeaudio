@@ -413,6 +413,16 @@ function writeCacheFileAtomic(filePath, buffer) {
     fs.renameSync(tmp, filePath);
   } catch (e) {
     fs.rmSync(tmp, { force: true });
+
+    // POSIX rename replaces the destination silently. Windows does not: it
+    // fails with EPERM/EACCES when another process holds the destination
+    // open - which is precisely the concurrent case this function exists to
+    // make safe, so throwing here would trade a torn read for a crash.
+    //
+    // Losing the race is not a failure. Generation is deterministic, so the
+    // process that won wrote byte-identical content; the destination simply
+    // existing is the success condition.
+    if (fs.existsSync(filePath)) return;
     throw e;
   }
 }
