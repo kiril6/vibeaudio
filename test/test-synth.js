@@ -778,7 +778,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
   console.log("   ✓ --status reports missing pieces and --stop is safe with nothing running.");
 
   // --- 33. Codex and Cursor get hooks in their own dialect ---
-  console.log("\n\x1b[1m[33] Multi-agent hooks: Codex and Cursor file shapes\x1b[0m");
+  console.log("\n\x1b[1m[33] Multi-agent hooks: Codex, Cursor and Grok file shapes\x1b[0m");
   {
     const { installHooks: install, uninstallHooks: remove, TARGETS } = require("../src/hooks");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-targets-"));
@@ -826,8 +826,23 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       );
     }
 
+    // Grok owns its whole file, so uninstall must delete it rather than leave
+    // an empty husk in a directory Grok keeps scanning.
+    {
+      const grokFile = path.join(dir, "grok.json");
+      install("jazz", 0.3, grokFile, { id: "grok", reactive: true });
+
+      const after = JSON.parse(fs.readFileSync(grokFile, "utf8"));
+      assert.deepStrictEqual(Object.keys(after), ["hooks"], "grok: root must hold hooks only");
+      assert.ok(after.hooks.UserPromptSubmit && after.hooks.Stop, "grok must use Claude's event names");
+
+      const { removed } = remove(grokFile, { id: "grok" });
+      assert.strictEqual(removed, 3, "grok: uninstall must report all three hooks");
+      assert.ok(!fs.existsSync(grokFile), "grok: uninstall must delete our file, not empty it");
+    }
+
     fs.rmSync(dir, { recursive: true, force: true });
-    console.log("   ✓ Codex and Cursor hooks install, stay idempotent and uninstall cleanly.");
+    console.log("   ✓ Codex and Cursor merge safely; Grok gets its own file and takes it with it.");
   }
 
   // --- 34. Shuffle stays musical ---
@@ -851,7 +866,82 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ random stays musical; drone remains reachable by name and alias.");
   }
 
-  console.log("\n\x1b[32mAll 34 tests passed successfully!\x1b[0m");
+  // --- 34b. Grok spells the tool name differently ---
+  console.log("\n\x1b[1m[34b] Reactive: both tool-name spellings\x1b[0m");
+  {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-grokpayload-"));
+    const runTool = (payload) =>
+      new Promise((resolve) => {
+        const child = spawn(process.execPath, [CLI, "--hook-tool"], {
+          env: { ...process.env, HOME: home, USERPROFILE: home },
+          stdio: ["pipe", "ignore", "ignore"]
+        });
+        child.stdin.end(JSON.stringify(payload));
+        child.on("close", () => resolve(fs.readFileSync(path.join(home, ".vibeaudio", "intensity"), "utf8")));
+      });
+
+    // Claude/Codex/Cursor send tool_name; Grok sends toolName. Both must land
+    // on the same tier - reading one spelling would pin Grok to the fallback.
+    assert.strictEqual(await runTool({ tool_name: "Bash" }), "3", "tool_name must be read");
+    assert.strictEqual(await runTool({ toolName: "Bash" }), "3", "toolName (Grok) must be read");
+    assert.strictEqual(await runTool({ toolName: "Read" }), "1", "Grok payloads must reach the full tier map");
+    assert.strictEqual(await runTool({ nothing: true }), "2", "an unrecognised payload falls back to the middle");
+
+    fs.rmSync(home, { recursive: true, force: true });
+    console.log("   ✓ Both tool-name spellings reach the tier map.");
+  }
+
+  // --- 35. Sparse piano ---
+  console.log("\n\x1b[1m[35] Sparse Piano Generator\x1b[0m");
+  {
+    const { generatePianoLoop } = require("../src/synth/piano");
+
+    const level = (buf) => {
+      let peak = 0, sum = 0, n = 0;
+      for (let o = 44; o + 1 < buf.length; o += 2) {
+        const v = buf.readInt16LE(o) / 32768;
+        peak = Math.max(peak, Math.abs(v));
+        sum += v * v;
+        n++;
+      }
+      return { peak, rms: Math.sqrt(sum / n) };
+    };
+
+    const tiers = [1, 2, 3].map((t) => generatePianoLoop(7.6, t, 4242));
+
+    assert.ok(
+      generatePianoLoop(7.6, 2, 4242).equals(tiers[1]),
+      "the same seed and tier must render byte-identical audio"
+    );
+    assert.ok(
+      !tiers[0].equals(tiers[1]) && !tiers[1].equals(tiers[2]),
+      "each tier must honour its argument - identical files would disable escalation"
+    );
+
+    let previous = 0;
+    for (let i = 0; i < 3; i++) {
+      const { peak, rms } = level(tiers[i]);
+      // Volume is applied after this, so a hot render just clips earlier.
+      assert.ok(peak < 0.95, `tier ${i + 1} must not clip (peak ${peak.toFixed(3)})`);
+      // Level-matched to the rest: measured across 12 seeds this sits at
+      // 0.056-0.138, between jazz (0.118 at tier 3) and drone (0.141).
+      assert.ok(rms > 0.05 && rms < 0.15, `tier ${i + 1} rms ${rms.toFixed(4)} is off the house level`);
+      assert.ok(rms > previous, `tier ${i + 1} must add weight over tier ${i}`);
+      previous = rms;
+    }
+
+    // The loop is spawned again before the previous one ends, so the ends have
+    // to be silent or every repeat clicks.
+    const edges = [
+      Math.abs(tiers[1].readInt16LE(44)),
+      Math.abs(tiers[1].readInt16LE(tiers[1].length - 2))
+    ];
+    assert.ok(Math.max(...edges) < 32, "loop boundaries must fade to silence");
+
+    console.log("   ✓ Piano is deterministic, escalates, stays level-matched and loops seamlessly.");
+  }
+
+  console.log("\n\x1b[32mAll 35 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);

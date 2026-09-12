@@ -67,7 +67,10 @@ function hookTool() {
   const commit = () => {
     let toolName = "";
     try {
-      toolName = JSON.parse(raw).tool_name || "";
+      const payload = JSON.parse(raw);
+      // Claude Code, Codex and Cursor send tool_name; Grok sends toolName.
+      // Reading only one of them would silently pin that agent to tier 2.
+      toolName = payload.tool_name || payload.toolName || "";
     } catch (e) {
       // Malformed or absent payload - fall back to the neutral tier.
     }
@@ -134,6 +137,21 @@ const TARGETS = {
     entry: (command) => ({ command, timeout: 5 }),
     commands: (entry) => (entry.command ? [entry.command] : []),
     seed: () => ({ version: 1 })
+  },
+  grok: {
+    name: "Grok",
+    cmd: "grok",
+    // Grok reads every *.json in this directory, so we get a file of our own
+    // rather than merging into someone else's - which also makes uninstall a
+    // delete instead of an edit. `dedicated` says so.
+    file: () => path.join(os.homedir(), ".grok", "hooks", "vibeaudio.json"),
+    dedicated: true,
+    // Directory, not file: detection can't use dirname() like the others.
+    configDir: () => path.join(os.homedir(), ".grok"),
+    events: { start: "UserPromptSubmit", stop: "Stop", tool: "PreToolUse" },
+    entry: (command) => ({ hooks: [{ type: "command", command, timeout: 5 }] }),
+    commands: (entry) => (entry.hooks || []).map((h) => h.command),
+    seed: () => ({})
   }
 };
 
@@ -157,7 +175,8 @@ function detectTargets() {
   const { isInstalled } = require("./interactive");
   return Object.keys(TARGETS).filter((id) => {
     const t = TARGETS[id];
-    return fs.existsSync(path.dirname(t.file())) || isInstalled(t.cmd);
+    const dir = t.configDir ? t.configDir() : path.dirname(t.file());
+    return fs.existsSync(dir) || isInstalled(t.cmd);
   });
 }
 
@@ -283,6 +302,18 @@ function setHook(hooks, event, command, id) {
   hooks[event] = kept;
 }
 
+function readVibeEntryCount(file, id) {
+  try {
+    const { settings } = loadSettings(file);
+    return Object.values(settings.hooks || {}).reduce(
+      (n, entries) => n + (entries || []).filter((e) => isVibeHook(e, id)).length,
+      0
+    );
+  } catch (e) {
+    return 0; // Unreadable: the delete below still cleans it up.
+  }
+}
+
 function loadSettings(file, t = null) {
   if (!fs.existsSync(file)) return { settings: t ? t.seed() : {}, raw: null };
   const raw = fs.readFileSync(file, "utf8");
@@ -347,8 +378,17 @@ function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = fa
 }
 
 function uninstallHooks(file = null, { id = "claude" } = {}) {
-  file = file || target(id).file();
+  const t = target(id);
+  file = file || t.file();
   if (!fs.existsSync(file)) return { file, removed: 0, id };
+
+  // Our own file has nothing of the user's in it, so removing our entries
+  // would just leave an empty husk in a directory the tool scans.
+  if (t.dedicated) {
+    const removed = readVibeEntryCount(file, id);
+    fs.rmSync(file, { force: true });
+    return { file, removed, id };
+  }
 
   const { settings } = loadSettings(file);
   if (!settings.hooks) return { file, removed: 0, id };

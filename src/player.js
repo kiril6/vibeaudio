@@ -14,6 +14,7 @@ const { generateChiptuneLoop } = require("./synth/chiptune");
 const { generateElectronicLoop } = require("./synth/electronic");
 const { generateZenLoop } = require("./synth/zen");
 const { generateDroneLoop } = require("./synth/drone");
+const { generatePianoLoop } = require("./synth/piano");
 const { generateJazzLoop } = require("./synth/jazz");
 const { generateSuccessChime, generateFailureChime } = require("./synth/chime");
 const { hashString } = require("./synth/generator");
@@ -21,7 +22,7 @@ const pkg = require("../package.json");
 
 const CACHE_ROOT = path.join(os.homedir(), ".vibeaudio", "cache");
 const CACHE_DIR = path.join(CACHE_ROOT, `v${pkg.version}`);
-const AVAILABLE_GENRES = ["lofi", "synthwave", "8bit", "electronic", "jazz", "zen", "drone"];
+const AVAILABLE_GENRES = ["lofi", "synthwave", "8bit", "electronic", "jazz", "zen", "piano", "drone"];
 
 /**
  * What `random` may land on. Drone is deliberately excluded: it is the "no
@@ -144,7 +145,9 @@ const GENRE_ALIASES = {
   bossa: "jazz",
   ambient: "zen",
   noise: "drone",
-  focus: "drone"
+  focus: "drone",
+  sparse: "piano",
+  satie: "piano"
 };
 
 function isKnownGenre(genre) {
@@ -192,6 +195,8 @@ function generateLoop(genre, tier, seed) {
       return generateZenLoop(7.2, tier, seed);
     case "drone":
       return generateDroneLoop(7.0, tier, seed);
+    case "piano":
+      return generatePianoLoop(7.6, tier, seed);
     case "lofi":
     default:
       return generateLofiLoop(6.4, tier, seed);
