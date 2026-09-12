@@ -259,7 +259,7 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 
 ## 🖥️ Everything Else (Codex, Gemini CLI, Claude Desktop, Antigravity… via MCP)
 
-**VibeAudio's hooks support only Claude Code today** — that's a limit of this project, not of the tools. Codex has its own hook system (`~/.codex/hooks.json`) that VibeAudio doesn't write to yet; [issues welcome](https://github.com/kiril6/vibeaudio/issues) if you want it. For everything else, MCP is the way in: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
+**VibeAudio's hooks support only Claude Code today** — that's a limit of this project, not of the tools. Both [Cursor](https://cursor.com/docs/hooks) (`~/.cursor/hooks.json`, with `beforeSubmitPrompt` / `stop` / `preToolUse`) and Codex (`~/.codex/hooks.json`) have hook systems carrying the same events VibeAudio needs — it just doesn't write to them yet. [Issues welcome](https://github.com/kiril6/vibeaudio/issues) if you want either. For everything else, MCP is the way in: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
 
 > **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On Claude Code — terminal or desktop app — use [hooks](#-claude-code-hooks-no-wrapper-needed) instead.**
 
