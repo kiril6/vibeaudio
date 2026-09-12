@@ -20,6 +20,10 @@ const { AudioPlayer } = require("./player");
 const STATE_DIR = path.join(os.homedir(), ".vibeaudio");
 const PID_FILE = path.join(STATE_DIR, "daemon.pid");
 const INTENSITY_FILE = path.join(STATE_DIR, "intensity");
+// Present while the music is paused mid-turn; holds what will resume it.
+const WAITING_FILE = path.join(STATE_DIR, "waiting");
+// The turn the music belongs to: its session, and where its transcript began.
+const TURN_FILE = path.join(STATE_DIR, "turn.json");
 const CLI_ENTRY = path.join(__dirname, "..", "bin", "vibeaudio.js");
 
 /**
@@ -80,6 +84,22 @@ function readIntensity() {
   }
 }
 
+function parsePayload(raw) {
+  try {
+    const payload = JSON.parse(raw);
+    return payload !== null && typeof payload === "object" ? payload : {};
+  } catch (e) {
+    return {}; // Malformed or absent payload.
+  }
+}
+
+function payloadToolName(raw) {
+  const payload = parsePayload(raw);
+  // Claude Code, Codex and Cursor send tool_name; Grok sends toolName.
+  // Reading only one of them would silently pin that agent to tier 2.
+  return String(payload.tool_name || payload.toolName || "");
+}
+
 /**
  * PreToolUse hook: Claude Code delivers the tool call as JSON on stdin.
  * Writes a tier for the running daemon to pick up at its next loop boundary.
@@ -87,18 +107,9 @@ function readIntensity() {
 function hookTool() {
   let raw = "";
   const commit = () => {
-    let toolName = "";
-    try {
-      const payload = JSON.parse(raw);
-      // Claude Code, Codex and Cursor send tool_name; Grok sends toolName.
-      // Reading only one of them would silently pin that agent to tier 2.
-      toolName = payload.tool_name || payload.toolName || "";
-    } catch (e) {
-      // Malformed or absent payload - fall back to the neutral tier.
-    }
     try {
       fs.mkdirSync(STATE_DIR, { recursive: true });
-      fs.writeFileSync(INTENSITY_FILE, String(toolTier(toolName)));
+      fs.writeFileSync(INTENSITY_FILE, String(toolTier(payloadToolName(raw))));
     } catch (e) {
       // Never let a hook failure disturb the agent.
     }
@@ -134,8 +145,27 @@ const TARGETS = {
     name: "Claude Code",
     cmd: "claude",
     file: () => path.join(os.homedir(), ".claude", "settings.json"),
-    events: { start: "UserPromptSubmit", stop: "Stop", tool: "PreToolUse" },
-    entry: (command) => ({ hooks: [{ type: "command", command, timeout: 5 }] }),
+    // Everything past `tool` exists only here; the other agents have no
+    // verified equivalents, so they get no entry rather than a guessed one.
+    // - wait: PermissionRequest fires when the dialog is shown in the terminal,
+    //   the SDK (desktop app, IDEs) and print mode alike - Notification's
+    //   permission_prompt is raised by the terminal UI alone, after 6s idle.
+    // - failure / end: turns that never reach Stop. An API error ends the
+    //   turn with StopFailure instead; a session closing mid-turn ends it with
+    //   SessionEnd; Esc reaches neither and is caught in hookResume.
+    events: {
+      start: "UserPromptSubmit",
+      stop: "Stop",
+      tool: "PreToolUse",
+      wait: ["PermissionRequest", "Elicitation"],
+      resume: ["PostToolUse", "PostToolUseFailure", "ElicitationResult"],
+      failure: "StopFailure",
+      end: "SessionEnd"
+    },
+    // `async` keeps the wait hook's chime from holding the dialog back.
+    entry: (command, { async = false } = {}) => ({
+      hooks: [{ type: "command", command, timeout: 5, ...(async ? { async: true } : {}) }]
+    }),
     commands: (entry) => (entry.hooks || []).map((h) => h.command),
     seed: () => ({})
   },
@@ -241,9 +271,16 @@ function isOurDaemon(pid) {
   }
 }
 
-function stopDaemon() {
+/**
+ * `pause` keeps the turn's state (what resumes it, whose it is): only the hooks
+ * pausing mid-turn pass it. Every other stop (new prompt, turn end, --stop,
+ * uninstall) ends the turn, or a later tool call would resume music nobody is
+ * waiting for.
+ */
+function stopDaemon({ pause = false } = {}) {
   const pid = readPid();
   fs.rmSync(PID_FILE, { force: true });
+  if (!pause) endTurnState();
   if (pid === null || !isOurDaemon(pid)) return false;
 
   try {
@@ -254,11 +291,116 @@ function stopDaemon() {
   }
 }
 
+function endTurnState() {
+  fs.rmSync(WAITING_FILE, { force: true });
+  fs.rmSync(TURN_FILE, { force: true });
+}
+
+function fileSize(file) {
+  try {
+    return fs.statSync(file).size;
+  } catch (e) {
+    return 0;
+  }
+}
+
+/**
+ * A turn starts at a prompt. The transcript offset is taken here, not when a
+ * daemon spawns, because a resume respawns the daemon mid-turn - and an
+ * interrupt written just before that must still count.
+ */
+function newTurn(raw) {
+  const payload = parsePayload(raw);
+  const transcript = typeof payload.transcript_path === "string" ? payload.transcript_path : "";
+  return { session: String(payload.session_id || ""), transcript, offset: transcript ? fileSize(transcript) : 0 };
+}
+
+function readTurn() {
+  try {
+    return JSON.parse(fs.readFileSync(TURN_FILE, "utf8"));
+  } catch (e) {
+    return null;
+  }
+}
+
+// Claude Code's entry for Esc / the stop button: a user message whose text is
+// "[Request interrupted by user]" or "... for tool use]".
+const INTERRUPT_MARK = "[Request interrupted by user";
+
+function isInterruptEntry(line) {
+  if (!line.includes(INTERRUPT_MARK)) return false; // Cheap filter before parsing.
+  try {
+    const entry = JSON.parse(line);
+    if (entry.type !== "user" || !entry.message) return false;
+    // Structural, not substring: a transcript that merely quotes the phrase -
+    // in a tool result, a file, a prompt about this very feature - is not one.
+    const content = entry.message.content;
+    const texts = typeof content === "string"
+      ? [content]
+      : Array.isArray(content) ? content.filter((b) => b && b.type === "text").map((b) => b.text) : [];
+    return texts.some((t) => typeof t === "string" && t.startsWith(INTERRUPT_MARK));
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Interrupting Claude Code (Esc in the terminal, stop in the desktop app or an
+ * IDE) fires no hook at all - not Stop, not StopFailure, and mid-tool only a
+ * plain PostToolUse. What it always does is append an interrupt entry to the
+ * transcript. Returns a poll that reads only what was appended since `offset`
+ * and reports whether one arrived.
+ */
+function interruptWatcher(transcript, offset) {
+  const { StringDecoder } = require("string_decoder");
+  const decoder = new StringDecoder("utf8"); // A read can split a multibyte character.
+  let pos = offset;
+  let partial = "";
+
+  return () => {
+    try {
+      const size = fileSize(transcript);
+      if (size <= pos) return false;
+      const fd = fs.openSync(transcript, "r");
+      const buf = Buffer.alloc(size - pos);
+      try {
+        fs.readSync(fd, buf, 0, buf.length, pos);
+      } finally {
+        fs.closeSync(fd);
+      }
+      pos = size;
+      const lines = (partial + decoder.write(buf)).split("\n");
+      partial = lines.pop(); // Not a whole line yet.
+      return lines.some(isInterruptEntry);
+    } catch (e) {
+      return false; // Unreadable transcript: the MAX_DAEMON_MS ceiling still applies.
+    }
+  };
+}
+
+const INTERRUPT_POLL_MS = 500;
+
 /**
  * Internal mode: holds the audio open until told to stop. The player's own
  * loop timer keeps the event loop alive.
  */
 function runDaemon(genre, volume, { reactive = false } = {}) {
+  const turn = readTurn();
+  const interrupted = turn && turn.transcript ? interruptWatcher(turn.transcript, turn.offset) : null;
+
+  // Silent, like Ctrl+C in the wrapper: an interrupt is never reported as done.
+  const endInterrupted = () => {
+    if (readPid() === process.pid) {
+      fs.rmSync(PID_FILE, { force: true });
+      endTurnState();
+      fs.rmSync(INTENSITY_FILE, { force: true });
+    }
+    process.exit(0);
+  };
+  // Already interrupted before this daemon started - a resume respawned by the
+  // PostToolUse that an interrupted tool still fires.
+  if (interrupted && interrupted()) endInterrupted();
+
   const player = new AudioPlayer();
   const started = player.start(genre, volume, {
     intensity: reactive ? readIntensity : null
@@ -273,12 +415,22 @@ function runDaemon(genre, volume, { reactive = false } = {}) {
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
   setTimeout(shutdown, MAX_DAEMON_MS);
+
+  if (interrupted) {
+    setInterval(() => {
+      if (!interrupted()) return;
+      player.stop({ playChime: false });
+      endInterrupted();
+    }, INTERRUPT_POLL_MS);
+  }
 }
 
-function hookStart(genre, volume, { reactive = false } = {}) {
+function hookStart(genre, volume, { reactive = false, turn = null } = {}) {
   stopDaemon(); // Single instance: a new prompt replaces the previous run
   fs.mkdirSync(STATE_DIR, { recursive: true });
   fs.rmSync(INTENSITY_FILE, { force: true }); // Don't inherit the last prompt's activity
+  // Before the spawn: the daemon reads it on startup.
+  if (turn) fs.writeFileSync(TURN_FILE, JSON.stringify(turn));
 
   const args = [CLI_ENTRY, "--daemon", "--genre", genre, "--volume", String(Math.round(volume * 100))];
   if (reactive) args.push("--reactive");
@@ -291,19 +443,18 @@ function hookStart(genre, volume, { reactive = false } = {}) {
 }
 
 /**
- * What the agent's stop event says about how the turn ended. Only Cursor
- * reports it: `status` is "completed", "aborted" or "error". Claude Code's
- * Stop payload carries no verdict at all and Codex's StopRequest has none
- * either, so those keep the success chime - the alternative would be
- * inventing a failure the agent never claimed.
+ * What the agent's stop event says about how the turn ended. Cursor reports
+ * it in `status` ("completed", "aborted" or "error"). Claude Code's Stop
+ * carries no verdict, but an API error ends the turn with StopFailure
+ * *instead* of Stop, so that event is the verdict. Codex's StopRequest has
+ * none, so it keeps the success chime - the alternative would be inventing a
+ * failure the agent never claimed.
  */
 function outcomeFromPayload(raw) {
-  try {
-    const status = String(JSON.parse(raw).status || "").toLowerCase();
-    return status === "error" || status === "aborted" ? "failure" : "success";
-  } catch (e) {
-    return "success"; // No payload, or not JSON - the common case.
-  }
+  const payload = parsePayload(raw);
+  if (payload.hook_event_name === "StopFailure") return "failure";
+  const status = String(payload.status || "").toLowerCase();
+  return status === "error" || status === "aborted" ? "failure" : "success";
 }
 
 /**
@@ -339,12 +490,92 @@ function readPayload(done, timeoutMs = 500) {
 }
 
 function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChime = false } = {}) {
+  // Read before stopDaemon clears it. A turn that ends while paused for the
+  // user - a denied tool that nothing resumed after - still finished.
+  const wasWaiting = fs.existsSync(WAITING_FILE);
   const wasPlaying = stopDaemon();
   fs.rmSync(INTENSITY_FILE, { force: true });
-  if (!wasPlaying || noChime) return false;
+  if (!(wasPlaying || wasWaiting) || noChime) return false;
 
   // Chime plays in this short-lived hook process, after the daemon is gone.
   new AudioPlayer().stop({ playChime: true, outcome, volume, chimeVolume });
+  return true;
+}
+
+function readWaiting() {
+  try {
+    return fs.readFileSync(WAITING_FILE, "utf8");
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * What a wait is waiting for, and what ends it: the tool's name for a
+ * permission dialog and its PostToolUse, the server's name for an MCP
+ * elicitation and its ElicitationResult. PermissionRequest carries no
+ * tool_use_id, hence names.
+ */
+function waitKey(raw) {
+  const server = parsePayload(raw).mcp_server_name;
+  return payloadToolName(raw) || (server ? `mcp:${server}` : "");
+}
+
+/**
+ * The agent is blocked on the user (a permission dialog, a question, a plan to
+ * approve, an MCP server asking for input). Music that keeps playing says
+ * "still working", which is the one thing that is not true, so it stops and
+ * the attention chime asks instead.
+ *
+ * Only while music is playing: after the turn has ended there is nobody to
+ * interrupt, and a second dialog while already waiting keeps the first wait
+ * rather than chiming twice.
+ */
+function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {}) {
+  if (!stopDaemon({ pause: true })) return false;
+  fs.writeFileSync(WAITING_FILE, waitKey(raw));
+  if (!noChime) new AudioPlayer().stop({ playChime: true, outcome: "attention", volume, chimeVolume });
+  return true;
+}
+
+/**
+ * A tool call or an elicitation has ended. Nothing fires on an approval
+ * itself, so this is the first signal that work carries on after one - resume,
+ * if it is the one being waited for.
+ *
+ * The turn is carried over rather than started afresh, so the new daemon keeps
+ * watching the transcript from the prompt. An approved tool interrupted with
+ * Esc still fires this PostToolUse, and must not bring the music back.
+ *
+ * ponytail: matching by name means two same-named tools in one parallel batch,
+ * one needing approval, can resume early - after the chime already did its
+ * job. Match on tool_input as well if that ever shows up in practice.
+ */
+function hookResume(raw, genre, volume, { reactive = false } = {}) {
+  const waitingFor = readWaiting();
+  if (waitingFor === null) return false; // Not waiting - the common case, on every tool call.
+  if (waitingFor !== waitKey(raw)) return false;
+
+  hookStart(genre, volume, { reactive, turn: readTurn() || newTurn(raw) });
+  return true;
+}
+
+/**
+ * The agent's session is over (quit, /clear, logout). A turn cut off by it
+ * never reaches Stop. Silent: nothing finished.
+ *
+ * Only the session that started the music may end it. SessionEnd also fires
+ * for idle sessions, and one terminal closing must not silence another that is
+ * mid-turn. Fails closed: with no recorded session there is no proof the music
+ * is this session's, and the MAX_DAEMON_MS ceiling still applies.
+ */
+function hookEnd(raw) {
+  const turn = readTurn();
+  const owner = turn && turn.session;
+  if (!owner || owner !== String(parsePayload(raw).session_id || "")) return false;
+
+  stopDaemon();
+  fs.rmSync(INTENSITY_FILE, { force: true });
   return true;
 }
 
@@ -368,25 +599,28 @@ function shellQuote(value) {
 
 function hookCommand(flag, genre, volume, reactive = false) {
   const base = `${shellQuote(process.execPath)} ${shellQuote(CLI_ENTRY)} ${flag}`;
-  if (flag !== "--hook-start") return base;
+  // Resuming respawns the daemon, so it needs the same settings as starting.
+  if (flag !== "--hook-start" && flag !== "--hook-resume") return base;
 
   const start = `${base} --genre ${genre} --volume ${Math.round(volume * 100)}`;
   return reactive ? `${start} --reactive` : start;
 }
 
+const VIBE_HOOK_FLAG = /--hook-(start|stop|tool|wait|resume|end)\b/;
+
 function isVibeHook(entry, id = "claude") {
   return target(id)
     .commands(entry)
-    .some((c) => typeof c === "string" && /--hook-(start|stop|tool)\b/.test(c));
+    .some((c) => typeof c === "string" && VIBE_HOOK_FLAG.test(c));
 }
 
-function setHook(hooks, event, command, id) {
+function setHook(hooks, event, command, id, opts) {
   // Replacing our own entries keeps repeat installs idempotent and leaves
   // every other tool's hooks untouched. Appending rather than prepending also
   // keeps the existing entries at their original index, which is what Codex
   // keys its per-hook trust records by.
   const kept = (hooks[event] || []).filter((entry) => !isVibeHook(entry, id));
-  kept.push(target(id).entry(command));
+  kept.push(target(id).entry(command, opts));
   hooks[event] = kept;
 }
 
@@ -498,6 +732,21 @@ function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = fa
     else delete settings.hooks[ev.tool];
   }
 
+  if (ev.wait) {
+    for (const event of ev.wait) {
+      setHook(settings.hooks, event, hookCommand("--hook-wait", genre, volume), id, { async: true });
+    }
+    // Synchronous on purpose: the agent awaits it before the next tool's
+    // permission check, so a resume can never land after the next wait.
+    // ponytail: one ~40ms node start per tool call; a shell-side existence
+    // check on the waiting file would skip it if that ever shows.
+    for (const event of ev.resume) {
+      setHook(settings.hooks, event, hookCommand("--hook-resume", genre, volume, reactive), id);
+    }
+    setHook(settings.hooks, ev.failure, hookCommand("--hook-stop", genre, volume), id);
+    setHook(settings.hooks, ev.end, hookCommand("--hook-end", genre, volume), id);
+  }
+
   fs.writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`);
   return { file, backup, reactive, id, name: t.name, note: t.note || null, events: ev };
 }
@@ -538,6 +787,10 @@ module.exports = {
   hookStart,
   hookStop,
   hookTool,
+  hookWait,
+  hookResume,
+  hookEnd,
+  newTurn,
   outcomeFromPayload,
   readPayload,
   toolTier,
@@ -549,6 +802,7 @@ module.exports = {
   uninstallHooks,
   settingsPath,
   isVibeHook,
+  VIBE_HOOK_FLAG,
   TARGETS,
   targetFile,
   detectTargets,

@@ -86,8 +86,52 @@ function generateFailureChime(durationSec = 1.8) {
   return createWavBuffer({ left, right, sampleRate: SAMPLE_RATE });
 }
 
+/**
+ * "Your turn": the agent is blocked on the user. It must not be mistaken for
+ * either outcome - success resolves downward onto the tonic and failure
+ * descends in minor, so this one rises by an open fifth and stops there,
+ * unresolved, twice. A question rather than an answer.
+ */
+function generateAttentionChime(durationSec = 1.3) {
+  const totalSamples = Math.floor(SAMPLE_RATE * durationSec);
+  const left = new Float64Array(totalSamples);
+  const right = new Float64Array(totalSamples);
+
+  const askNotes = [
+    { note: "E5", delay: 0.00, pan: 0.45 },
+    { note: "B5", delay: 0.13, pan: 0.55 },
+    { note: "E5", delay: 0.42, pan: 0.45 },
+    { note: "B5", delay: 0.55, pan: 0.55 }
+  ];
+
+  for (const c of askNotes) {
+    const f = noteToFreq(c.note);
+    const startIdx = Math.floor(c.delay * SAMPLE_RATE);
+    const ringSamples = Math.floor(0.7 * SAMPLE_RATE);
+
+    for (let i = 0; i < ringSamples; i++) {
+      const idx = startIdx + i;
+      if (idx >= totalSamples) break;
+      const t = i / SAMPLE_RATE;
+      // Shorter ring than the outcome chimes: a tap on the shoulder, not a bell.
+      const env = Math.exp(-t * 7.0);
+
+      const sample = (
+        sine(f * t) * 0.78 +
+        sine(f * 2.0 * t) * 0.16 * Math.exp(-t * 12.0)
+      ) * env * 0.28;
+
+      left[idx] += sample * (1.0 - c.pan);
+      right[idx] += sample * c.pan;
+    }
+  }
+
+  return createWavBuffer({ left, right, sampleRate: SAMPLE_RATE });
+}
+
 module.exports = {
   generateChime: generateSuccessChime,
   generateSuccessChime,
-  generateFailureChime
+  generateFailureChime,
+  generateAttentionChime
 };

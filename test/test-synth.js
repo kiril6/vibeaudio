@@ -344,9 +344,11 @@ assert.ok(/--genre zen/.test(afterInstall.hooks.UserPromptSubmit[0].hooks[0].com
 const { removed } = uninstallHooks(hookSettings);
 const afterUninstall = JSON.parse(fs.readFileSync(hookSettings, "utf8"));
 fs.unlinkSync(hookSettings);
-assert.strictEqual(removed, 2, "both hooks must be removed");
+// start, stop, and Claude's 2 wait + 3 resume + StopFailure + SessionEnd
+assert.strictEqual(removed, 9, "all nine hooks must be removed");
 assert.deepStrictEqual(afterUninstall.hooks.Stop, [foreignHook], "uninstall must leave foreign hooks untouched");
 assert.strictEqual(afterUninstall.hooks.UserPromptSubmit, undefined, "emptied events must be dropped");
+assert.strictEqual(afterUninstall.hooks.PermissionRequest, undefined, "the wait hook must go too");
 console.log("   ✓ Hooks install idempotently, merge safely and uninstall cleanly.");
 
 // 22. Seeded Arrangements: deterministic per project, varied across projects
@@ -950,6 +952,11 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     assert.strictEqual(outcomeFromPayload('{"status":"aborted"}'), "failure", "aborted must chime failure");
     assert.strictEqual(outcomeFromPayload('{"status":"ABORTED"}'), "failure", "status must be case-insensitive");
     assert.strictEqual(outcomeFromPayload('{"status":"completed"}'), "success", "completed must chime success");
+    // Claude Code ends an API-error turn with StopFailure instead of Stop.
+    assert.strictEqual(
+      outcomeFromPayload('{"hook_event_name":"StopFailure","error":"rate_limit"}'), "failure",
+      "StopFailure must chime failure"
+    );
 
     // Claude Code and Codex send a Stop payload with no verdict in it. Calling
     // that a failure would invent one the agent never claimed.
@@ -1330,7 +1337,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     // And the live file still has the other tool's hook plus ours.
     const live = JSON.parse(fs.readFileSync(file, "utf8"));
     assert.ok(JSON.stringify(live).includes("someone-elses-hook"), "someone else's hook survives the install");
-    assert.strictEqual(hooks.uninstallHooks(file, { id: "claude" }).removed, 2, "uninstall removes only ours");
+    assert.strictEqual(hooks.uninstallHooks(file, { id: "claude" }).removed, 9, "uninstall removes only ours");
     assert.ok(JSON.stringify(JSON.parse(fs.readFileSync(file, "utf8"))).includes("someone-elses-hook"));
 
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -1839,7 +1846,187 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ EPERM with the file present is success; a real failure still throws.");
   }
 
-  console.log("\n\x1b[32mAll 44 tests passed successfully!\x1b[0m");
+  // 45. Blocked on the user: the music must stop saying "working".
+  //
+  //     Music that plays through a permission dialog tells someone in another
+  //     window the agent is busy when it is stuck on them. PermissionRequest
+  //     pauses and asks with its own chime; the approved tool's PostToolUse
+  //     resumes. Driven through the real CLI and daemon against a fake backend,
+  //     because each step's effect is a process or a file another process reads.
+  {
+    const fs = require("fs");
+    const path = require("path");
+    const { spawnSync } = require("child_process");
+    const hooks = require("../src/hooks");
+
+    console.log("\n\x1b[1m[45] Waiting on the user pauses, asks, and resumes\x1b[0m");
+
+    // Install shape - checkable everywhere.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-wait-"));
+    const file = path.join(tmp, "settings.json");
+    hooks.installHooks("jazz", 0.3, file, { id: "claude", reactive: true });
+    const s = JSON.parse(fs.readFileSync(file, "utf8")).hooks;
+    for (const event of ["PermissionRequest", "Elicitation"]) {
+      const wait = s[event][0].hooks[0];
+      assert.ok(/--hook-wait\b/.test(wait.command), `${event} must run --hook-wait`);
+      assert.strictEqual(wait.async, true, `${event}: the wait hook must not hold the dialog back while it chimes`);
+    }
+    for (const event of ["PostToolUse", "PostToolUseFailure", "ElicitationResult"]) {
+      const resume = s[event][0].hooks[0];
+      assert.ok(/--hook-resume --genre jazz --volume 30 --reactive/.test(resume.command), `${event} must resume with the start settings`);
+      assert.strictEqual(resume.async, undefined, `${event} must stay synchronous so it cannot land after the next wait`);
+    }
+    // The turns that never reach Stop.
+    assert.ok(/--hook-stop\b/.test(s.StopFailure[0].hooks[0].command), "StopFailure must end the turn like Stop");
+    assert.ok(/--hook-end\b/.test(s.SessionEnd[0].hooks[0].command), "SessionEnd must run --hook-end");
+    for (const id of ["codex", "cursor", "grok"]) {
+      const ev = hooks.TARGETS[id].events;
+      assert.ok(!ev.wait && !ev.failure && !ev.end, `${id} has no verified waiting, failure or session-end event`);
+    }
+    fs.rmSync(tmp, { recursive: true, force: true });
+
+    if (process.platform === "win32") {
+      console.log("   ✓ Install shape checked; daemon flow skipped on Windows (needs a POSIX executable bit).");
+    } else {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-waitflow-"));
+      const log = path.join(dir, "played.log");
+      fs.writeFileSync(log, "");
+      fs.writeFileSync(path.join(dir, "afplay"), `#!/bin/sh\necho "$@" >> ${log}\nexit 0\n`, { mode: 0o755 });
+      fs.writeFileSync(path.join(dir, "which"), `#!/bin/sh\n[ -x "${dir}/$1" ] && echo "${dir}/$1" || exit 1\n`, { mode: 0o755 });
+      // ps must stay reachable: stopDaemon refuses to signal a pid it cannot verify.
+      const env = { ...process.env, PATH: `${dir}:/bin:/usr/bin`, HOME: dir, USERPROFILE: dir, VIBE_DISABLE: "" };
+      const cli = (args, payload = "") =>
+        spawnSync(process.execPath, [CLI, ...args], { input: payload, env, timeout: 20000 });
+      const state = path.join(dir, ".vibeaudio");
+      const pidFile = path.join(state, "daemon.pid");
+      const waitingFile = path.join(state, "waiting");
+      const settle = async (what, check) => {
+        for (let i = 0; i < 100 && !check(); i++) await new Promise((r) => setTimeout(r, 100));
+        assert.ok(check(), what);
+      };
+      const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return false; } };
+      const bash = JSON.stringify({ tool_name: "Bash" });
+
+      try {
+        // Nothing playing: a dialog after the turn ended has nobody to interrupt.
+        cli(["--hook-wait"], bash);
+        assert.ok(!/chime_attention/.test(fs.readFileSync(log, "utf8")), "no chime when no music was playing");
+        assert.ok(!fs.existsSync(waitingFile), "and no wait recorded");
+
+        cli(["--hook-start", "--genre", "zen", "--volume", "5"]);
+        await settle("the daemon must reach the backend", () => /loop_zen_/.test(fs.readFileSync(log, "utf8")));
+        const firstPid = parseInt(fs.readFileSync(pidFile, "utf8"), 10);
+
+        cli(["--hook-wait"], bash);
+        assert.ok(/chime_attention/.test(fs.readFileSync(log, "utf8")), "the dialog must play the attention chime");
+        assert.ok(!/chime_success/.test(fs.readFileSync(log, "utf8")), "not the done chime");
+        assert.ok(!fs.existsSync(pidFile), "the music must stop while waiting");
+        await settle("the daemon must actually exit", () => !alive(firstPid));
+        assert.strictEqual(fs.readFileSync(waitingFile, "utf8"), "Bash", "the wait must remember which tool it is for");
+
+        // A different tool finishing (a parallel read) is not the approval.
+        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ tool_name: "Read" }));
+        assert.ok(!fs.existsSync(pidFile), "another tool's PostToolUse must not resume");
+
+        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], bash);
+        assert.ok(fs.existsSync(pidFile), "the approved tool's PostToolUse must resume the music");
+        assert.ok(!fs.existsSync(waitingFile), "and end the wait");
+        const resumedPid = parseInt(fs.readFileSync(pidFile, "utf8"), 10);
+        await settle("the resumed daemon must be running", () => alive(resumedPid));
+
+        // Paused, then the turn ends with nothing resumed (a denied tool): it
+        // still finished, so it still chimes done.
+        cli(["--hook-wait"], bash);
+        fs.writeFileSync(log, "");
+        cli(["--hook-stop"], "{}");
+        assert.ok(/chime_success/.test(fs.readFileSync(log, "utf8")), "a turn ending while paused must still chime done");
+        assert.ok(!fs.existsSync(waitingFile), "Stop must clear the wait");
+
+        const start = (session) =>
+          cli(["--hook-start", "--genre", "zen", "--volume", "5"], JSON.stringify({ session_id: session }));
+        const playing = () => fs.existsSync(pidFile);
+
+        // An MCP server asking for input is a wait too, ended by its own result.
+        start("s1");
+        const elicit = JSON.stringify({ hook_event_name: "Elicitation", mcp_server_name: "github" });
+        cli(["--hook-wait"], elicit);
+        assert.ok(!playing(), "an elicitation must pause the music");
+        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ hook_event_name: "ElicitationResult", mcp_server_name: "slack" }));
+        assert.ok(!playing(), "another server's result is not the answer");
+        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ hook_event_name: "ElicitationResult", mcp_server_name: "github" }));
+        assert.ok(playing(), "its ElicitationResult must resume it");
+
+        // An API error never reaches Stop; StopFailure is the only end.
+        fs.writeFileSync(log, "");
+        cli(["--hook-stop"], JSON.stringify({ hook_event_name: "StopFailure", error: "rate_limit" }));
+        assert.ok(!playing(), "StopFailure must stop the music");
+        assert.ok(/chime_failure/.test(fs.readFileSync(log, "utf8")), "and play the failure chime, not success");
+
+        // Esc fires no hook at all - mid-reply nothing, mid-tool a plain
+        // PostToolUse (both observed against the real binary). The transcript
+        // entry is the only signal, so the daemon watches for it.
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+        const transcript = path.join(dir, "session.jsonl");
+        const userText = (text) => JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text }] } }) + "\n";
+        const INTERRUPT = "[Request interrupted by user]";
+        const turnPayload = (extra = {}) => JSON.stringify({ session_id: "s3", transcript_path: transcript, ...extra });
+        const startTurn = async () => {
+          fs.writeFileSync(log, "");
+          cli(["--hook-start", "--genre", "zen", "--volume", "5"], turnPayload());
+          await settle("the turn's music must start", () => /loop_zen_/.test(fs.readFileSync(log, "utf8")));
+          return parseInt(fs.readFileSync(pidFile, "utf8"), 10);
+        };
+
+        // The previous turn ended interrupted: that entry predates this prompt.
+        fs.writeFileSync(transcript, userText("earlier prompt") + userText(INTERRUPT));
+        const turnPid = await startTurn();
+        // Quoting the phrase is not interrupting - this conversation does it.
+        fs.appendFileSync(transcript,
+          JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", content: INTERRUPT }] } }) + "\n" +
+          JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: INTERRUPT }] } }) + "\n");
+        await sleep(1200);
+        assert.ok(alive(turnPid), "an old interrupt, or a quote of the phrase, must not stop the music");
+
+        // The entry can arrive split across two polls.
+        const entry = userText("[Request interrupted by user for tool use]");
+        fs.writeFileSync(log, "");
+        fs.appendFileSync(transcript, entry.slice(0, 40));
+        await sleep(1200);
+        assert.ok(alive(turnPid), "half an entry is not an entry yet");
+        fs.appendFileSync(transcript, entry.slice(40));
+        await settle("Esc must stop the music", () => !alive(turnPid));
+        assert.ok(!playing(), "and the interrupted daemon must clear its pid file");
+        assert.ok(!/chime/.test(fs.readFileSync(log, "utf8")), "silently: an interrupt is never reported as done");
+
+        // Esc during an approved tool still fires its PostToolUse. The resumed
+        // daemon watches from the prompt, not from its own start, so it sees
+        // the interrupt that came first and never plays.
+        await startTurn();
+        cli(["--hook-wait"], bash);
+        fs.appendFileSync(transcript, userText(INTERRUPT));
+        fs.writeFileSync(log, "");
+        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], turnPayload({ tool_name: "Bash" }));
+        await sleep(1500);
+        assert.ok(!/loop_/.test(fs.readFileSync(log, "utf8")), "an interrupted approved tool must not bring the music back");
+
+        // SessionEnd: only the session that started the music may stop it.
+        start("s1");
+        await settle("s1's music must start", () => playing());
+        cli(["--hook-end"], JSON.stringify({ session_id: "s2", reason: "prompt_input_exit" }));
+        assert.ok(playing(), "another session closing must not silence this one");
+        cli(["--hook-end"], "{}");
+        assert.ok(playing(), "an unidentified session must not stop it either");
+        cli(["--hook-end"], JSON.stringify({ session_id: "s1", reason: "prompt_input_exit" }));
+        assert.ok(!playing(), "the owning session ending must stop it");
+      } finally {
+        cli(["--stop"]);
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+      console.log("   ✓ Dialogs and elicitations pause and resume; API errors, Esc (via the transcript) and session end all stop the music.");
+    }
+  }
+
+  console.log("\n\x1b[32mAll 45 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);
