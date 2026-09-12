@@ -253,7 +253,7 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 **What the installer will and won't do to your config:**
 
 * **Merges, never replaces.** Other tools' hooks are left untouched and keep their position in the file — which is what Codex keys its trust records by.
-* **Backs up first.** Your previous file is copied alongside as `*.vibeaudio.bak`.
+* **Backs up first, once.** The first install copies your file alongside as `*.vibeaudio.bak`. Later installs leave it alone — re-copying would overwrite your real pre-VibeAudio config with a copy of VibeAudio's own last install.
 * **Reinstalling updates, never duplicates.** Uninstalling sweeps every supported agent and removes only VibeAudio's own entries.
 * **Refuses rather than clobbers.** Malformed JSON aborts the write; a temporary `npx` checkout is rejected outright, since the hook records an absolute path that npm's cache eviction would later delete.
 * **Can't run away.** The background player is capped at 15 minutes, so a missed stop event can't leave music looping.
@@ -385,8 +385,8 @@ export VIBE_GENRE=jazz     # or synthwave, 8bit, electronic, zen, piano, drone, 
 | Flag | Description | Default |
 | :--- | :--- | :--- |
 | `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `random` | `lofi` |
-| `-v, --volume <0-100>` | Set playback volume | `40` |
-| `-cv, --chime-volume <0-100>` | Set independent completion chime volume | `volume × 1.1`, kept within 35–65 |
+| `-v, --volume <5-100>` | Set playback volume | `40` |
+| `-cv, --chime-volume <5-100>` | Set independent completion chime volume | `volume × 1.1`, kept within 35–65 |
 | `--grace <ms>` | Silence window before music starts | `1500` |
 | `--seed <n>` | Force a specific arrangement | derived from the project directory |
 | `--whisper` | Quick preset: 15% volume (headphones / late night) | — |

@@ -1460,7 +1460,284 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ The error names the offending key, and the file is left untouched.");
   }
 
-  console.log("\n\x1b[32mAll 40 tests passed successfully!\x1b[0m");
+  // 41. Invariants CLAUDE.md calls load-bearing that nothing was enforcing.
+  //     Found by mutation testing: each assertion below fails against the
+  //     specific one-line regression it names.
+  {
+    console.log("\n\x1b[1m[41] Documented invariants, now enforced\x1b[0m");
+    const fs = require("fs");
+    const path = require("path");
+    const CLI = path.join(__dirname, "..", "bin", "vibeaudio.js");
+
+    // a. A hook must not outlive its work. Reading stdin resumes it, and a
+    //    resumed stdin holds the event loop open by itself - so without the
+    //    pause() in readPayload the hook sits there on EVERY turn until the
+    //    agent times it out. Stdin is deliberately left open here: that is
+    //    the case that hangs.
+    //    Stdin is opened and deliberately never ended - spawnSync's `input`
+    //    closes it for you, which makes the `end` event fire and hides the
+    //    bug entirely. An agent holds the pipe open; that is the case that
+    //    hangs, so it is the case to test.
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-hook-"));
+    const exitCode = await new Promise((resolve, reject) => {
+      const child = require("child_process").spawn(process.execPath, [CLI, "--hook-stop"], {
+        stdio: ["pipe", "ignore", "ignore"],
+        env: { ...process.env, HOME: home, USERPROFILE: home, VIBE_DISABLE: "1" }
+      });
+      child.stdin.write('{"status":"completed"}');   // written, never ended
+      const timer = setTimeout(() => {
+        child.kill("SIGKILL");
+        resolve("HUNG");
+      }, 6000);
+      child.on("error", reject);
+      child.on("close", (code) => { clearTimeout(timer); resolve(code); });
+    });
+    assert.notStrictEqual(exitCode, "HUNG", "--hook-stop hung: readPayload left stdin resumed");
+    fs.rmSync(home, { recursive: true, force: true });
+
+    // b. The intensity file must not carry one prompt's activity into the
+    //    next: hookStart and hookStop both clear it.
+    const hooks = require("../src/hooks");
+    const INTENSITY = path.join(os.homedir(), ".vibeaudio", "intensity");
+    const hadFile = fs.existsSync(INTENSITY);
+    const saved = hadFile ? fs.readFileSync(INTENSITY, "utf8") : null;
+    try {
+      fs.mkdirSync(path.dirname(INTENSITY), { recursive: true });
+      fs.writeFileSync(INTENSITY, "3");
+      hooks.hookStop({ noChime: true });
+      assert.ok(!fs.existsSync(INTENSITY), "hookStop must clear the intensity file");
+    } finally {
+      if (hadFile) fs.writeFileSync(INTENSITY, saved);
+      else fs.rmSync(INTENSITY, { force: true });
+    }
+
+    //    hookStart clears it too, and that half was the one left uncovered.
+    //    It spawns a detached daemon, so per CLAUDE.md it runs in a child with
+    //    HOME redirected - never by setting process.env.HOME in this suite,
+    //    which would operate on the real ~/.vibeaudio and clobber a live pid.
+    const startHome = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-start-"));
+    const probe = path.join(startHome, "probe.js");
+    fs.writeFileSync(probe, `
+      const fs = require("fs"), path = require("path"), os = require("os");
+      const file = path.join(os.homedir(), ".vibeaudio", "intensity");
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, "3");
+      const hooks = require(${JSON.stringify(path.join(__dirname, "..", "src", "hooks"))});
+      hooks.hookStart("lofi", 0.4, {});
+      console.log(JSON.stringify({ cleared: !fs.existsSync(file) }));
+      hooks.stopDaemon();
+      process.exit(0);
+    `);
+    const probeRun = require("child_process").spawnSync(process.execPath, [probe], {
+      encoding: "utf8",
+      timeout: 20000,
+      env: { ...process.env, HOME: startHome, USERPROFILE: startHome, VIBE_DISABLE: "1" }
+    });
+    assert.strictEqual(probeRun.status, 0, `intensity probe failed: ${probeRun.stderr}`);
+    assert.strictEqual(
+      JSON.parse(probeRun.stdout.trim().split("\n").pop()).cleared, true,
+      "hookStart must clear the intensity file so the last prompt's activity cannot leak in"
+    );
+    fs.rmSync(startHome, { recursive: true, force: true });
+
+    // c. cleanup() can be reached from the signal path and the close path, so
+    //    the HUD's stop must be idempotent - without the guard it prints twice.
+    const { TerminalHud } = require("../src/hud");
+    const hud = new TerminalHud("lofi");
+    const lines = [];
+    const realWrite = process.stdout.write.bind(process.stdout);
+    const wasTTY = process.stdout.isTTY;
+    process.stdout.isTTY = true;
+    process.stdout.write = (c) => { lines.push(String(c)); return true; };
+    try {
+      hud.start();
+      hud.stop({ outcome: "success", code: 0, chimed: true });
+      hud.stop({ outcome: "success", code: 0, chimed: true });
+    } finally {
+      process.stdout.write = realWrite;
+      process.stdout.isTTY = wasTTY;
+    }
+    assert.strictEqual(
+      lines.filter((l) => /Done in/.test(l)).length, 1,
+      "a second hud.stop() must print nothing"
+    );
+
+    console.log("   ✓ The hook returns, the intensity file is cleared, the HUD prints once.");
+  }
+
+  // 42. The playback path itself, driven through a fake audio backend - so
+  //     --no-chime and a genre switch are checked against what was actually
+  //     spawned rather than against a return value.
+  if (process.platform === "win32") {
+    console.log("\n\x1b[1m[42] Playback path\x1b[0m\n   ✓ Skipped on Windows (needs a POSIX executable bit).");
+  } else {
+    console.log("\n\x1b[1m[42] Playback path, via a fake audio backend\x1b[0m");
+    const fs = require("fs");
+    const path = require("path");
+
+    // A backend that records what it was asked to play instead of playing it.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-play-"));
+    const log = path.join(dir, "played.log");
+    fs.writeFileSync(path.join(dir, "afplay"), `#!/bin/sh\necho "$@" >> ${log}\nexit 0\n`, { mode: 0o755 });
+    fs.writeFileSync(path.join(dir, "which"), `#!/bin/sh\n[ -x "${dir}/$1" ] && echo "${dir}/$1" || exit 1\n`, { mode: 0o755 });
+
+    // Run in a child: detectPlayer() caches at module scope, so the sandbox
+    // PATH has to be in place before player.js is first required.
+    const driver = path.join(dir, "drive.js");
+    // spawn() is asynchronous, so each step needs a moment to actually reach
+    // the backend before the next one tears it down - otherwise the fake is
+    // SIGTERMed before it can record anything and the test fails on itself.
+    fs.writeFileSync(driver, `
+      const { AudioPlayer } = require(${JSON.stringify(path.join(__dirname, "..", "src", "player"))});
+      const settle = () => new Promise((r) => setTimeout(r, 400));
+      (async () => {
+        const p = new AudioPlayer();
+        const out = {};
+        out.firstStart = p.start("jazz", 0.4);
+        await settle();
+        out.sameAgain  = p.start("jazz", 0.4);   // identical settings: no restart
+        await settle();
+        out.switched   = p.start("zen", 0.4);    // different genre: must restart
+        await settle();
+        out.genre      = p.genre;
+        p.stop({ playChime: true, outcome: "success" });
+        p.stop({ playChime: false });
+        console.log(JSON.stringify(out));
+        process.exit(0);
+      })();
+    `);
+
+    const run = require("child_process").spawnSync(process.execPath, [driver], {
+      encoding: "utf8",
+      timeout: 20000,
+      env: { ...process.env, PATH: dir, HOME: dir, USERPROFILE: dir, VIBE_DISABLE: "" }
+    });
+    assert.strictEqual(run.status, 0, `driver failed: ${run.stderr}`);
+    const out = JSON.parse(run.stdout.trim().split("\n").pop());
+
+    assert.strictEqual(out.firstStart, true, "start() must report that it started");
+    assert.strictEqual(out.sameAgain, false, "restarting with identical settings is a no-op");
+    assert.strictEqual(out.switched, true, "a genre switch must restart, not be dropped");
+    assert.strictEqual(out.genre, "zen", "and the player must be on the new genre");
+
+    const played = fs.readFileSync(log, "utf8");
+    assert.ok(/loop_jazz_/.test(played), "the jazz loop must actually reach the backend");
+    assert.ok(/loop_zen_/.test(played), "and so must the genre we switched to");
+    assert.ok(/chime_success/.test(played), "playChime:true must spawn the chime");
+
+    // --no-chime, the other direction: nothing new may be played.
+    fs.writeFileSync(log, "");
+    const quiet = path.join(dir, "quiet.js");
+    fs.writeFileSync(quiet, `
+      const { AudioPlayer } = require(${JSON.stringify(path.join(__dirname, "..", "src", "player"))});
+      (async () => {
+        const p = new AudioPlayer();
+        p.start("jazz", 0.4);
+        await new Promise((r) => setTimeout(r, 400));
+        p.stop({ playChime: false });
+        process.exit(0);
+      })();
+    `);
+    require("child_process").spawnSync(process.execPath, [quiet], {
+      timeout: 20000,
+      env: { ...process.env, PATH: dir, HOME: dir, USERPROFILE: dir, VIBE_DISABLE: "" }
+    });
+    assert.ok(!/chime/.test(fs.readFileSync(log, "utf8")), "playChime:false must spawn no chime at all");
+
+    // --no-chime is decided in cli.js, not in AudioPlayer, so it only counts
+    // if the wrapper itself is driven. Asserting on stop({playChime:false})
+    // tests the wrong layer and passes while the flag is ignored.
+    const CLI_BIN = path.join(__dirname, "..", "bin", "vibeaudio.js");
+    const wrapper = (extra) => {
+      fs.writeFileSync(log, "");
+      require("child_process").spawnSync(
+        process.execPath,
+        [CLI_BIN, "--grace", "0", ...extra, process.execPath, "-e", "setTimeout(() => {}, 700)"],
+        { timeout: 30000, stdio: "ignore", env: { ...process.env, PATH: dir, HOME: dir, USERPROFILE: dir, VIBE_DISABLE: "" } }
+      );
+      return fs.readFileSync(log, "utf8");
+    };
+
+    const withChime = wrapper([]);
+    assert.ok(/loop_/.test(withChime), "the wrapper must start music once the grace window passes");
+    assert.ok(/chime_success/.test(withChime), "a clean run past the grace window must chime");
+
+    const noChime = wrapper(["--no-chime"]);
+    assert.ok(/loop_/.test(noChime), "--no-chime silences the chime, not the music");
+    assert.ok(!/chime/.test(noChime), "--no-chime must reach the chime decision in cli.js");
+
+    fs.rmSync(dir, { recursive: true, force: true });
+    console.log("   ✓ Loops and chimes reach the backend; a genre switch restarts; --no-chime is honoured end to end.");
+  }
+
+  // 43. Nothing pinned the actual audio, so an accidental change to a
+  //     generator shipped silently - and the cache key, which hashes
+  //     src/synth/, would dutifully deliver it to every user as though it
+  //     were intended. One render per genre is enough to notice.
+  //
+  //     WHEN THIS FAILS AND THE CHANGE WAS DELIBERATE: listen to the genre
+  //     first (`node bin/vibeaudio.js --clear-cache && node bin/vibeaudio.js
+  //     --preview <genre>`), then paste the new hash in. Updating it without
+  //     listening defeats the only check that hears anything at all.
+  {
+    console.log("\n\x1b[1m[43] Generator output is pinned\x1b[0m");
+    const crypto = require("crypto");
+
+    // All three tiers, not just one. Pinning tier 2 alone left every
+    // tier-specific regression invisible whenever the broken value happened to
+    // equal tier 2's - mutation testing caught exactly that: hard-coding
+    // piano's note count to 4 (its tier-2 value) changed nothing at tier 2 and
+    // sailed through, while silently flattening tiers 1 and 3.
+    const GOLDEN = {
+      lofi:         ["c6342ec4f12c", "9468d401ca94", "e017253dfaf0"],
+      synthwave:    ["2cffc02140f9", "6ddd0a6b251c", "e09a176a6d1c"],
+      "8bit":       ["fa3083b3a8db", "1435a0ec21d0", "ba0dd7225b96"],
+      electronic:   ["38d8969c5ef1", "8a4e1dba2055", "7628b54e62ba"],
+      jazz:         ["fadaf4f52b75", "5cdbd8524d3d", "686fd1208d39"],
+      zen:          ["0496cb273359", "2ea4a3da3d8a", "efb72a71fac0"],
+      piano:        ["e12477cbde4c", "3e2e18d19203", "27e0f694c35f"],
+      drone:        ["80d547b0bf48", "dfba6786efb4", "62c4918e156b"]
+    };
+
+    const RENDERERS = {
+      lofi: (t) => generateLofiLoop(6.4, t, 1),
+      synthwave: (t) => generateSynthwaveLoop(6.8, t, 1),
+      "8bit": (t) => generateChiptuneLoop(7.5, t, 1),
+      electronic: (t) => generateElectronicLoop(6.4, t, 1),
+      jazz: (t) => generateJazzLoop(6.26, t, 1),
+      zen: (t) => generateZenLoop(7.2, t, 1),
+      piano: (t) => require("../src/synth/piano").generatePianoLoop(7.6, t, 1),
+      drone: (t) => require("../src/synth/drone").generateDroneLoop(7.0, t, 1)
+    };
+
+    // Every genre the player can produce must be pinned, or a new one slips
+    // in with no drift protection at all.
+    const { AVAILABLE_GENRES } = require("../src/player");
+    assert.deepStrictEqual(
+      Object.keys(GOLDEN).sort(), [...AVAILABLE_GENRES].sort(),
+      "every genre in AVAILABLE_GENRES needs a golden hash here"
+    );
+
+    for (const [genre, render] of Object.entries(RENDERERS)) {
+      const hashes = [1, 2, 3].map((t) =>
+        crypto.createHash("sha256").update(render(t)).digest("hex").slice(0, 12)
+      );
+      for (let i = 0; i < 3; i++) {
+        assert.strictEqual(
+          hashes[i], GOLDEN[genre][i],
+          `${genre} tier ${i + 1} renders differently than it used to ` +
+          `(${GOLDEN[genre][i]} -> ${hashes[i]}). If you meant to change it, listen to it and ` +
+          `update the hash; if you did not, you just found a regression.`
+        );
+      }
+      // A tier that stopped differing is escalation quietly switched off.
+      assert.strictEqual(new Set(hashes).size, 3, `${genre} must render three distinct tiers`);
+    }
+
+    console.log("   ✓ All 8 genres × 3 tiers render exactly as pinned — audio drift now fails the suite.");
+  }
+
+  console.log("\n\x1b[32mAll 43 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);
