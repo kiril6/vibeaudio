@@ -238,11 +238,17 @@ assert.strictEqual(isKnownGenre("nonsense"), false, "unknown genres must be reje
 assert.strictEqual(isKnownGenre("zen"), true);
 console.log("   ✓ Genre aliases, casing, random resolution and validation behave correctly.");
 
-// 17. Cache Is Version-Scoped
+// 17. Cache Is Scoped To The Audio It Holds
 // Regression: an unversioned cache meant synth changes never reached upgraders.
-console.log("17. Testing Versioned Audio Cache...");
-assert.ok(CACHE_DIR.endsWith(`v${require("../package.json").version}`), "cache dir must be keyed by package version");
-console.log(`   ✓ Cache is scoped to v${require("../package.json").version}.`);
+// Keying on the version alone did not fix that - it just moved the failure to
+// "someone must remember to bump it", which went 0 for 40. The key now carries
+// a hash of the generators as well; test 34d covers that half.
+console.log("17. Testing Scoped Audio Cache...");
+assert.ok(
+  new RegExp(`v${require("../package.json").version.replace(/\./g, "\\.")}-[0-9a-f]{8}$`).test(CACHE_DIR),
+  `cache dir must be keyed by version and synth hash, got ${CACHE_DIR}`
+);
+console.log(`   ✓ Cache is scoped to ${require("path").basename(CACHE_DIR)}.`);
 
 // 18. WAV Duration Parsing (drives gapless loop scheduling)
 console.log("18. Testing WAV Duration Parsing...");
@@ -920,6 +926,46 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     assert.ok(Date.now() - started < 2000, "readPayload must give up rather than wait forever");
 
     console.log("   ✓ Cursor's status reaches the chime; the silent agents still report success.");
+  }
+
+  // --- 34d. The cache key is derived from the generators, not declared ---
+  console.log("\n\x1b[1m[34d] Cache key tracks the synth sources\x1b[0m");
+  {
+    const { synthFingerprint, CACHE_DIR } = require("../src/player");
+    const pkgVersion = require("../package.json").version;
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-fp-"));
+    const write = (name, body) => fs.writeFileSync(path.join(dir, name), body);
+
+    write("a.js", "const x = 1;");
+    write("b.js", "const y = 2;");
+    const base = synthFingerprint(dir);
+
+    assert.strictEqual(synthFingerprint(dir), base, "the same sources must hash the same every time");
+    assert.ok(/^[0-9a-f]{8}$/.test(base), `fingerprint must be 8 hex chars, got ${base}`);
+
+    // The whole point: a changed generator must invalidate the cache without
+    // anyone remembering to bump a version.
+    write("a.js", "const x = 2;");
+    assert.notStrictEqual(synthFingerprint(dir), base, "editing a generator must change the key");
+
+    write("a.js", "const x = 1;");
+    assert.strictEqual(synthFingerprint(dir), base, "reverting must restore the key, not just move it");
+
+    // A new generator counts too, and a non-generator must not.
+    write("c.js", "const z = 3;");
+    assert.notStrictEqual(synthFingerprint(dir), base, "adding a generator must change the key");
+    fs.rmSync(path.join(dir, "c.js"));
+    write("notes.md", "# ignore me");
+    assert.strictEqual(synthFingerprint(dir), base, "non-.js files must not affect the key");
+
+    assert.ok(
+      path.basename(CACHE_DIR).startsWith(`v${pkgVersion}-`),
+      `the cache dir must carry the version and the hash, got ${path.basename(CACHE_DIR)}`
+    );
+
+    fs.rmSync(dir, { recursive: true, force: true });
+    console.log("   ✓ Editing a generator invalidates the cache on its own.");
   }
 
   // --- 35. Sparse piano ---

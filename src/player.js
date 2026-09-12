@@ -21,7 +21,37 @@ const { hashString } = require("./synth/generator");
 const pkg = require("../package.json");
 
 const CACHE_ROOT = path.join(os.homedir(), ".vibeaudio", "cache");
-const CACHE_DIR = path.join(CACHE_ROOT, `v${pkg.version}`);
+
+/**
+ * The cache key has to change whenever the audio would, or existing users keep
+ * hearing the previous render forever with nothing to tell them so.
+ *
+ * Keying it on the package version alone made that a thing someone had to
+ * remember, and the record for that was 0 for 40: eight of the ten generators
+ * changed across forty commits while the version sat still, so the fix that
+ * makes synth changes reach users had never once fired. Hashing the sources
+ * instead makes it an invariant - you cannot change a generator without
+ * invalidating the cache, because the generator *is* the key.
+ *
+ * The version stays in the directory name for legibility; the hash is what
+ * actually decides. Costs one read of ~50 kB at startup.
+ */
+function synthFingerprint(dir = path.join(__dirname, "synth")) {
+  try {
+    const parts = fs
+      .readdirSync(dir)
+      .filter((name) => name.endsWith(".js"))
+      .sort() // readdir order is not guaranteed; the key must be stable.
+      .map((name) => `${name}\u0000${fs.readFileSync(path.join(dir, name), "utf8")}`);
+    return hashString(parts.join("\u0000")).toString(16).padStart(8, "0");
+  } catch (e) {
+    // Unreadable sources are someone else's problem to report; falling back to
+    // the version keeps the old behaviour rather than failing to play at all.
+    return "nofp";
+  }
+}
+
+const CACHE_DIR = path.join(CACHE_ROOT, `v${pkg.version}-${synthFingerprint()}`);
 const AVAILABLE_GENRES = ["lofi", "synthwave", "8bit", "electronic", "jazz", "zen", "piano", "drone"];
 
 /**
@@ -116,14 +146,15 @@ function ensureCacheDir() {
 }
 
 /**
- * Caches are keyed by version, so a synth change reaches existing users.
- * Anything from another version is dead weight and regenerates on demand.
+ * Caches are keyed by version plus a hash of the generators, so a synth change
+ * reaches existing users. Anything from another key is dead weight and
+ * regenerates on demand.
  */
 function pruneStaleCache() {
   try {
     for (const entry of fs.readdirSync(CACHE_ROOT, { withFileTypes: true })) {
       const full = path.join(CACHE_ROOT, entry.name);
-      if (entry.isDirectory() && /^v\d/.test(entry.name) && entry.name !== `v${pkg.version}`) {
+      if (entry.isDirectory() && /^v\d/.test(entry.name) && entry.name !== path.basename(CACHE_DIR)) {
         fs.rmSync(full, { recursive: true, force: true });
       } else if (entry.isFile() && entry.name.endsWith(".wav")) {
         fs.rmSync(full, { force: true });
@@ -496,6 +527,7 @@ module.exports = {
   wavDurationMs,
   AVAILABLE_GENRES,
   SHUFFLE_GENRES,
+  synthFingerprint,
   CACHE_ROOT,
   CACHE_DIR
 };
