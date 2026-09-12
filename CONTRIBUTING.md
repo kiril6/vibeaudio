@@ -26,7 +26,7 @@ bin/vibeaudio.js → src/cli.js#run()
                                           └─ src/hud.js    (tab title HUD)
 ```
 
-`src/player.js` owns the audio cache (`~/.vibeaudio/cache/v<version>/`), OS player detection, tier escalation and the gapless loop scheduler.
+`src/player.js` owns the audio cache (`~/.vibeaudio/cache/v<version>-<synth hash>/s<seed>/`), OS player detection, tier escalation and the gapless loop scheduler.
 
 ## AI-assisted development
 
@@ -56,7 +56,7 @@ npm test                               # full suite (plain node + assert)
 
 `npm test` is a single linear script of assertions — no framework, no filtering. Keep it that way, and keep it fast.
 
-> **After changing anything in `src/synth/`, run `--clear-cache` before listening.** Audio is cached per version, so during development on an unchanged version number you'll otherwise keep hearing the old render.
+> **The cache key is derived from the generators, not declared.** `synthFingerprint()` hashes every file in `src/synth/`, so editing one invalidates the cache on its own — you do not need to bump anything, and `--clear-cache` is only for when you want a clean slate. This replaced keying on the version alone, which required someone to remember: eight of the ten generators changed across forty commits while the version sat still, so the mechanism meant to deliver audio fixes had never once fired.
 
 ## Submitting changes
 
@@ -75,8 +75,8 @@ Keep PRs focused and small where you can; it makes review faster.
 **Contributors don't do this.** You fork and open a PR (see above) — that's the whole job.
 
 ```bash
-# 1. Bump the version - this also invalidates every user's audio cache,
-#    which is how synth changes actually reach people.
+# 1. Bump the version. Note this is NOT what ships synth changes - the cache
+#    key hashes src/synth/ itself, so a generator edit already invalidates it.
 npm version patch          # or minor / major
 
 # 2. Push the commit and tag
