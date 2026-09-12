@@ -23,24 +23,46 @@ const INTENSITY_FILE = path.join(STATE_DIR, "intensity");
 const CLI_ENTRY = path.join(__dirname, "..", "bin", "vibeaudio.js");
 
 /**
- * Reactive mode: which tier a tool call implies. Searching and reading stay
- * sparse, edits bring in the groove, shelling out and subagents go to peak.
- * Unknown tools sit in the middle rather than swinging the mix.
+ * Reactive mode: which tier a tool call implies. Looking things up stays
+ * sparse, edits bring in the groove, shelling out and handing work to a
+ * subagent go to peak. Unknown tools sit in the middle rather than swinging
+ * the mix.
  *
  * The agents don't agree on tool names, so every vocabulary lives here: Claude
  * Code's PascalCase set (which Grok shares), Codex's snake_case one, and
  * Cursor's short names. They don't collide, so one flat map covers them all.
+ *
+ * Tiers here were checked against 30,532 real tool calls rather than guessed.
+ * Two things that measurement changed:
+ *
+ * - `Task` was the old name for the subagent tool; it is `Agent` now, so the
+ *   heaviest thing an agent does was landing on the fallback tier. Both are
+ *   listed, since an older Claude Code still emits the old one.
+ * - A third of all calls (33.7%) are MCP tools, which arrive as
+ *   `mcp__<server>__<tool>` (Claude Code) or `MCP:<tool>` (Cursor) and cannot
+ *   be enumerated - every user has different servers. They keep the fallback
+ *   deliberately: an MCP call is usually real work, but rarely the heaviest
+ *   thing in a turn, which is exactly what tier 2 means.
+ *
+ * Tools that mean "the agent has stopped and is waiting for the human" belong
+ * at tier 1 even though they are not lookups - nothing is being worked on.
  */
 const TOOL_TIERS = {
-  // Claude Code
+  // Claude Code - lookups, bookkeeping, and waiting on the user
   Read: 1, Glob: 1, Grep: 1, WebFetch: 1, WebSearch: 1, TodoWrite: 1,
+  ToolSearch: 1, SearchSkills: 1, ListAgents: 1, ListSkills: 1,
+  TaskCreate: 1, TaskUpdate: 1, TaskOutput: 1,
+  BashOutput: 1, KillShell: 1,
+  AskUserQuestion: 1, ExitPlanMode: 1, SendUserFile: 1, SendMessage: 1,
+  // Claude Code - editing
   Edit: 2, Write: 2, MultiEdit: 2, NotebookEdit: 2,
-  Bash: 3, Task: 3,
+  // Claude Code - shelling out, or handing the work to something else
+  Bash: 3, Agent: 3, Task: 3, Skill: 3, Workflow: 3,
   // Codex
   read_file: 1, list_dir: 1, grep: 1, web_search: 1, update_plan: 1,
   apply_patch: 2,
   shell: 3,
-  // Cursor (MCP calls arrive as "MCP:<name>" and fall through to the middle)
+  // Cursor
   Delete: 2,
   Shell: 3
 };
@@ -268,6 +290,54 @@ function hookStart(genre, volume, { reactive = false } = {}) {
   return child.pid;
 }
 
+/**
+ * What the agent's stop event says about how the turn ended. Only Cursor
+ * reports it: `status` is "completed", "aborted" or "error". Claude Code's
+ * Stop payload carries no verdict at all and Codex's StopRequest has none
+ * either, so those keep the success chime - the alternative would be
+ * inventing a failure the agent never claimed.
+ */
+function outcomeFromPayload(raw) {
+  try {
+    const status = String(JSON.parse(raw).status || "").toLowerCase();
+    return status === "error" || status === "aborted" ? "failure" : "success";
+  } catch (e) {
+    return "success"; // No payload, or not JSON - the common case.
+  }
+}
+
+/**
+ * Reads the hook's stdin payload, then hands it on. A hook must never hang
+ * the agent waiting for input that isn't coming, hence the timeout.
+ */
+function readPayload(done, timeoutMs = 500) {
+  let raw = "";
+  let settled = false;
+  const collect = (chunk) => {
+    raw += chunk;
+  };
+
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    // Reading stdin resumes it, and a resumed stdin keeps the event loop
+    // alive on its own. Without letting go here the hook process outlives
+    // its work and sits there until the agent's own timeout kills it -
+    // on every single turn.
+    process.stdin.removeListener("data", collect);
+    process.stdin.removeListener("end", finish);
+    process.stdin.removeListener("error", finish);
+    process.stdin.pause();
+    done(raw);
+  };
+
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", collect);
+  process.stdin.on("end", finish);
+  process.stdin.on("error", finish);
+  setTimeout(finish, timeoutMs).unref();
+}
+
 function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChime = false } = {}) {
   const wasPlaying = stopDaemon();
   fs.rmSync(INTENSITY_FILE, { force: true });
@@ -412,6 +482,8 @@ module.exports = {
   hookStart,
   hookStop,
   hookTool,
+  outcomeFromPayload,
+  readPayload,
   toolTier,
   readIntensity,
   stopDaemon,

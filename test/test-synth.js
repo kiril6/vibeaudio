@@ -885,10 +885,41 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     assert.strictEqual(await runTool({ tool_name: "Bash" }), "3", "tool_name must be read");
     assert.strictEqual(await runTool({ toolName: "Bash" }), "3", "toolName (Grok) must be read");
     assert.strictEqual(await runTool({ toolName: "Read" }), "1", "Grok payloads must reach the full tier map");
+    // `Task` was renamed to `Agent`; handing work to a subagent is the
+    // heaviest thing in a turn and was landing on the fallback tier.
+    assert.strictEqual(await runTool({ tool_name: "Agent" }), "3", "the subagent tool must be peak tier");
+    assert.strictEqual(await runTool({ tool_name: "AskUserQuestion" }), "1", "waiting on the human is not work");
+    // A third of real calls are MCP tools, which cannot be enumerated.
+    assert.strictEqual(await runTool({ tool_name: "mcp__server__thing" }), "2", "MCP calls keep the middle tier");
     assert.strictEqual(await runTool({ nothing: true }), "2", "an unrecognised payload falls back to the middle");
 
     fs.rmSync(home, { recursive: true, force: true });
     console.log("   ✓ Both tool-name spellings reach the tier map.");
+  }
+
+  // --- 34c. The failure chime can actually be reached under hooks ---
+  console.log("\n\x1b[1m[34c] Stop payload decides the chime\x1b[0m");
+  {
+    const { outcomeFromPayload, readPayload } = require("../src/hooks");
+
+    // Cursor is the only agent that reports how the turn ended.
+    assert.strictEqual(outcomeFromPayload('{"status":"error"}'), "failure", "error must chime failure");
+    assert.strictEqual(outcomeFromPayload('{"status":"aborted"}'), "failure", "aborted must chime failure");
+    assert.strictEqual(outcomeFromPayload('{"status":"ABORTED"}'), "failure", "status must be case-insensitive");
+    assert.strictEqual(outcomeFromPayload('{"status":"completed"}'), "success", "completed must chime success");
+
+    // Claude Code and Codex send a Stop payload with no verdict in it. Calling
+    // that a failure would invent one the agent never claimed.
+    assert.strictEqual(outcomeFromPayload('{"stop_hook_active":false}'), "success", "a payload with no status is a success");
+    assert.strictEqual(outcomeFromPayload(""), "success", "no payload at all is a success");
+    assert.strictEqual(outcomeFromPayload("not json {"), "success", "malformed input must not throw");
+
+    // A hook that blocks on stdin that never arrives would hang the agent.
+    const started = Date.now();
+    await new Promise((resolve) => readPayload(resolve, 80));
+    assert.ok(Date.now() - started < 2000, "readPayload must give up rather than wait forever");
+
+    console.log("   ✓ Cursor's status reaches the chime; the silent agents still report success.");
   }
 
   // --- 35. Sparse piano ---

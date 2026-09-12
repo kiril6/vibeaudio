@@ -211,6 +211,8 @@ Each tool spells the same three events its own way, and VibeAudio writes whichev
 | **Music stops + chime** | `Stop` | `Stop` | `stop` | `Stop` |
 | **Reactive** (opt-in) | `PreToolUse` | `PreToolUse` | `preToolUse` | `PreToolUse` |
 
+> **The failure chime only plays on Cursor.** Its stop event reports whether the turn completed, aborted or errored. Claude Code, Codex and Grok send no verdict at all, so a turn there always ends on the success chime — VibeAudio won't invent a failure the agent never claimed.
+
 > **Grok gets a file of its own.** It reads every `*.json` in `~/.grok/hooks/`, so VibeAudio writes `vibeaudio.json` there instead of merging into anyone else's — which also makes uninstalling it a delete rather than an edit. The other three merge into a shared file.
 
 That's it. Just run your agent normally — no `vibe` prefix.

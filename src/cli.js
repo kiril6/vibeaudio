@@ -534,7 +534,17 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, 
       return;
 
     case "hook-stop":
-      hooks.hookStop({ outcome: "success", volume, chimeVolume, noChime });
+      // Cursor's stop payload says how the turn ended; the others say nothing
+      // and fall back to success. Reading it is what lets the failure chime
+      // ever play under hooks - it was hardcoded to success before.
+      hooks.readPayload((raw) => {
+        hooks.hookStop({
+          outcome: hooks.outcomeFromPayload(raw),
+          volume,
+          chimeVolume,
+          noChime
+        });
+      });
       return;
 
     case "hook-tool":
