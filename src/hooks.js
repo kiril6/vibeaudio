@@ -348,8 +348,26 @@ function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChi
   return true;
 }
 
+/**
+ * The hook command is a string the agent hands to a shell, so every path in it
+ * has to survive that shell. Double quotes do not: `$` and a backtick expand
+ * inside them and a `"` ends the quote outright, so installing from a path
+ * like /tmp/dollar$dir wrote a command the shell quietly rewrote into a
+ * different one - and the install reported success. A hook that fails on every
+ * prompt while claiming to be installed is the exact failure
+ * ephemeralInstallReason() exists to prevent.
+ *
+ * POSIX gets single quotes, which expand nothing, plus the one escape a single
+ * quote itself needs. Windows keeps double quotes: cmd expands neither `$` nor
+ * a backtick, and `"` is not legal in a Windows path to begin with.
+ */
+function shellQuote(value) {
+  if (process.platform === "win32") return `"${value}"`;
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
 function hookCommand(flag, genre, volume, reactive = false) {
-  const base = `"${process.execPath}" "${CLI_ENTRY}" ${flag}`;
+  const base = `${shellQuote(process.execPath)} ${shellQuote(CLI_ENTRY)} ${flag}`;
   if (flag !== "--hook-start") return base;
 
   const start = `${base} --genre ${genre} --volume ${Math.round(volume * 100)}`;
@@ -387,11 +405,36 @@ function readVibeEntryCount(file, id) {
 function loadSettings(file, t = null) {
   if (!fs.existsSync(file)) return { settings: t ? t.seed() : {}, raw: null };
   const raw = fs.readFileSync(file, "utf8");
+
+  let settings;
   try {
-    return { settings: JSON.parse(raw), raw };
+    settings = JSON.parse(raw);
   } catch (e) {
     throw new Error(`${file} is not valid JSON (${e.message}) — refusing to overwrite it.`);
   }
+
+  // Valid JSON in the wrong shape used to reach the callers and fail there as
+  // "entries.filter is not a function", which tells the user nothing about
+  // their own file. Checked here because install, uninstall and the entry
+  // count all come through this function.
+  if (settings === null || typeof settings !== "object" || Array.isArray(settings)) {
+    throw new Error(`${file} does not contain a JSON object — refusing to overwrite it.`);
+  }
+  if (settings.hooks !== undefined) {
+    if (settings.hooks === null || typeof settings.hooks !== "object" || Array.isArray(settings.hooks)) {
+      throw new Error(`${file} has a "hooks" key that is not an object — refusing to overwrite it.`);
+    }
+    for (const [event, entries] of Object.entries(settings.hooks)) {
+      if (!Array.isArray(entries)) {
+        throw new Error(
+          `${file} has hooks.${event} as ${Array.isArray(entries) ? "an array" : typeof entries}, ` +
+          `not an array of entries — refusing to overwrite it.`
+        );
+      }
+    }
+  }
+
+  return { settings, raw };
 }
 
 /**
@@ -490,6 +533,7 @@ function uninstallHooks(file = null, { id = "claude" } = {}) {
 }
 
 module.exports = {
+  shellQuote,
   runDaemon,
   hookStart,
   hookStop,
