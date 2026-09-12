@@ -175,16 +175,15 @@ const VOLUMES = [
   { name: "📢 Loud (75%)", desc: "Audible across the room", vol: 0.75 }
 ];
 
-// Claude Code is the only tool VibeAudio installs hooks for today, so it is
-// the only one where the menu has a real choice to offer. (Codex has its own
-// hook system we don't write to yet - extend HOOK_TOOL when that lands.)
-const HOOK_TOOL = "claude";
+// The tools VibeAudio installs hooks for. Anything else gets the wrapper, so
+// there is no delivery choice worth asking about.
+const HOOK_TOOLS = ["claude", "codex"];
 
 const DELIVERY_FRESH = [
   {
     id: "hooks",
-    name: "Claude Code hooks",
-    desc: "Music follows the agent's thinking. Set once, works with plain `claude`"
+    name: "Agent hooks",
+    desc: "Music follows the agent's thinking. Set once, no wrapper needed"
   },
   {
     id: "wrapper",
@@ -200,7 +199,7 @@ const DELIVERY_FRESH = [
 const DELIVERY_INSTALLED = [
   {
     id: "launch",
-    name: "Just launch Claude Code",
+    name: "Just launch it",
     desc: "Your installed hooks already handle the music"
   },
   {
@@ -247,7 +246,7 @@ async function promptInteractive({ hooksInstalled = false } = {}) {
   // Without this the menu asks for a genre and volume that installed hooks
   // then ignore - three questions asked, one honoured.
   let delivery = "wrapper";
-  if (selectedTool.check === HOOK_TOOL) {
+  if (HOOK_TOOLS.includes(selectedTool.check)) {
     const chosen = await selectMenu(
       hooksInstalled ? "Hooks are already installed. What now?" : "How should the music run?",
       hooksInstalled ? DELIVERY_INSTALLED : DELIVERY_FRESH,
@@ -292,6 +291,9 @@ async function promptInteractive({ hooksInstalled = false } = {}) {
     genre: selectedGenre.id,
     volume: selectedVolume.vol,
     installHooks: delivery === "hooks",
+    // The menu asked about one tool, so it installs for that one - auto-detect
+    // belongs to the bare --install-hooks flag, where nothing was chosen.
+    hookTarget: delivery === "hooks" ? selectedTool.check : null,
     reactive
   };
 }

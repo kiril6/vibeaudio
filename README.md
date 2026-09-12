@@ -6,7 +6,7 @@
 > Every project gets its own arrangement. Zero dependencies, zero audio files.
 > Works with Claude Code, Codex, Gemini CLI, GitHub Copilot CLI, Aider — and any terminal command.
 
-**[Install](#-install)** · **[Claude Code hooks](#-claude-code-hooks-no-wrapper-needed)** · **[Genres](#-music-genres)** · **[Flags](#-options--flags)** · **[Troubleshooting](#-troubleshooting)** · **[Uninstall](#-uninstall)**
+**[Install](#-install)** · **[Agent hooks](#-agent-hooks-no-wrapper-needed)** · **[Genres](#-music-genres)** · **[Flags](#-options--flags)** · **[Troubleshooting](#-troubleshooting)** · **[Uninstall](#-uninstall)**
 
 > **In a hurry?** `npm i -g github:kiril6/vibeaudio`, then `vibe --install-hooks`. Your next prompt has music.
 
@@ -82,13 +82,13 @@ That puts `vibe` and `vibeaudio` on your `PATH`. Re-run the same command to upda
 
 ### Then pick how it runs
 
-**Using Claude Code interactively?** Install the hooks — this is the mode that actually tracks thinking:
+**Using Claude Code, Codex or Cursor interactively?** Install the hooks — this is the mode that actually tracks thinking:
 
 ```bash
 vibe --install-hooks
 ```
 
-Now run `claude` normally, with no prefix. Music starts when you submit a prompt and stops with a chime when the agent finishes. [Details below.](#-claude-code-hooks-no-wrapper-needed)
+Now run your agent normally, with no prefix. Music starts when you submit a prompt and stops with a chime when the agent finishes. [Details below.](#-agent-hooks-no-wrapper-needed)
 
 **Running one-shot commands?** Wrap them:
 
@@ -108,7 +108,7 @@ npx github:kiril6/vibeaudio sleep 8          # hear the wrapper: music, then the
 
 > **Heard nothing?** Music only starts once the wrapped command has run longer than the 1.5s grace window — that's [the point](#-what-makes-vibeaudio-different), so quick commands stay silent. `sleep 8` is the reliable demo; something like `npm test` is silent if the tests finish fast or the command errors out immediately.
 
-`npx` runs from a temporary cache that npm eventually deletes, so `--install-hooks` refuses to run this way — it would write a path into your Claude Code settings that later vanishes. Install globally first.
+`npx` runs from a temporary cache that npm eventually deletes, so `--install-hooks` refuses to run this way — it would write a path into your agent's hook config that later vanishes. Install globally first.
 
 ### Interactive Launcher Menu
 
@@ -147,11 +147,11 @@ Choose your volume level:
   4. 📢 Loud (75%)         — Audible across the room
 ```
 
-Pick **Claude Code** and it asks how the music should run — hooks or just this session — and the hooks branch then offers [reactive mode](#reactive-mode-opt-in) too:
+Pick **Claude Code** or **Codex** and it asks how the music should run — hooks or just this session — and the hooks branch then offers [reactive mode](#reactive-mode-opt-in) too:
 
 ```
 How should the music run?
-❯ 1. Claude Code hooks    — Music follows the agent's thinking. Set once, works with plain `claude`
+❯ 1. Agent hooks          — Music follows the agent's thinking. Set once, no wrapper needed
   2. This session only    — Music plays while the process lives - fine for one-shot commands
 
 Should the music react to what the agent is doing?
@@ -159,9 +159,9 @@ Should the music react to what the agent is doing?
   2. Reactive             — Intensity follows the tool in use - noticeable, by design
 ```
 
-Once hooks are installed, that first question becomes **Just launch Claude Code** / **Reconfigure the hooks** — and launching skips the genre and volume prompts entirely, since the hooks own those.
+Once hooks are installed, that first question becomes **Just launch it** / **Reconfigure the hooks** — and launching skips the genre and volume prompts entirely, since the hooks own those.
 
-Choosing hooks installs them with the genre and volume you picked, then launches `claude` — the same thing `vibe --genre <g> --volume <n> --reactive --install-hooks` does, without memorising flags. The reactive question is only asked on that branch, because `--reactive` does nothing without hooks.
+Choosing hooks installs them for the tool you picked with the genre and volume you chose, then launches it — the same thing `vibe --genre <g> --volume <n> --reactive --install-hooks` does, without memorising flags. The reactive question is only asked on that branch, because `--reactive` does nothing without hooks.
 
 Installed tools sort to the top. This list is a shortcut, not a compatibility list — **`vibe` wraps any command at all**, and "Custom command..." takes one you type (quoted arguments survive intact). Adding an entry is one line in [`src/interactive.js`](src/interactive.js) if you'd rather your tool be one keystroke.
 
@@ -183,31 +183,40 @@ vibe --preview jazz
 
 ---
 
-## 🪝 Claude Code Hooks (no wrapper needed)
+## 🪝 Agent Hooks (no wrapper needed)
 
-> **`--install-hooks` works with Claude Code only.** Other AI tools use the [wrapper or MCP](#-everything-else-codex-gemini-cli-claude-desktop-antigravity-via-mcp) instead.
+> **`--install-hooks` supports Claude Code, Codex and Cursor.** Everything else uses the [wrapper or MCP](#-everything-else-gemini-cli-claude-desktop-antigravity-via-mcp) instead.
 
 Wrapping (`vibe claude`) infers "the AI is thinking" from how long the process runs. Hooks know for certain — so music starts the moment you submit a prompt and stops the moment the agent finishes, with no grace-window guessing and no aliases.
 
-Once hooks are installed they take over: running `vibe claude` anyway plays no music of its own and says so, rather than layering a session-long loop on top of the hooks' per-prompt one.
+Once hooks are installed they take over: running `vibe claude` (or `vibe codex`) anyway plays no music of its own and says so, rather than layering a session-long loop on top of the hooks' per-prompt one.
 
 ```bash
-vibe --install-hooks                        # uses your default genre/volume
-vibe --genre jazz --volume 25 --install-hooks   # or pin them explicitly
+vibe --install-hooks                             # every agent found on this machine
+vibe --install-hooks --tools codex               # or just one of them
+vibe --genre jazz --volume 25 --install-hooks    # pin the genre and volume
 ```
 
-This wires two hooks into `~/.claude/settings.json`:
+**It auto-detects.** With no `--tools`, VibeAudio wires up each of Claude Code, Codex and Cursor that it finds on your machine — a tool counts as present when its config directory exists or its CLI is on your `PATH`. `--tools claude,codex,cursor` overrides that.
 
-| Event | Action |
-| :--- | :--- |
-| `UserPromptSubmit` | Starts a detached background player |
-| `Stop` | Stops it and plays the success chime |
+Each tool spells the same three events its own way, and VibeAudio writes whichever dialect the file expects:
 
-That's it. Just run `claude` normally — no `vibe` prefix.
+| | Claude Code | Codex | Cursor |
+| :--- | :--- | :--- | :--- |
+| **File** | `~/.claude/settings.json` | `~/.codex/hooks.json` | `~/.cursor/hooks.json` |
+| **Music starts** | `UserPromptSubmit` | `UserPromptSubmit` | `beforeSubmitPrompt` |
+| **Music stops + chime** | `Stop` | `Stop` | `stop` |
+| **Reactive** (opt-in) | `PreToolUse` | `PreToolUse` | `preToolUse` |
 
-> **No restart needed for a session that's already open.** Claude Code reads `settings.json` each time a hook fires, not once at startup, so edits land on your **next prompt**. A daemon already playing keeps its old settings until that prompt replaces it — at most the tail of one turn. (If a brand-new install doesn't seem to take, restarting is the safe fallback.)
+That's it. Just run your agent normally — no `vibe` prefix.
 
-> **This covers the Claude Code desktop app too**, not only the terminal. Both read the same `~/.claude/settings.json`, so one `--install-hooks` wires up both — no `vibe` prefix, and no MCP setup. (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-codex-gemini-cli-claude-desktop-antigravity-via-mcp).)
+> **Codex asks you to trust the hook once.** Codex records a per-hook trust hash in `~/.codex/config.toml` and won't run a hook it hasn't been told to trust, so the install isn't live until you approve it the first time it fires. Claude Code and Cursor need no such step.
+
+> **One player is shared.** All three drive the same background player, so if you prompt two agents at once, the last prompt owns the music. One person, one set of speakers — this is deliberate, not a limitation being worked around.
+
+> **No restart needed for a session that's already open.** All three read their hook file each time a hook fires, not once at startup, so edits land on your **next prompt**. A daemon already playing keeps its old settings until that prompt replaces it — at most the tail of one turn. (If a brand-new install doesn't seem to take, restarting is the safe fallback.)
+
+> **This covers the Claude Code desktop app too**, not only the terminal. Both read the same `~/.claude/settings.json`, so one `--install-hooks` wires up both — no `vibe` prefix, and no MCP setup. (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-gemini-cli-claude-desktop-antigravity-via-mcp).)
 
 ### Changing the sound later
 
@@ -253,15 +262,15 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 
 **This is off by default on purpose.** Music that moves every time the agent switches tools is music you *notice* — which is the opposite of what focus audio is for. Try it, but if you catch yourself listening to it instead of reading, reinstall without `--reactive` (which removes the `PreToolUse` hook again).
 
-**Safety notes:** installing is refused from a temporary `npx` checkout, since the hook records an absolute path that npm's cache eviction would later delete. Installing merges into your existing settings rather than replacing them — other tools' hooks are left untouched, your previous file is copied to `settings.json.vibeaudio.bak`, and re-running the install updates the entry instead of adding a duplicate. Uninstall removes only VibeAudio's own entries. If `settings.json` isn't valid JSON, VibeAudio refuses to write rather than clobbering it. The background player is capped at 15 minutes, so a missed `Stop` hook can't leave music looping.
+**Safety notes:** installing is refused from a temporary `npx` checkout, since the hook records an absolute path that npm's cache eviction would later delete. Installing merges into your existing config rather than replacing it — other tools' hooks are left untouched and keep their position in the file (which is what Codex keys its trust records by), your previous file is copied alongside it as `*.vibeaudio.bak`, and re-running the install updates the entry instead of adding a duplicate. Uninstall sweeps all three agents and removes only VibeAudio's own entries. If the file isn't valid JSON, VibeAudio refuses to write rather than clobbering it. The background player is capped at 15 minutes, so a missed `Stop` hook can't leave music looping.
 
 ---
 
-## 🖥️ Everything Else (Codex, Gemini CLI, Claude Desktop, Antigravity… via MCP)
+## 🖥️ Everything Else (Gemini CLI, Claude Desktop, Antigravity… via MCP)
 
-**VibeAudio's hooks support only Claude Code today** — that's a limit of this project, not of the tools. Both [Cursor](https://cursor.com/docs/hooks) (`~/.cursor/hooks.json`, with `beforeSubmitPrompt` / `stop` / `preToolUse`) and Codex (`~/.codex/hooks.json`) have hook systems carrying the same events VibeAudio needs — it just doesn't write to them yet. [Issues welcome](https://github.com/kiril6/vibeaudio/issues) if you want either. For everything else, MCP is the way in: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
+**Claude Code, [Codex](https://github.com/openai/codex) and [Cursor](https://cursor.com/docs/hooks) have hook systems, and `--install-hooks` writes to all three** — use [hooks](#-agent-hooks-no-wrapper-needed) there, they're strictly better. This section is for everything else. MCP is the way in: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
 
-> **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On Claude Code — terminal or desktop app — use [hooks](#-claude-code-hooks-no-wrapper-needed) instead.**
+> **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On Claude Code, Codex or Cursor, use [hooks](#-agent-hooks-no-wrapper-needed) instead.**
 
 Use an **absolute path**, not the bare `vibe` command: GUI apps launched from Finder don't inherit your shell's `PATH`, and version managers like `fnm` or `nvm` put `vibe` on a per-shell path that won't resolve. Print yours with:
 
@@ -364,8 +373,8 @@ How you change it depends on how you run VibeAudio — **a shell `export` only r
 | You run it via | Change the genre with |
 | :--- | :--- |
 | **Wrapper** (`vibe <command>`) | `export VIBE_GENRE=jazz` — or `--genre` per run |
-| **Claude Code hooks** | re-run `vibe --genre jazz --install-hooks` — [why](#changing-the-sound-later) |
-| **MCP** (Codex, Claude Desktop, …) | ask the assistant, or the config's `env` block — [how](#changing-the-genre-here) |
+| **Agent hooks** (Claude Code, Codex, Cursor) | re-run `vibe --genre jazz --install-hooks` — [why](#changing-the-sound-later) |
+| **MCP** (Gemini CLI, Claude Desktop, …) | ask the assistant, or the config's `env` block — [how](#changing-the-genre-here) |
 
 ```bash
 export VIBE_GENRE=jazz     # or synthwave, electronic, zen, drone, random
@@ -392,9 +401,10 @@ export VIBE_GENRE=jazz     # or synthwave, electronic, zen, drone, random
 | `--stop` | Stop the background player, then exit | — |
 | `--clear-cache` | Delete all cached audio, then exit | — |
 | `--mcp` | Run as an MCP stdio server for desktop apps | — |
-| `--install-hooks` | Wire music into Claude Code hooks (no wrapper needed) | — |
+| `--install-hooks` | Wire music into your agent's hooks (no wrapper needed) | — |
+| `--tools <list>` | With `--install-hooks`: `claude,codex,cursor` | auto-detect |
 | `--reactive` | With `--install-hooks`: intensity follows the tool in use | off |
-| `--uninstall-hooks` | Remove the Claude Code hooks again | — |
+| `--uninstall-hooks` | Remove the hooks again, from every agent | — |
 | `-h, --help` | Show help and options | — |
 | `--version` | Show version | — |
 
@@ -457,17 +467,20 @@ Audio
   player    afplay
   cache     7.6 MB in ~/.vibeaudio/cache
 
-Claude Code hooks
-  ✔ Stop
-  ✔ UserPromptSubmit   jazz @ 25%, reactive
-  ✔ PreToolUse
+Hooks
+  Claude Code
+    ✔ Stop
+    ✔ UserPromptSubmit     jazz @ 25%, reactive
+    ✔ PreToolUse
+  Codex        not installed — run: vibe --install-hooks
+  Cursor       not on this machine
 
 Background player
   running pid 59078   stop it with: vibe --stop
 
 AI tools found
   ✔ Claude Code         hooks — installed
-  ✔ Codex               MCP — see the README
+  ✔ Codex               hooks — run: vibe --install-hooks
   ✔ Gemini CLI          MCP — see the README
   ✔ GitHub Copilot CLI  MCP, or wrap it
 ```
@@ -481,14 +494,14 @@ The last block is detected from your own `PATH`, so it answers "will this work w
 **Remove the hooks first, while `vibe` still exists:**
 
 ```bash
-vibe --uninstall-hooks          # 1. unwire Claude Code, and stop any player still running
+vibe --uninstall-hooks          # 1. unwire every agent, and stop any player still running
 npm rm -g vibeaudio             # 2. remove the CLI
 rm -rf ~/.vibeaudio             # 3. optional: cached audio + daemon state
 ```
 
 Step 1 also **stops a background player that's still going**. That matters: once the hooks are gone nothing will ever send the `Stop` event, and after step 2 there's no `vibe` left to stop it with — music would simply play on until its 15-minute cap. If you ever need to do it by hand: `pkill -f "vibeaudio.js --daemon"`.
 
-> **Order matters.** `npm rm -g` deletes the binary but not your `~/.claude/settings.json`. Removing the package first strands hook entries that point at a path that no longer exists, and Claude Code will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json` by hand.
+> **Order matters.** `npm rm -g` deletes the binary but not your hook config. Removing the package first strands hook entries that point at a path that no longer exists, and your agent will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json`, `~/.codex/hooks.json` and `~/.cursor/hooks.json` by hand.
 
 Step 3 only reclaims disk — the audio cache, pruned to the 3 most recent projects (5.2 MB here for two) — and it's regenerated on next use, so skip it if you're reinstalling.
 
@@ -497,7 +510,7 @@ Step 3 only reclaims disk — the audio cache, pruned to the 3 most recent proje
 | Leftover | Why, and how to remove it |
 | :--- | :--- |
 | `~/.claude/settings.json.vibeaudio.bak` | Your settings as they were before the first install — a safety net we won't delete for you. `rm` it once you're happy the real file is correct. |
-| `vibeaudio` entries in other apps' MCP configs | VibeAudio never edits those files, so it can't clean them either. Drop the entry from [whichever config you added it to](#-everything-else-codex-gemini-cli-claude-desktop-antigravity-via-mcp). |
+| `vibeaudio` entries in other apps' MCP configs | VibeAudio never edits those files, so it can't clean them either. Drop the entry from [whichever config you added it to](#-everything-else-gemini-cli-claude-desktop-antigravity-via-mcp). |
 
 Apart from those two, the three commands above remove everything VibeAudio writes.
 

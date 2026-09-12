@@ -1,6 +1,7 @@
 /**
  * Model Context Protocol (MCP) Stdio Server
- * Connects VibeAudio to Desktop Apps (Claude Desktop, Antigravity, Cursor)
+ * Connects VibeAudio to clients with no hook system (Claude Desktop, Antigravity,
+ * Gemini CLI). Claude Code, Codex and Cursor have hooks — use those instead.
  * Zero dependencies - Pure Node.js JSON-RPC 2.0 over Stdio
  */
 

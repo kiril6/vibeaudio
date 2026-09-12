@@ -1,10 +1,14 @@
 /**
- * Claude Code Hooks Integration
+ * Agent Hooks Integration (Claude Code, Codex, Cursor)
  *
  * Hooks fire as short-lived processes, so playback lives in a detached daemon
- * tracked by a pid file. UserPromptSubmit starts it, Stop tears it down and
- * plays the chime. This tracks the agent's actual thinking window instead of
- * guessing from a wrapped process's lifetime.
+ * tracked by a pid file. The prompt-submit event starts it, the stop event
+ * tears it down and plays the chime. This tracks the agent's actual thinking
+ * window instead of guessing from a wrapped process's lifetime.
+ *
+ * The three agents differ only in where the file lives, what the events are
+ * called and how one entry is shaped - TARGETS holds those three facts and
+ * everything else below is shared.
  */
 
 const fs = require("fs");
@@ -22,11 +26,23 @@ const CLI_ENTRY = path.join(__dirname, "..", "bin", "vibeaudio.js");
  * Reactive mode: which tier a tool call implies. Searching and reading stay
  * sparse, edits bring in the groove, shelling out and subagents go to peak.
  * Unknown tools sit in the middle rather than swinging the mix.
+ *
+ * Each agent names its tools differently, so all three vocabularies live here:
+ * Claude Code's PascalCase set, Codex's snake_case one, and Cursor's short
+ * names. They don't collide, so one flat map covers every target.
  */
 const TOOL_TIERS = {
+  // Claude Code
   Read: 1, Glob: 1, Grep: 1, WebFetch: 1, WebSearch: 1, TodoWrite: 1,
   Edit: 2, Write: 2, MultiEdit: 2, NotebookEdit: 2,
-  Bash: 3, Task: 3
+  Bash: 3, Task: 3,
+  // Codex
+  read_file: 1, list_dir: 1, grep: 1, web_search: 1, update_plan: 1,
+  apply_patch: 2,
+  shell: 3,
+  // Cursor (MCP calls arrive as "MCP:<name>" and fall through to the middle)
+  Delete: 2,
+  Shell: 3
 };
 
 function toolTier(toolName) {
@@ -76,8 +92,77 @@ function hookTool() {
 // A lost Stop hook must not leave music looping forever.
 const MAX_DAEMON_MS = 15 * 60 * 1000;
 
+/**
+ * The agents VibeAudio can wire itself into, and the three things that differ
+ * between them. Verified against the files each tool actually writes:
+ *
+ *   Claude Code  ~/.claude/settings.json  PascalCase events, nested entries
+ *   Codex        ~/.codex/hooks.json      same shape, different file
+ *   Cursor       ~/.cursor/hooks.json     camelCase events, flat entries
+ *
+ * `seed` is the root object to write when the file does not exist yet. Cursor
+ * requires its schema version; Codex rejects unknown root keys outright, so
+ * nothing may be added there beyond `hooks`.
+ */
+const TARGETS = {
+  claude: {
+    name: "Claude Code",
+    cmd: "claude",
+    file: () => path.join(os.homedir(), ".claude", "settings.json"),
+    events: { start: "UserPromptSubmit", stop: "Stop", tool: "PreToolUse" },
+    entry: (command) => ({ hooks: [{ type: "command", command, timeout: 5 }] }),
+    commands: (entry) => (entry.hooks || []).map((h) => h.command),
+    seed: () => ({})
+  },
+  codex: {
+    name: "Codex",
+    cmd: "codex",
+    file: () => path.join(os.homedir(), ".codex", "hooks.json"),
+    events: { start: "UserPromptSubmit", stop: "Stop", tool: "PreToolUse" },
+    entry: (command) => ({ hooks: [{ type: "command", command, timeout: 5 }] }),
+    commands: (entry) => (entry.hooks || []).map((h) => h.command),
+    seed: () => ({}),
+    // Codex records a trusted_hash per hook in config.toml and asks before
+    // running one it has not seen, so the install is not live until approved.
+    note: "Codex asks you to trust a new hook the first time it fires — approve it once."
+  },
+  cursor: {
+    name: "Cursor",
+    cmd: "cursor-agent",
+    file: () => path.join(os.homedir(), ".cursor", "hooks.json"),
+    events: { start: "beforeSubmitPrompt", stop: "stop", tool: "preToolUse" },
+    entry: (command) => ({ command, timeout: 5 }),
+    commands: (entry) => (entry.command ? [entry.command] : []),
+    seed: () => ({ version: 1 })
+  }
+};
+
+function target(id) {
+  const t = TARGETS[id];
+  if (!t) throw new Error(`unknown hook target '${id}' — expected one of ${Object.keys(TARGETS).join(", ")}`);
+  return t;
+}
+
+function targetFile(id) {
+  return target(id).file();
+}
+
+/**
+ * Which of them are on this machine. The config directory is the reliable
+ * signal - Cursor ships no CLI on PATH at all, and a tool that has never run
+ * has nothing for us to merge into anyway. PATH is a fallback for the case of
+ * a fresh install whose config directory does not exist yet.
+ */
+function detectTargets() {
+  const { isInstalled } = require("./interactive");
+  return Object.keys(TARGETS).filter((id) => {
+    const t = TARGETS[id];
+    return fs.existsSync(path.dirname(t.file())) || isInstalled(t.cmd);
+  });
+}
+
 function settingsPath() {
-  return path.join(os.homedir(), ".claude", "settings.json");
+  return TARGETS.claude.file();
 }
 
 function readPid() {
@@ -182,22 +267,24 @@ function hookCommand(flag, genre, volume, reactive = false) {
   return reactive ? `${start} --reactive` : start;
 }
 
-function isVibeHook(entry) {
-  return (entry.hooks || []).some(
-    (h) => typeof h.command === "string" && /--hook-(start|stop|tool)\b/.test(h.command)
-  );
+function isVibeHook(entry, id = "claude") {
+  return target(id)
+    .commands(entry)
+    .some((c) => typeof c === "string" && /--hook-(start|stop|tool)\b/.test(c));
 }
 
-function setHook(hooks, event, command) {
+function setHook(hooks, event, command, id) {
   // Replacing our own entries keeps repeat installs idempotent and leaves
-  // every other tool's hooks untouched.
-  const kept = (hooks[event] || []).filter((entry) => !isVibeHook(entry));
-  kept.push({ hooks: [{ type: "command", command, timeout: 5 }] });
+  // every other tool's hooks untouched. Appending rather than prepending also
+  // keeps the existing entries at their original index, which is what Codex
+  // keys its per-hook trust records by.
+  const kept = (hooks[event] || []).filter((entry) => !isVibeHook(entry, id));
+  kept.push(target(id).entry(command));
   hooks[event] = kept;
 }
 
-function loadSettings(file) {
-  if (!fs.existsSync(file)) return { settings: {}, raw: null };
+function loadSettings(file, t = null) {
+  if (!fs.existsSync(file)) return { settings: t ? t.seed() : {}, raw: null };
   const raw = fs.readFileSync(file, "utf8");
   try {
     return { settings: JSON.parse(raw), raw };
@@ -218,7 +305,9 @@ function ephemeralInstallReason(entry = CLI_ENTRY) {
   return null;
 }
 
-function installHooks(genre = "lofi", volume = 0.4, file = settingsPath(), { reactive = false } = {}) {
+function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = false, id = "claude" } = {}) {
+  const t = target(id);
+  file = file || t.file();
   const ephemeral = ephemeralInstallReason();
   if (ephemeral) {
     throw new Error(
@@ -232,39 +321,41 @@ function installHooks(genre = "lofi", volume = 0.4, file = settingsPath(), { rea
 
   fs.mkdirSync(path.dirname(file), { recursive: true });
 
-  const { settings, raw } = loadSettings(file);
+  const { settings, raw } = loadSettings(file, t);
   let backup = null;
   if (raw !== null) {
     backup = `${file}.vibeaudio.bak`;
     fs.writeFileSync(backup, raw);
   }
 
+  const ev = t.events;
   settings.hooks = settings.hooks || {};
-  setHook(settings.hooks, "UserPromptSubmit", hookCommand("--hook-start", genre, volume, reactive));
-  setHook(settings.hooks, "Stop", hookCommand("--hook-stop", genre, volume));
+  setHook(settings.hooks, ev.start, hookCommand("--hook-start", genre, volume, reactive), id);
+  setHook(settings.hooks, ev.stop, hookCommand("--hook-stop", genre, volume), id);
 
   // Only reactive mode needs per-tool-call signalling.
   if (reactive) {
-    setHook(settings.hooks, "PreToolUse", hookCommand("--hook-tool", genre, volume));
-  } else if (settings.hooks.PreToolUse) {
-    const kept = settings.hooks.PreToolUse.filter((entry) => !isVibeHook(entry));
-    if (kept.length) settings.hooks.PreToolUse = kept;
-    else delete settings.hooks.PreToolUse;
+    setHook(settings.hooks, ev.tool, hookCommand("--hook-tool", genre, volume), id);
+  } else if (settings.hooks[ev.tool]) {
+    const kept = settings.hooks[ev.tool].filter((entry) => !isVibeHook(entry, id));
+    if (kept.length) settings.hooks[ev.tool] = kept;
+    else delete settings.hooks[ev.tool];
   }
 
   fs.writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`);
-  return { file, backup, reactive };
+  return { file, backup, reactive, id, name: t.name, note: t.note || null, events: ev };
 }
 
-function uninstallHooks(file = settingsPath()) {
-  if (!fs.existsSync(file)) return { file, removed: 0 };
+function uninstallHooks(file = null, { id = "claude" } = {}) {
+  file = file || target(id).file();
+  if (!fs.existsSync(file)) return { file, removed: 0, id };
 
   const { settings } = loadSettings(file);
-  if (!settings.hooks) return { file, removed: 0 };
+  if (!settings.hooks) return { file, removed: 0, id };
 
   let removed = 0;
   for (const [event, entries] of Object.entries(settings.hooks)) {
-    const kept = entries.filter((entry) => !isVibeHook(entry));
+    const kept = entries.filter((entry) => !isVibeHook(entry, id));
     removed += entries.length - kept.length;
 
     if (kept.length) settings.hooks[event] = kept;
@@ -273,7 +364,7 @@ function uninstallHooks(file = settingsPath()) {
 
   if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
   fs.writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`);
-  return { file, removed };
+  return { file, removed, id };
 }
 
 module.exports = {
@@ -290,5 +381,8 @@ module.exports = {
   uninstallHooks,
   settingsPath,
   isVibeHook,
+  TARGETS,
+  targetFile,
+  detectTargets,
   PID_FILE
 };

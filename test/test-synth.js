@@ -407,7 +407,7 @@ assert.strictEqual(
   "an absolute path to claude must still be recognised"
 );
 assert.strictEqual(hooksAlreadyCover(["npm", "test"], coverFile), false, "other commands keep the wrapper");
-assert.strictEqual(hooksAlreadyCover(["gemini"], coverFile), false, "hooks are Claude Code only");
+assert.strictEqual(hooksAlreadyCover(["gemini"], coverFile), false, "a tool without hooks keeps the wrapper");
 
 uninstallHooks(coverFile);
 assert.strictEqual(hooksAlreadyCover(["claude"], coverFile), false, "without hooks the wrapper takes over again");
@@ -777,7 +777,60 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
   fs.rmSync(emptyHome, { recursive: true, force: true });
   console.log("   ✓ --status reports missing pieces and --stop is safe with nothing running.");
 
-  console.log("\n\x1b[32mAll 32 tests passed successfully!\x1b[0m");
+  // --- 33. Codex and Cursor get hooks in their own dialect ---
+  console.log("\n\x1b[1m[33] Multi-agent hooks: Codex and Cursor file shapes\x1b[0m");
+  {
+    const { installHooks: install, uninstallHooks: remove, TARGETS } = require("../src/hooks");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-targets-"));
+
+    // Each tool's file already holds someone else's hook, in that tool's own
+    // shape - the install must merge into it, not flatten it.
+    const existing = {
+      codex: { hooks: { Stop: [{ hooks: [{ type: "command", command: "other-tool" }] }] } },
+      cursor: { version: 1, hooks: { preToolUse: [{ command: "other-tool" }] } }
+    };
+
+    for (const id of ["codex", "cursor"]) {
+      const file = path.join(dir, `${id}.json`);
+      fs.writeFileSync(file, JSON.stringify(existing[id]));
+
+      install("jazz", 0.3, file, { id, reactive: true });
+      install("jazz", 0.3, file, { id, reactive: true }); // must stay idempotent
+      const after = JSON.parse(fs.readFileSync(file, "utf8"));
+      const ev = TARGETS[id].events;
+
+      assert.ok(after.hooks[ev.start], `${id} must write its own prompt event (${ev.start})`);
+      assert.ok(after.hooks[ev.stop], `${id} must write its own stop event (${ev.stop})`);
+      assert.strictEqual(
+        after.hooks[ev.start].length, 1,
+        `${id}: installing twice must not duplicate the entry`
+      );
+      // Codex rejects unknown root keys outright; Cursor needs its version.
+      assert.deepStrictEqual(
+        Object.keys(after).sort(),
+        id === "cursor" ? ["hooks", "version"] : ["hooks"],
+        `${id}: the root object must keep exactly the keys that tool accepts`
+      );
+      // Codex keys its per-hook trust records by index, so ours must append.
+      assert.ok(
+        JSON.stringify(after.hooks[ev.tool][0]).includes("other-tool") ||
+          JSON.stringify(after.hooks[ev.stop][0]).includes("other-tool"),
+        `${id}: the pre-existing hook must stay at index 0`
+      );
+
+      const { removed } = remove(file, { id });
+      assert.strictEqual(removed, 3, `${id}: uninstall must remove all three of our hooks`);
+      assert.ok(
+        JSON.stringify(JSON.parse(fs.readFileSync(file, "utf8"))).includes("other-tool"),
+        `${id}: uninstall must leave the other tool's hook alone`
+      );
+    }
+
+    fs.rmSync(dir, { recursive: true, force: true });
+    console.log("   ✓ Codex and Cursor hooks install, stay idempotent and uninstall cleanly.");
+  }
+
+  console.log("\n\x1b[32mAll 33 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);
