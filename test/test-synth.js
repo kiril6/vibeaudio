@@ -445,7 +445,7 @@ assert.strictEqual(
   "an absolute path to claude must still be recognised"
 );
 assert.strictEqual(hooksAlreadyCover(["npm", "test"], coverFile), false, "other commands keep the wrapper");
-assert.strictEqual(hooksAlreadyCover(["gemini"], coverFile), false, "a tool without hooks keeps the wrapper");
+assert.strictEqual(hooksAlreadyCover(["aider"], coverFile), false, "a tool without hooks keeps the wrapper");
 
 uninstallHooks(coverFile);
 assert.strictEqual(hooksAlreadyCover(["claude"], coverFile), false, "without hooks the wrapper takes over again");
@@ -864,7 +864,9 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       );
 
       const { removed } = remove(file, { id });
-      assert.strictEqual(removed, 3, `${id}: uninstall must remove all three of our hooks`);
+      // start, stop, tool - plus Codex's PermissionRequest wait and PostToolUse resume
+      const expected = id === "codex" ? 5 : 3;
+      assert.strictEqual(removed, expected, `${id}: uninstall must remove all ${expected} of our hooks`);
       assert.ok(
         JSON.stringify(JSON.parse(fs.readFileSync(file, "utf8"))).includes("other-tool"),
         `${id}: uninstall must leave the other tool's hook alone`
@@ -1869,17 +1871,15 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     for (const event of ["PermissionRequest", "Elicitation"]) {
       const wait = s[event][0].hooks[0];
       assert.ok(/--hook-wait\b/.test(wait.command), `${event} must run --hook-wait`);
-      assert.strictEqual(wait.async, true, `${event}: the wait hook must not hold the dialog back while it chimes`);
     }
     for (const event of ["PostToolUse", "PostToolUseFailure", "ElicitationResult"]) {
       const resume = s[event][0].hooks[0];
       assert.ok(/--hook-resume --genre jazz --volume 30 --reactive/.test(resume.command), `${event} must resume with the start settings`);
-      assert.strictEqual(resume.async, undefined, `${event} must stay synchronous so it cannot land after the next wait`);
     }
     // The turns that never reach Stop.
     assert.ok(/--hook-stop\b/.test(s.StopFailure[0].hooks[0].command), "StopFailure must end the turn like Stop");
     assert.ok(/--hook-end\b/.test(s.SessionEnd[0].hooks[0].command), "SessionEnd must run --hook-end");
-    for (const id of ["codex", "cursor", "grok"]) {
+    for (const id of ["cursor", "grok"]) {
       const ev = hooks.TARGETS[id].events;
       assert.ok(!ev.wait && !ev.failure && !ev.end, `${id} has no verified waiting, failure or session-end event`);
     }
@@ -1891,7 +1891,8 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-waitflow-"));
       const log = path.join(dir, "played.log");
       fs.writeFileSync(log, "");
-      fs.writeFileSync(path.join(dir, "afplay"), `#!/bin/sh\necho "$@" >> ${log}\nexit 0\n`, { mode: 0o755 });
+      // The attention chime "plays" for 2s, so a hook that waits for it shows.
+      fs.writeFileSync(path.join(dir, "afplay"), `#!/bin/sh\necho "$@" >> ${log}\ncase "$*" in *chime_attention*) sleep 2;; esac\nexit 0\n`, { mode: 0o755 });
       fs.writeFileSync(path.join(dir, "which"), `#!/bin/sh\n[ -x "${dir}/$1" ] && echo "${dir}/$1" || exit 1\n`, { mode: 0o755 });
       // ps must stay reachable: stopDaemon refuses to signal a pid it cannot verify.
       const env = { ...process.env, PATH: `${dir}:/bin:/usr/bin`, HOME: dir, USERPROFILE: dir, VIBE_DISABLE: "" };
@@ -1917,8 +1918,10 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         await settle("the daemon must reach the backend", () => /loop_zen_/.test(fs.readFileSync(log, "utf8")));
         const firstPid = parseInt(fs.readFileSync(pidFile, "utf8"), 10);
 
+        const waitStarted = Date.now();
         cli(["--hook-wait"], bash);
-        assert.ok(/chime_attention/.test(fs.readFileSync(log, "utf8")), "the dialog must play the attention chime");
+        assert.ok(Date.now() - waitStarted < 1500, "the wait hook must not hold the dialog back for the chime");
+        await settle("the dialog must play the attention chime", () => /chime_attention/.test(fs.readFileSync(log, "utf8")));
         assert.ok(!/chime_success/.test(fs.readFileSync(log, "utf8")), "not the done chime");
         assert.ok(!fs.existsSync(pidFile), "the music must stop while waiting");
         await settle("the daemon must actually exit", () => !alive(firstPid));
@@ -1955,6 +1958,17 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         assert.ok(!playing(), "another server's result is not the answer");
         cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ hook_event_name: "ElicitationResult", mcp_server_name: "github" }));
         assert.ok(playing(), "its ElicitationResult must resume it");
+
+        // Copilot and Gemini announce the dialog as a Notification, among
+        // others that are not waits, and name no tool - so any tool resumes.
+        start("s1");
+        await settle("s1's music must start", () => playing());
+        cli(["--hook-wait"], JSON.stringify({ hook_event_name: "Notification", notification_type: "idle_prompt" }));
+        assert.ok(playing(), "a notification that is not a dialog must not pause");
+        cli(["--hook-wait"], JSON.stringify({ hook_event_name: "Notification", notification_type: "ToolPermission" }));
+        assert.ok(!playing(), "Gemini's ToolPermission notification must pause");
+        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ tool_name: "run_shell_command" }));
+        assert.ok(playing(), "a wait that named no tool resumes on whichever tool finishes");
 
         // An API error never reaches Stop; StopFailure is the only end.
         fs.writeFileSync(log, "");
@@ -2026,7 +2040,100 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     }
   }
 
-  console.log("\n\x1b[32mAll 45 tests passed successfully!\x1b[0m");
+  // 46. Gemini CLI, Copilot CLI and Qwen Code in their own dialects; a dry run
+  //     that writes nothing; and /vibe, which must never touch a user's file.
+  {
+    const fs = require("fs");
+    const path = require("path");
+    const { spawnSync } = require("child_process");
+    const hooks = require("../src/hooks");
+    console.log("\n\x1b[1m[46] Gemini, Copilot and Qwen hooks; --dry-run; /vibe\x1b[0m");
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-agents-"));
+    try {
+      // Gemini keeps settings (not events) inside `hooks`; they must survive,
+      // and must not be mistaken for a malformed event list.
+      const gemini = path.join(dir, "gemini.json");
+      fs.writeFileSync(gemini, JSON.stringify({ theme: "dark", hooks: { enabled: true, AfterTool: [{ hooks: [{ type: "command", command: "other-tool" }] }] } }));
+      hooks.installHooks("zen", 0.3, gemini, { id: "gemini", reactive: true });
+      const g = JSON.parse(fs.readFileSync(gemini, "utf8"));
+      for (const event of ["BeforeAgent", "AfterAgent", "BeforeTool", "Notification", "AfterTool", "SessionEnd"]) {
+        assert.ok(g.hooks[event], `gemini must write ${event}`);
+      }
+      const gEntry = g.hooks.BeforeAgent[0].hooks[0];
+      assert.strictEqual(gEntry.timeout, 5000, "Gemini timeouts are milliseconds");
+      assert.strictEqual(g.hooks.enabled, true, "Gemini's hooks.enabled setting must survive the install");
+      assert.strictEqual(g.hooks.AfterTool[0].hooks[0].command, "other-tool", "another tool's AfterTool hook stays first");
+      assert.strictEqual(hooks.uninstallHooks(gemini, { id: "gemini" }).removed, 6, "gemini: all six of ours removed");
+      const gAfter = JSON.parse(fs.readFileSync(gemini, "utf8"));
+      assert.deepStrictEqual(gAfter, { theme: "dark", hooks: { enabled: true, AfterTool: [{ hooks: [{ type: "command", command: "other-tool" }] }] } },
+        "gemini: uninstall must leave exactly the user's settings behind");
+
+      // Copilot: a file of our own, schema version, flat entries, PascalCase
+      // events (which select the Claude-compatible payloads).
+      const copilot = path.join(dir, "copilot", "hooks", "vibeaudio.json");
+      hooks.installHooks("zen", 0.3, copilot, { id: "copilot" });
+      const c = JSON.parse(fs.readFileSync(copilot, "utf8"));
+      assert.deepStrictEqual(Object.keys(c).sort(), ["hooks", "version"], "copilot: root is version + hooks");
+      assert.strictEqual(c.version, 1);
+      assert.deepStrictEqual(Object.keys(c.hooks).sort(),
+        ["Notification", "PostToolUse", "PostToolUseFailure", "SessionEnd", "Stop", "UserPromptSubmit"],
+        "copilot: its verified events, and no PermissionRequest - that one fires without a prompt");
+      assert.strictEqual(c.hooks.Stop[0].timeoutSec, 5, "copilot entries are flat, with timeoutSec");
+      assert.strictEqual(hooks.uninstallHooks(copilot, { id: "copilot" }).removed, 6);
+      assert.ok(!fs.existsSync(copilot), "copilot: uninstall deletes our file");
+
+      const qwen = path.join(dir, "qwen.json");
+      hooks.installHooks("zen", 0.3, qwen, { id: "qwen" });
+      const q = JSON.parse(fs.readFileSync(qwen, "utf8"));
+      for (const event of ["UserPromptSubmit", "Stop", "PermissionRequest", "PostToolUse", "PostToolUseFailure", "StopFailure", "SessionEnd"]) {
+        assert.ok(q.hooks[event], `qwen must write ${event}`);
+      }
+      assert.strictEqual(q.hooks.Stop[0].hooks[0].timeout, 5000, "Qwen timeouts are milliseconds");
+      assert.strictEqual(hooks.uninstallHooks(qwen, { id: "qwen" }).removed, 7);
+
+      // Dry run: the result is computed, nothing is written - not the file,
+      // not its directory, not a backup.
+      const existing = path.join(dir, "existing.json");
+      const original = JSON.stringify({ model: "opus" });
+      fs.writeFileSync(existing, original);
+      const plan = hooks.installHooks("jazz", 0.4, existing, { id: "claude", dryRun: true });
+      assert.strictEqual(fs.readFileSync(existing, "utf8"), original, "a dry run must not modify the file");
+      assert.ok(!fs.existsSync(`${existing}.vibeaudio.bak`), "a dry run must not write a backup");
+      assert.ok(plan.backup, "but it must say one would be written");
+      assert.ok(JSON.parse(plan.after).hooks.UserPromptSubmit, "and return what would be written");
+      const fresh = path.join(dir, "not-yet", "settings.json");
+      hooks.installHooks("jazz", 0.4, fresh, { id: "claude", dryRun: true });
+      assert.ok(!fs.existsSync(path.dirname(fresh)), "a dry run must not create directories");
+
+      // End to end, through the flag, against a disposable HOME.
+      const home = path.join(dir, "home");
+      fs.mkdirSync(home);
+      const run = spawnSync(process.execPath, [CLI, "--install-hooks", "--tools", "claude", "--dry-run"],
+        { env: { ...process.env, HOME: home, USERPROFILE: home }, encoding: "utf8", timeout: 20000 });
+      assert.strictEqual(run.status, 0, `--dry-run failed: ${run.stderr}`);
+      assert.ok(/Dry run/.test(run.stdout) && /\+ add\s+\x1b\[0m UserPromptSubmit/.test(run.stdout), "--dry-run must list what it would add");
+      assert.deepStrictEqual(fs.readdirSync(home), [], "--dry-run must leave HOME untouched, /vibe included");
+
+      // /vibe: ours is replaced and removed; a user's own vibe.md is neither.
+      const slash = path.join(dir, "commands", "vibe.md");
+      assert.strictEqual(hooks.installSlashCommand({ file: slash }).installed, true);
+      const text = fs.readFileSync(slash, "utf8");
+      assert.ok(text.startsWith("---\n") && /--mute/.test(text) && text.includes(path.join(__dirname, "..", "bin", "vibeaudio.js")),
+        "/vibe must be a command file that runs this CLI");
+      assert.strictEqual(hooks.uninstallSlashCommand({ file: slash }), true);
+      assert.ok(!fs.existsSync(slash));
+      fs.writeFileSync(slash, "my own vibe command");
+      assert.strictEqual(hooks.installSlashCommand({ file: slash }).installed, false, "a user's vibe.md must not be overwritten");
+      assert.strictEqual(hooks.uninstallSlashCommand({ file: slash }), false, "nor deleted");
+      assert.strictEqual(fs.readFileSync(slash, "utf8"), "my own vibe command");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+    console.log("   ✓ Three more dialects merge and uninstall cleanly; --dry-run writes nothing; /vibe spares a user's own file.");
+  }
+
+  console.log("\n\x1b[32mAll 46 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);

@@ -1,5 +1,5 @@
 /**
- * Agent Hooks Integration (Claude Code, Codex, Cursor)
+ * Agent Hooks Integration (Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI, Qwen Code)
  *
  * Hooks fire as short-lived processes, so playback lives in a detached daemon
  * tracked by a pid file. The prompt-submit event starts it, the stop event
@@ -129,30 +129,32 @@ function hookTool() {
 const MAX_DAEMON_MS = 15 * 60 * 1000;
 
 /**
- * The agents VibeAudio can wire itself into, and the three things that differ
- * between them. Verified against the files each tool actually writes:
+ * The agents VibeAudio can wire itself into, and the few things that differ
+ * between them: where the file lives, what the events are called, how one
+ * entry is shaped. Each was verified against the tool itself - its installed
+ * binary and a live run where it is installed, its released source where not -
+ * never inferred from another tool's docs.
  *
- *   Claude Code  ~/.claude/settings.json  PascalCase events, nested entries
- *   Codex        ~/.codex/hooks.json      same shape, different file
- *   Cursor       ~/.cursor/hooks.json     camelCase events, flat entries
+ * `events` beyond start/stop/tool are optional, and a target only lists what
+ * that tool was shown to fire:
+ * - wait:    the agent is blocked on the user (pause + attention chime)
+ * - resume:  what ends a wait
+ * - failure: a turn ending in error *instead of* the stop event
+ * - end:     the session closing, which can cut a turn off before stop
  *
  * `seed` is the root object to write when the file does not exist yet. Cursor
- * requires its schema version; Codex rejects unknown root keys outright, so
- * nothing may be added there beyond `hooks`.
+ * and Copilot require a schema version; Codex rejects unknown root keys
+ * outright, so nothing may be added there beyond `hooks`.
  */
 const TARGETS = {
   claude: {
     name: "Claude Code",
     cmd: "claude",
     file: () => path.join(os.homedir(), ".claude", "settings.json"),
-    // Everything past `tool` exists only here; the other agents have no
-    // verified equivalents, so they get no entry rather than a guessed one.
     // - wait: PermissionRequest fires when the dialog is shown in the terminal,
     //   the SDK (desktop app, IDEs) and print mode alike - Notification's
     //   permission_prompt is raised by the terminal UI alone, after 6s idle.
-    // - failure / end: turns that never reach Stop. An API error ends the
-    //   turn with StopFailure instead; a session closing mid-turn ends it with
-    //   SessionEnd; Esc reaches neither and is caught in hookResume.
+    // - Esc reaches no hook at all; the daemon watches the transcript for it.
     events: {
       start: "UserPromptSubmit",
       stop: "Stop",
@@ -162,10 +164,7 @@ const TARGETS = {
       failure: "StopFailure",
       end: "SessionEnd"
     },
-    // `async` keeps the wait hook's chime from holding the dialog back.
-    entry: (command, { async = false } = {}) => ({
-      hooks: [{ type: "command", command, timeout: 5, ...(async ? { async: true } : {}) }]
-    }),
+    entry: (command) => ({ hooks: [{ type: "command", command, timeout: 5 }] }),
     commands: (entry) => (entry.hooks || []).map((h) => h.command),
     seed: () => ({})
   },
@@ -173,13 +172,23 @@ const TARGETS = {
     name: "Codex",
     cmd: "codex",
     file: () => path.join(os.homedir(), ".codex", "hooks.json"),
-    events: { start: "UserPromptSubmit", stop: "Stop", tool: "PreToolUse" },
+    // PermissionRequest runs only when Codex is about to ask for approval,
+    // with tool_name, and is present in 0.125's binary. Its docs describe
+    // Interrupt and SessionEnd too, but 0.125 has neither - and a strict parser
+    // meeting an event it does not know would take every hook down with it.
+    events: {
+      start: "UserPromptSubmit",
+      stop: "Stop",
+      tool: "PreToolUse",
+      wait: ["PermissionRequest"],
+      resume: ["PostToolUse"]
+    },
     entry: (command) => ({ hooks: [{ type: "command", command, timeout: 5 }] }),
     commands: (entry) => (entry.hooks || []).map((h) => h.command),
     seed: () => ({}),
     // Codex records a trusted_hash per hook in config.toml and asks before
     // running one it has not seen, so the install is not live until approved.
-    note: "Codex asks you to trust a new hook the first time it fires — approve it once."
+    note: "Codex asks you to trust each new hook the first time it fires — approve each one once."
   },
   cursor: {
     name: "Cursor",
@@ -204,6 +213,82 @@ const TARGETS = {
     entry: (command) => ({ hooks: [{ type: "command", command, timeout: 5 }] }),
     commands: (entry) => (entry.hooks || []).map((h) => h.command),
     seed: () => ({})
+  },
+  gemini: {
+    name: "Gemini CLI",
+    cmd: "gemini",
+    file: () => path.join(os.homedir(), ".gemini", "settings.json"),
+    // Verified against gemini-cli v0.59.0's source (hooks/types.ts,
+    // settingsSchema.ts) - the Gemini CLI available to test against predated
+    // hooks, so there was no binary to run. Hooks are on by default and
+    // user-level ones need no trust step. The permission dialog is a
+    // Notification, and it names no tool - so any AfterTool resumes.
+    events: {
+      start: "BeforeAgent",
+      stop: "AfterAgent",
+      tool: "BeforeTool",
+      wait: ["Notification"],
+      resume: ["AfterTool"],
+      end: "SessionEnd"
+    },
+    entry: (command) => ({ hooks: [{ type: "command", command, name: "vibeaudio", timeout: 5000 }] }),
+    commands: (entry) => (entry.hooks || []).map((h) => h.command),
+    seed: () => ({}),
+    // Settings, not events, that may sit in the same `hooks` object.
+    configKeys: ["enabled", "disabled", "notifications"],
+    // Unlike the four above, not verified to re-read hooks mid-session.
+    liveReload: false,
+    note: "Not checked whether an open Gemini CLI session reloads hooks — start a new one to be sure."
+  },
+  copilot: {
+    name: "GitHub Copilot CLI",
+    cmd: "copilot",
+    // Copilot reads every *.json in hooks/, so, like Grok, a file of our own.
+    // PascalCase event names select its Claude-compatible payloads
+    // (snake_case, tool_name "Bash"); camelCase ones get a different dialect.
+    // Verified live on 1.0.80: its PermissionRequest fires before *every*
+    // permission check, prompt or not, so the wait signal is the
+    // permission_prompt Notification, which names no tool.
+    file: () => path.join(process.env.COPILOT_HOME || path.join(os.homedir(), ".copilot"), "hooks", "vibeaudio.json"),
+    dedicated: true,
+    configDir: () => process.env.COPILOT_HOME || path.join(os.homedir(), ".copilot"),
+    events: {
+      start: "UserPromptSubmit",
+      stop: "Stop",
+      tool: "PreToolUse",
+      wait: ["Notification"],
+      resume: ["PostToolUse", "PostToolUseFailure"],
+      end: "SessionEnd"
+    },
+    entry: (command) => ({ type: "command", command, timeoutSec: 5 }),
+    commands: (entry) => (entry.command ? [entry.command] : []),
+    seed: () => ({ version: 1 }),
+    // Unlike the four above, not verified to re-read hooks mid-session.
+    liveReload: false,
+    note: "Not checked whether an open Copilot CLI session reloads hooks — start a new one to be sure."
+  },
+  qwen: {
+    name: "Qwen Code",
+    cmd: "qwen",
+    file: () => path.join(os.homedir(), ".qwen", "settings.json"),
+    // Verified against qwen-code v0.23.3's source (hooks/types.ts): Claude
+    // Code's event set, including a PermissionRequest raised when the dialog
+    // is displayed, with tool_name. Timeouts are milliseconds.
+    events: {
+      start: "UserPromptSubmit",
+      stop: "Stop",
+      tool: "PreToolUse",
+      wait: ["PermissionRequest"],
+      resume: ["PostToolUse", "PostToolUseFailure"],
+      failure: "StopFailure",
+      end: "SessionEnd"
+    },
+    entry: (command) => ({ hooks: [{ type: "command", command, name: "vibeaudio", timeout: 5000 }] }),
+    commands: (entry) => (entry.hooks || []).map((h) => h.command),
+    seed: () => ({}),
+    // Unlike the four above, not verified to re-read hooks mid-session.
+    liveReload: false,
+    note: "Not checked whether an open Qwen Code session reloads hooks — start a new one to be sure."
   }
 };
 
@@ -521,6 +606,14 @@ function waitKey(raw) {
   return payloadToolName(raw) || (server ? `mcp:${server}` : "");
 }
 
+// Notification types that mean "blocked on the user". Agents whose permission
+// dialog is a Notification send every other kind through the same event.
+const WAIT_NOTIFICATIONS = new Set([
+  "permission_prompt", // Copilot CLI
+  "elicitation_dialog", // Copilot CLI
+  "ToolPermission" // Gemini CLI
+]);
+
 /**
  * The agent is blocked on the user (a permission dialog, a question, a plan to
  * approve, an MCP server asking for input). Music that keeps playing says
@@ -530,11 +623,18 @@ function waitKey(raw) {
  * Only while music is playing: after the turn has ended there is nobody to
  * interrupt, and a second dialog while already waiting keeps the first wait
  * rather than chiming twice.
+ *
+ * The chime is detached: the agent waits on this hook before showing the
+ * dialog, and a chime played to completion here held it back for its length.
  */
 function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {}) {
+  const payload = parsePayload(raw);
+  const type = payload.notification_type ?? payload.notificationType;
+  if (type !== undefined && !WAIT_NOTIFICATIONS.has(String(type))) return false;
+
   if (!stopDaemon({ pause: true })) return false;
   fs.writeFileSync(WAITING_FILE, waitKey(raw));
-  if (!noChime) new AudioPlayer().stop({ playChime: true, outcome: "attention", volume, chimeVolume });
+  if (!noChime) new AudioPlayer().stop({ playChime: true, outcome: "attention", volume, chimeVolume, detach: true });
   return true;
 }
 
@@ -554,7 +654,9 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
 function hookResume(raw, genre, volume, { reactive = false } = {}) {
   const waitingFor = readWaiting();
   if (waitingFor === null) return false; // Not waiting - the common case, on every tool call.
-  if (waitingFor !== waitKey(raw)) return false;
+  // An empty key is a wait that named nothing (a Notification): the next tool
+  // to finish is the first sign of work carrying on.
+  if (waitingFor !== "" && waitingFor !== waitKey(raw)) return false;
 
   hookStart(genre, volume, { reactive, turn: readTurn() || newTurn(raw) });
   return true;
@@ -614,21 +716,27 @@ function isVibeHook(entry, id = "claude") {
     .some((c) => typeof c === "string" && VIBE_HOOK_FLAG.test(c));
 }
 
-function setHook(hooks, event, command, id, opts) {
+function setHook(hooks, event, command, id) {
   // Replacing our own entries keeps repeat installs idempotent and leaves
   // every other tool's hooks untouched. Appending rather than prepending also
   // keeps the existing entries at their original index, which is what Codex
   // keys its per-hook trust records by.
   const kept = (hooks[event] || []).filter((entry) => !isVibeHook(entry, id));
-  kept.push(target(id).entry(command, opts));
+  kept.push(target(id).entry(command));
   hooks[event] = kept;
+}
+
+/** [event, entries] for every event in a hooks object, skipping settings keys. */
+function hookEntries(hooks, t) {
+  const configKeys = (t && t.configKeys) || [];
+  return Object.entries(hooks || {}).filter(([key]) => !configKeys.includes(key));
 }
 
 function readVibeEntryCount(file, id) {
   try {
-    const { settings } = loadSettings(file);
-    return Object.values(settings.hooks || {}).reduce(
-      (n, entries) => n + (entries || []).filter((e) => isVibeHook(e, id)).length,
+    const { settings } = loadSettings(file, target(id));
+    return hookEntries(settings.hooks, target(id)).reduce(
+      (n, [, entries]) => n + entries.filter((e) => isVibeHook(e, id)).length,
       0
     );
   } catch (e) {
@@ -658,7 +766,7 @@ function loadSettings(file, t = null) {
     if (settings.hooks === null || typeof settings.hooks !== "object" || Array.isArray(settings.hooks)) {
       throw new Error(`${file} has a "hooks" key that is not an object — refusing to overwrite it.`);
     }
-    for (const [event, entries] of Object.entries(settings.hooks)) {
+    for (const [event, entries] of hookEntries(settings.hooks, t)) {
       if (!Array.isArray(entries)) {
         throw new Error(
           `${file} has hooks.${event} as ${Array.isArray(entries) ? "an array" : typeof entries}, ` +
@@ -683,7 +791,12 @@ function ephemeralInstallReason(entry = CLI_ENTRY) {
   return null;
 }
 
-function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = false, id = "claude" } = {}) {
+/**
+ * `dryRun` computes the result without touching the disk - no directory, no
+ * backup, no write - and returns it with the file's current contents, so the
+ * caller can show exactly what would change in a file that belongs to the user.
+ */
+function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = false, id = "claude", dryRun = false } = {}) {
   const t = target(id);
   file = file || t.file();
   const ephemeral = ephemeralInstallReason();
@@ -697,9 +810,8 @@ function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = fa
     );
   }
 
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-
   const { settings, raw } = loadSettings(file, t);
+  if (!dryRun) fs.mkdirSync(path.dirname(file), { recursive: true });
   let backup = null;
   // Only worth backing up a file that holds someone else's config. A dedicated
   // target's file is ours alone, so a backup of it would just be a copy of our
@@ -713,7 +825,7 @@ function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = fa
   if (raw !== null && !t.dedicated) {
     const backupFile = `${file}.vibeaudio.bak`;
     if (!fs.existsSync(backupFile)) {
-      fs.writeFileSync(backupFile, raw);
+      if (!dryRun) fs.writeFileSync(backupFile, raw);
       backup = backupFile;
     }
   }
@@ -732,23 +844,78 @@ function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = fa
     else delete settings.hooks[ev.tool];
   }
 
-  if (ev.wait) {
-    for (const event of ev.wait) {
-      setHook(settings.hooks, event, hookCommand("--hook-wait", genre, volume), id, { async: true });
-    }
-    // Synchronous on purpose: the agent awaits it before the next tool's
-    // permission check, so a resume can never land after the next wait.
-    // ponytail: one ~40ms node start per tool call; a shell-side existence
-    // check on the waiting file would skip it if that ever shows.
-    for (const event of ev.resume) {
-      setHook(settings.hooks, event, hookCommand("--hook-resume", genre, volume, reactive), id);
-    }
-    setHook(settings.hooks, ev.failure, hookCommand("--hook-stop", genre, volume), id);
-    setHook(settings.hooks, ev.end, hookCommand("--hook-end", genre, volume), id);
+  for (const event of ev.wait || []) {
+    setHook(settings.hooks, event, hookCommand("--hook-wait", genre, volume), id);
   }
+  // The agent awaits a resume before the next tool's permission check, so a
+  // resume can never land after the next wait.
+  // ponytail: one ~40ms node start per tool call; a shell-side existence
+  // check on the waiting file would skip it if that ever shows.
+  for (const event of ev.resume || []) {
+    setHook(settings.hooks, event, hookCommand("--hook-resume", genre, volume, reactive), id);
+  }
+  if (ev.failure) setHook(settings.hooks, ev.failure, hookCommand("--hook-stop", genre, volume), id);
+  if (ev.end) setHook(settings.hooks, ev.end, hookCommand("--hook-end", genre, volume), id);
 
-  fs.writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`);
-  return { file, backup, reactive, id, name: t.name, note: t.note || null, events: ev };
+  const after = `${JSON.stringify(settings, null, 2)}\n`;
+  if (!dryRun) fs.writeFileSync(file, after);
+  return { file, backup, reactive, id, name: t.name, note: t.note || null, events: ev, before: raw, after, dryRun };
+}
+
+/**
+ * `/vibe` inside Claude Code: a command file, not a hook - it asks the model to
+ * run the CLI, so mute, stop and genre changes need no second terminal. The
+ * marker is how install and uninstall tell our file from a user's own vibe.md,
+ * which neither may overwrite or delete.
+ */
+const SLASH_MARK = "<!-- vibeaudio:slash-command -->";
+
+function slashCommandFile() {
+  return path.join(os.homedir(), ".claude", "commands", "vibe.md");
+}
+
+function slashCommandText() {
+  const cli = `${shellQuote(process.execPath)} ${shellQuote(CLI_ENTRY)}`;
+  return `---
+description: Control VibeAudio - status, mute, unmute, stop, or change genre or volume
+argument-hint: "[status | mute [minutes] | unmute | stop | genre <name> | volume <5-100>]"
+---
+${SLASH_MARK}
+Control VibeAudio, the focus music that plays while you work, for the user.
+Arguments: \`$ARGUMENTS\`
+
+Run the one matching command with the Bash tool, then report the result in a
+single short sentence. Do nothing else.
+
+- no arguments, or \`status\`: \`${cli} --status\`
+- \`mute\` or \`mute <minutes>\`: \`${cli} --mute <minutes>\`
+- \`unmute\`: \`${cli} --unmute\`
+- \`stop\`: \`${cli} --stop\`
+- \`genre <name>\` or \`volume <5-100>\`: first run \`${cli} --status\` and read
+  Claude Code's current genre, volume, and whether it says "reactive". Then run
+  \`${cli} --install-hooks --tools claude --genre <genre> --volume <volume>\`,
+  adding \`--reactive\` if it was reactive, and changing only what was asked.
+  Genres: lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, random.
+
+For anything else, show the user the list above instead of running a command.
+`;
+}
+
+function installSlashCommand({ file = slashCommandFile(), dryRun = false } = {}) {
+  if (fs.existsSync(file) && !fs.readFileSync(file, "utf8").includes(SLASH_MARK)) {
+    return { file, installed: false, reason: "a vibe.md that is not ours is already there" };
+  }
+  if (!dryRun) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, slashCommandText());
+  }
+  return { file, installed: true };
+}
+
+function uninstallSlashCommand({ file = slashCommandFile() } = {}) {
+  if (!fs.existsSync(file) || !fs.readFileSync(file, "utf8").includes(SLASH_MARK)) return false;
+  fs.rmSync(file, { force: true });
+  return true;
 }
 
 function uninstallHooks(file = null, { id = "claude" } = {}) {
@@ -764,11 +931,11 @@ function uninstallHooks(file = null, { id = "claude" } = {}) {
     return { file, removed, id };
   }
 
-  const { settings } = loadSettings(file);
+  const { settings } = loadSettings(file, t);
   if (!settings.hooks) return { file, removed: 0, id };
 
   let removed = 0;
-  for (const [event, entries] of Object.entries(settings.hooks)) {
+  for (const [event, entries] of hookEntries(settings.hooks, t)) {
     const kept = entries.filter((entry) => !isVibeHook(entry, id));
     removed += entries.length - kept.length;
 
@@ -802,6 +969,9 @@ module.exports = {
   uninstallHooks,
   settingsPath,
   isVibeHook,
+  hookEntries,
+  installSlashCommand,
+  uninstallSlashCommand,
   VIBE_HOOK_FLAG,
   TARGETS,
   targetFile,

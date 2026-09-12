@@ -4,7 +4,7 @@
 
 > **Procedural focus music while your AI coding tools think.**
 > Every project gets its own arrangement. Zero dependencies, zero audio files.
-> Works with Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI, Aider — and any terminal command.
+> Works with Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI, Qwen Code, Aider — and any terminal command.
 
 **[Install](#-install)** · **[Agent hooks](#-agent-hooks-no-wrapper-needed)** · **[Genres](#-music-genres)** · **[Flags](#-options--flags)** · **[Troubleshooting](#-troubleshooting)** · **[Uninstall](#-uninstall)**
 
@@ -26,7 +26,7 @@ AI coding agents take 15–45 seconds to reason, read files and write code. Star
 * ✋ **A "your turn" chime.** When Claude Code stops to ask permission (or an MCP server asks for input), the music pauses and a rising two-note chime asks for you; it picks back up once you've answered.
 * 🧮 **Honest exit codes.** Your command's status passes straight through (`130` on `Ctrl+C`), so `vibe claude && next-step` behaves exactly as it would without the wrapper.
 * 🌊 **Terminal title HUD.** A live ASCII wave and elapsed timer in the window title, where it can't corrupt a full-screen TUI.
-* 🔌 **Universal drop-in.** Hooks for **Claude Code, Codex, Cursor and Grok**; MCP for **Gemini CLI, Claude Desktop, Antigravity**; the wrapper (`vibe <command>`) for anything else.
+* 🔌 **Universal drop-in.** Hooks for **Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI and Qwen Code**; MCP for **Claude Desktop and Antigravity**; the wrapper (`vibe <command>`) for anything else.
 
 ### 🎼 Every project gets its own arrangement
 
@@ -166,7 +166,7 @@ Installed tools sort to the top. The list is a shortcut, not a compatibility lis
 
 ## 🪝 Agent Hooks (no wrapper needed)
 
-> **`--install-hooks` supports Claude Code, Codex, Cursor and Grok.** Everything else uses the [wrapper or MCP](#-everything-else-gemini-cli-claude-desktop-antigravity-via-mcp) instead.
+> **`--install-hooks` supports Claude Code, Codex, Cursor, Grok, Gemini CLI, GitHub Copilot CLI and Qwen Code.** Everything else uses the [wrapper or MCP](#-everything-else-claude-desktop-antigravity-via-mcp) instead.
 
 Wrapping (`vibe claude`) infers "the AI is thinking" from how long the process runs. Hooks know for certain — so music starts the moment you submit a prompt and stops the moment the agent finishes, with no grace-window guessing and no aliases.
 
@@ -176,40 +176,65 @@ Once hooks are installed they take over: running `vibe claude` (or `vibe codex`)
 vibe --install-hooks                             # every agent found on this machine
 vibe --install-hooks --tools codex               # or just one of them
 vibe --genre jazz --volume 25 --install-hooks    # pin the genre and volume
+vibe --install-hooks --dry-run                   # show what would change, write nothing
 ```
 
-**It auto-detects.** With no `--tools`, VibeAudio wires up each supported agent it finds on your machine — one counts as present when its config directory exists or its CLI is on your `PATH`. `--tools claude,codex,cursor,grok` overrides that.
+**It auto-detects.** With no `--tools`, VibeAudio wires up each supported agent it finds on your machine — one counts as present when its config directory exists or its CLI is on your `PATH`. `--tools claude,codex,cursor,grok,gemini,copilot,qwen` overrides that. Add `--dry-run` to see, per event, what would be added or changed in each file before anything is written.
 
-Each tool spells the same three events its own way, and VibeAudio writes whichever dialect the file expects:
+Each tool spells its events its own way, and VibeAudio writes whichever dialect the file expects:
 
-| | Claude Code | Codex | Cursor | Grok |
+| | File | Music starts | Music stops + chime | Reactive (opt-in) |
 | :--- | :--- | :--- | :--- | :--- |
-| **File** | `~/.claude/settings.json` | `~/.codex/hooks.json` | `~/.cursor/hooks.json` | `~/.grok/hooks/vibeaudio.json` |
-| **Music starts** | `UserPromptSubmit` | `UserPromptSubmit` | `beforeSubmitPrompt` | `UserPromptSubmit` |
-| **Music stops + chime** | `Stop` | `Stop` | `stop` | `Stop` |
-| **Reactive** (opt-in) | `PreToolUse` | `PreToolUse` | `preToolUse` | `PreToolUse` |
-| **Music pauses + "your turn" chime** | `PermissionRequest`, `Elicitation` | — | — | — |
-| **Music resumes** | `PostToolUse`, `PostToolUseFailure`, `ElicitationResult` | — | — | — |
-| **Turn ends on an API error** (failure chime) | `StopFailure` | — | — | — |
-| **Session closes mid-turn** (silent) | `SessionEnd` | — | — | — |
+| **Claude Code** | `~/.claude/settings.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
+| **Codex** | `~/.codex/hooks.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
+| **Cursor** | `~/.cursor/hooks.json` | `beforeSubmitPrompt` | `stop` | `preToolUse` |
+| **Grok** | `~/.grok/hooks/vibeaudio.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
+| **Gemini CLI** | `~/.gemini/settings.json` | `BeforeAgent` | `AfterAgent` | `BeforeTool` |
+| **Copilot CLI** | `~/.copilot/hooks/vibeaudio.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
+| **Qwen Code** | `~/.qwen/settings.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
+
+Where an agent reports more than start and stop, VibeAudio listens for that too — and only where the event was confirmed against the tool itself:
+
+| | Music pauses + "your turn" chime | Music resumes | Failure chime (API error) | Session closes mid-turn (silent) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Claude Code** | `PermissionRequest`, `Elicitation` | `PostToolUse`, `PostToolUseFailure`, `ElicitationResult` | `StopFailure` | `SessionEnd` |
+| **Codex** | `PermissionRequest` | `PostToolUse` | — | — |
+| **Gemini CLI** | `Notification` (tool permission) | `AfterTool` | — | `SessionEnd` |
+| **Copilot CLI** | `Notification` (permission prompt) | `PostToolUse`, `PostToolUseFailure` | — | `SessionEnd` |
+| **Qwen Code** | `PermissionRequest` | `PostToolUse`, `PostToolUseFailure` | `StopFailure` | `SessionEnd` |
+| **Cursor, Grok** | — | — | — | — |
 
 That's it — run your agent normally, with no `vibe` prefix.
 
-Five things differ per agent, and none of them need any action from you except the first:
+Six things differ per agent, and none of them need any action from you except the first:
 
 | | |
 | :--- | :--- |
-| **Only Claude Code tells you it's waiting on you** | Its `PermissionRequest` fires whenever a permission dialog opens — in the terminal, the desktop app and IDEs alike — and `Elicitation` whenever an MCP server asks you for input, so the music stops rather than sounding busy while the agent is stuck on you. It resumes once the thing you answered has run. The other agents have no equivalent event that's been verified, so they keep playing through a prompt. |
+| **Five agents tell you when they're waiting on you** | When a permission dialog opens the music stops rather than sounding busy while the agent is stuck on you, and it resumes once the thing you answered has run. Claude Code covers the terminal, desktop app and IDEs alike, plus MCP servers asking for input. Copilot CLI's own `PermissionRequest` fires before *every* permission check — dialog or not — so VibeAudio listens for its permission-prompt notification instead. Cursor and Grok have no such event that's been verified, so they keep playing through a prompt. |
 | **Claude Code turns that never reach `Stop` still end the music** | An API error or rate limit ends the turn with `StopFailure` instead, which plays the failure chime. Interrupting (Esc, or the stop button in the desktop app) fires no hook at all, so the background player watches the session transcript for Claude Code's interrupt entry and stops silently within half a second — whether the agent was writing or running a tool. Closing the session mid-turn stops it too — but only if that session started the music, so closing an idle terminal never silences another one. |
-| **Codex asks you to trust the hook once** | Codex keeps a per-hook trust hash in `~/.codex/config.toml` and won't run a hook it hasn't been told to trust, so the install isn't live until you approve it the first time it fires. |
+| **Codex asks you to trust the hook once** | Codex keeps a per-hook trust hash in `~/.codex/config.toml` and won't run a hook it hasn't been told to trust, so the install isn't live until you approve each one the first time it fires. |
 | **Only Cursor can play the failure chime** | Its stop event reports whether the turn completed, aborted or errored. The others send no verdict, so a turn there always ends on the success chime — VibeAudio won't invent a failure the agent never claimed. |
-| **Grok gets a file of its own** | It reads every `*.json` in `~/.grok/hooks/`, so VibeAudio writes `vibeaudio.json` rather than merging into anyone else's — which makes uninstalling it a delete, and leaves no backup file behind. |
+| **Grok and Copilot CLI get a file of their own** | Each reads every `*.json` in its `hooks/` directory, so VibeAudio writes `vibeaudio.json` rather than merging into anyone else's — which makes uninstalling it a delete, and leaves no backup file behind. Copilot's honours `COPILOT_HOME`. |
 
-> **No restart needed, even mid-session.** Every one of them re-reads its hook file each time a hook fires, so changes land on your **next prompt**. A daemon already playing keeps its old settings until that prompt replaces it — at most the tail of one turn.
+> **No restart needed, even mid-session — for Claude Code, Codex, Cursor and Grok.** Each re-reads its hook file every time a hook fires, so changes land on your **next prompt**. A daemon already playing keeps its old settings until that prompt replaces it — at most the tail of one turn. Whether an open Gemini CLI, Copilot CLI or Qwen Code session does the same hasn't been checked, so start a new session there to be sure.
 
 > **One player is shared.** They all drive the same background player, so if you prompt two agents at once, the last prompt owns the music. One person, one set of speakers — deliberate, not a limitation being worked around.
 
-> **The Claude Code desktop app is covered too**, not just the terminal — both read the same `~/.claude/settings.json`. (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-gemini-cli-claude-desktop-antigravity-via-mcp).)
+> **The Claude Code desktop app is covered too**, not just the terminal — both read the same `~/.claude/settings.json`. (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-claude-desktop-antigravity-via-mcp).)
+
+### `/vibe` inside Claude Code
+
+Installing the Claude Code hooks also adds a `/vibe` command (`~/.claude/commands/vibe.md`), so you can control the music without leaving the session:
+
+```text
+/vibe                 what's installed and playing
+/vibe mute 30         silence for 30 minutes (/vibe unmute to end it early)
+/vibe stop            stop the music now
+/vibe genre jazz      switch genre, keeping your volume
+/vibe volume 20       change volume, keeping your genre
+```
+
+It asks Claude to run the matching `vibe` command, so Claude Code will ask permission for that command the first time. If you already have your own `vibe.md` there, VibeAudio leaves it alone and says so; `--uninstall-hooks` removes only its own.
 
 ### Changing the sound later
 
@@ -267,11 +292,11 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 
 ---
 
-## 🖥️ Everything Else (Gemini CLI, Claude Desktop, Antigravity… via MCP)
+## 🖥️ Everything Else (Claude Desktop, Antigravity… via MCP)
 
-**Claude Code, [Codex](https://github.com/openai/codex), [Cursor](https://cursor.com/docs/hooks) and [Grok](https://docs.x.ai/build/features/hooks) have hook systems, and `--install-hooks` writes to all four** — use [hooks](#-agent-hooks-no-wrapper-needed) there, they're strictly better. This section is for everything else. MCP is the way in: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
+**Claude Code, [Codex](https://github.com/openai/codex), [Cursor](https://cursor.com/docs/hooks), [Grok](https://docs.x.ai/build/features/hooks), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Copilot CLI](https://docs.github.com/en/copilot/reference/hooks-configuration) and [Qwen Code](https://github.com/QwenLM/qwen-code) have hook systems, and `--install-hooks` writes to all seven** — use [hooks](#-agent-hooks-no-wrapper-needed) there, they're strictly better. This section is for everything else. MCP is the way in: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
 
-> **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On Claude Code, Codex, Cursor or Grok, use [hooks](#-agent-hooks-no-wrapper-needed) instead.**
+> **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On any of the seven agents above, use [hooks](#-agent-hooks-no-wrapper-needed) instead.**
 
 Use an **absolute path**, not the bare `vibe` command: GUI apps launched from Finder don't inherit your shell's `PATH`, and version managers like `fnm` or `nvm` put `vibe` on a per-shell path that won't resolve. Print yours with:
 
@@ -296,7 +321,6 @@ Where the file lives:
 
 | Tool | Config file |
 | :--- | :--- |
-| **Gemini CLI** | `~/.gemini/settings.json` |
 | **Claude Desktop** (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | **Antigravity, VS Code, Zed, …** | that app's own MCP settings — same JSON shape |
 
@@ -308,7 +332,7 @@ command = "node"
 args = ["/absolute/path/from/the/command/above", "--mcp"]
 ```
 
-Restart the app afterwards. For terminal tools that hold an interactive session open, like Gemini CLI, MCP is the better fit than `vibe gemini`: the wrapper times the *process*, so it would play for the whole session, including while you read and type.
+Restart the app afterwards. Older Gemini CLI releases predate its hook system (0.10.0 has none) — if you're on one and can't upgrade, the same JSON goes in `~/.gemini/settings.json`.
 
 ### Changing the genre here
 
@@ -409,8 +433,9 @@ export VIBE_GENRE=jazz     # or synthwave, 8bit, electronic, zen, piano, drone, 
 | `--clear-cache` | Delete all cached audio, then exit | — |
 | `--mcp` | Run as an MCP stdio server for desktop apps | — |
 | `--install-hooks` | Wire music into your agent's hooks (no wrapper needed) | — |
-| `--tools <list>` | With `--install-hooks`: `claude,codex,cursor,grok` | auto-detect |
+| `--tools <list>` | With `--install-hooks`: `claude,codex,cursor,grok,gemini,copilot,qwen` | auto-detect |
 | `--reactive` | With `--install-hooks`: intensity follows the tool in use | off |
+| `--dry-run` | With `--install-hooks`: show what would change in each file, write nothing | off |
 | `--uninstall-hooks` | Remove the hooks again, from every agent | — |
 | `-h, --help` | Show help and options | — |
 | `--version` | Show version | — |
@@ -461,6 +486,28 @@ It shouldn't. The cache key includes a hash of the synth sources, so changing a 
 vibe --clear-cache
 ```
 
+**Silent when the agent runs on another machine over SSH**
+Sound plays on the machine where the agent runs, and a remote server usually has no sound card — so VibeAudio finds no player and stays quiet. You can hear it locally by forwarding a PulseAudio socket through the SSH connection: the remote `paplay` sends the audio back over SSH to your own speakers.
+
+This needs a PulseAudio-compatible sound server on **your local machine**: a Linux desktop (PipeWire and PulseAudio both provide one) or Windows with WSLg. macOS has none built in, so this route doesn't apply there.
+
+1. **Connect with the socket forwarded.** On the local machine, pick the socket for your setup:
+
+   ```bash
+   ssh -R /tmp/vibe-pulse.sock:"$XDG_RUNTIME_DIR/pulse/native" you@server   # Linux desktop
+   ssh -R /tmp/vibe-pulse.sock:/mnt/wslg/PulseServer you@server              # WSLg
+   ```
+
+2. **On the server, point audio at it and install a player** — in the shell you launch the agent from, since hooks inherit the agent's environment:
+
+   ```bash
+   sudo apt install pulseaudio-utils           # provides paplay
+   export PULSE_SERVER=unix:/tmp/vibe-pulse.sock
+   vibe --preview jazz                         # you should hear it locally
+   ```
+
+If the second connection fails with the socket "already in use", an earlier session left it behind: `rm /tmp/vibe-pulse.sock` on the server, or set `StreamLocalBindUnlink yes` in the server's `sshd_config`. If `paplay` says access denied, your local PulseAudio requires its cookie — copy `~/.config/pulse/cookie` to the same path on the server.
+
 **Volume flag does nothing**
 Shouldn't happen any more — where the player can't attenuate (`aplay`, PowerShell), the gain is baked into the audio instead. If you changed `--volume` and hear no difference, you're most likely on hooks, which ignore the wrapper's flags: re-run `vibe --volume 25 --install-hooks`.
 
@@ -498,8 +545,8 @@ Background player
 AI tools found
   ✔ Claude Code         hooks — installed
   ✔ Codex               hooks — run: vibe --install-hooks
-  ✔ Gemini CLI          MCP — see the README
-  ✔ GitHub Copilot CLI  MCP, or wrap it
+  ✔ Gemini CLI          hooks — run: vibe --install-hooks
+  ✔ GitHub Copilot CLI  hooks — run: vibe --install-hooks
 ```
 
 The last block is detected from your own `PATH`, so it answers "will this work with my tool" without you matching yourself against a table. `vibe --stop` kills the background player on the spot; the next prompt starts a fresh one.
@@ -518,7 +565,7 @@ rm -rf ~/.vibeaudio             # 3. optional: cached audio + daemon state
 
 Step 1 also **stops a background player that's still going**. That matters: once the hooks are gone nothing will ever send the `Stop` event, and after step 2 there's no `vibe` left to stop it with — music would simply play on until its 15-minute cap. If you ever need to do it by hand: `pkill -f "vibeaudio.js --daemon"`.
 
-> **Order matters.** `npm rm -g` deletes the binary but not your hook config. Removing the package first strands hook entries that point at a path that no longer exists, and your agent will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json`, `~/.codex/hooks.json` and `~/.cursor/hooks.json` by hand, and delete `~/.grok/hooks/vibeaudio.json`.
+> **Order matters.** `npm rm -g` deletes the binary but not your hook config. Removing the package first strands hook entries that point at a path that no longer exists, and your agent will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.cursor/hooks.json`, `~/.gemini/settings.json` and `~/.qwen/settings.json` by hand, and delete `~/.grok/hooks/vibeaudio.json`, `~/.copilot/hooks/vibeaudio.json` and `~/.claude/commands/vibe.md`.
 
 Step 3 only reclaims disk — the audio cache, pruned to the 3 most recent projects — and it's regenerated on next use, so skip it if you're reinstalling.
 
@@ -526,8 +573,8 @@ Step 3 only reclaims disk — the audio cache, pruned to the 3 most recent proje
 
 | Leftover | Why, and how to remove it |
 | :--- | :--- |
-| `*.vibeaudio.bak` next to each shared hook config | Your config as it was before the first install — one each for Claude Code, Codex and Cursor. A safety net we won't delete for you; `rm` them once you're happy the real files are correct, and `vibe --uninstall-hooks` prints the path of every one it finds. (Grok leaves nothing: its file is ours alone, so uninstall deletes it outright.) |
-| `vibeaudio` entries in other apps' MCP configs | VibeAudio never edits those files, so it can't clean them either. Drop the entry from [whichever config you added it to](#-everything-else-gemini-cli-claude-desktop-antigravity-via-mcp). |
+| `*.vibeaudio.bak` next to each shared hook config | Your config as it was before the first install — one each for Claude Code, Codex, Cursor, Gemini CLI and Qwen Code. A safety net we won't delete for you; `rm` them once you're happy the real files are correct, and `vibe --uninstall-hooks` prints the path of every one it finds. (Grok and Copilot CLI leave nothing: their files are ours alone, so uninstall deletes them outright.) |
+| `vibeaudio` entries in other apps' MCP configs | VibeAudio never edits those files, so it can't clean them either. Drop the entry from [whichever config you added it to](#-everything-else-claude-desktop-antigravity-via-mcp). |
 
 Apart from those two, the three commands above remove everything VibeAudio writes.
 

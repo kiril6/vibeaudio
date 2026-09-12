@@ -29,11 +29,12 @@ function isInstalled(cmd) {
 // hand-kept list gets wrong.
 const AI_TOOLS = [
   { name: "Claude Code", cmd: ["claude"], check: "claude", hookTarget: "claude" },
-  { name: "Gemini CLI", cmd: ["gemini"], check: "gemini" },
+  { name: "Gemini CLI", cmd: ["gemini"], check: "gemini", hookTarget: "gemini" },
   { name: "Codex CLI", cmd: ["codex"], check: "codex", hookTarget: "codex" },
   { name: "Grok CLI", cmd: ["grok"], check: "grok", hookTarget: "grok" },
   { name: "Cursor CLI", cmd: ["cursor-agent"], check: "cursor-agent", hookTarget: "cursor" },
-  { name: "GitHub Copilot CLI", cmd: ["copilot"], check: "copilot" },
+  { name: "GitHub Copilot CLI", cmd: ["copilot"], check: "copilot", hookTarget: "copilot" },
+  { name: "Qwen Code", cmd: ["qwen"], check: "qwen", hookTarget: "qwen" },
   { name: "Aider", cmd: ["aider"], check: "aider" },
   { name: "Ollama (Llama 3)", cmd: ["ollama", "run", "llama3"], check: "ollama" },
   { name: "Custom command...", cmd: null }

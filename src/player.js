@@ -592,7 +592,12 @@ class AudioPlayer {
     this.procs.clear();
   }
 
-  stop({ playChime = true, outcome = "success", volume = 0.35, chimeVolume = null } = {}) {
+  /**
+   * `detach` plays the chime in a process that outlives this one, for a hook
+   * that must hand control back at once - an agent waits on its hooks, and a
+   * blocking chime held the permission dialog back for its whole length.
+   */
+  stop({ playChime = true, outcome = "success", volume = 0.35, chimeVolume = null, detach = false } = {}) {
     const wasPlaying = this.isPlaying;
     this.isPlaying = false;
 
@@ -617,7 +622,13 @@ class AudioPlayer {
       const chimeFile = getChimePath(outcome, bakedGain(backend, clamped));
 
       try {
-        spawnSync(backend.cmd, backend.args(chimeFile, clamped), { stdio: "ignore", timeout: 2500 });
+        if (detach) {
+          spawn(backend.cmd, backend.args(chimeFile, clamped), { stdio: "ignore", detached: true })
+            .on("error", () => {})
+            .unref();
+        } else {
+          spawnSync(backend.cmd, backend.args(chimeFile, clamped), { stdio: "ignore", timeout: 2500 });
+        }
       } catch (e) {
         // Ignore timeout
       }

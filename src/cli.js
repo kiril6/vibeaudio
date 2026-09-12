@@ -71,8 +71,9 @@ Procedural focus music while your AI coding tools think.
       --clear-cache            Delete cached audio, then exit
       --mcp                    Run as Model Context Protocol (MCP) server for Desktop apps
       --install-hooks          Wire music into your agent's hooks (no wrapper needed)
-      --tools <list>           With --install-hooks: claude,codex,cursor,grok (auto-detect)
+      --tools <list>           With --install-hooks: claude,codex,cursor,grok,gemini,copilot,qwen (auto-detect)
       --reactive               With --install-hooks: intensity follows the tool in use
+      --dry-run                With --install-hooks: show what would change, write nothing
       --uninstall-hooks        Remove the hooks again, from every agent
   -h, --help                   Show this help message
       --version                Show version
@@ -123,6 +124,7 @@ function parseArgs(argv) {
   let hookAction = null;
   let mcp = false;
   let reactive = false;
+  let dryRun = false;
   let tools = null;
   let cmdArgs = [];
 
@@ -243,6 +245,12 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--dry-run") {
+      dryRun = true;
+      i += 1;
+      continue;
+    }
+
     if (arg === "--tools") {
       tools = args[i + 1];
       i += 2;
@@ -328,6 +336,7 @@ function parseArgs(argv) {
     hookAction,
     mcp,
     reactive,
+    dryRun,
     tools,
     cmdArgs
   };
@@ -373,37 +382,82 @@ function resolveTargets(explicit) {
  * The one install path. Both --install-hooks and the menu's hooks branch call
  * this, so the two entry points can't drift in what they write or report.
  */
-function installHookTargets(ids, genre, volume, reactive) {
+function installHookTargets(ids, genre, volume, reactive, dryRun = false) {
   const hooks = require("./hooks");
+  if (dryRun) console.log(`\x1b[1mDry run\x1b[0m — nothing below is written.\n`);
 
   for (const id of ids) {
-    const { file, backup, name, note, events } = hooks.installHooks(genre, volume, null, { reactive, id });
+    const result = hooks.installHooks(genre, volume, null, { reactive, id, dryRun });
+    const { file, backup, name, note, events } = result;
 
-    console.log(`\x1b[32m✔ ${name} hooks installed in ${file}\x1b[0m`);
-    if (backup) console.log(`  Previous config backed up to ${backup}`);
+    if (dryRun) {
+      printHookPlan(result, hooks.TARGETS[id]);
+    } else {
+      console.log(`\x1b[32m✔ ${name} hooks installed in ${file}\x1b[0m`);
+      if (backup) console.log(`  Previous config backed up to ${backup}`);
+    }
     console.log(`  ${events.start.padEnd(19)}→ music starts (${genre} @ ${Math.round(volume * 100)}%)`);
     console.log(`  ${events.stop.padEnd(19)}→ music stops + success chime`);
     if (reactive) {
       console.log(`  ${events.tool.padEnd(19)}→ intensity follows the tool in use (reactive mode)`);
     }
-    if (events.wait) {
-      console.log(`  ${events.wait[0].padEnd(19)}→ music pauses + "your turn" chime`);
-      console.log(`  ${events.resume[0].padEnd(19)}→ music resumes once you've answered`);
-      console.log(`  ${events.failure.padEnd(19)}→ music stops + failure chime (API error)`);
-      console.log(`  ${events.end.padEnd(19)}→ music stops if that session started it`);
+    if (events.wait) console.log(`  ${events.wait[0].padEnd(19)}→ music pauses + "your turn" chime`);
+    if (events.resume) console.log(`  ${events.resume[0].padEnd(19)}→ music resumes once you've answered`);
+    if (events.failure) console.log(`  ${events.failure.padEnd(19)}→ music stops + failure chime (API error)`);
+    if (events.end) console.log(`  ${events.end.padEnd(19)}→ music stops if that session started it`);
+
+    if (id === "claude") {
+      const slash = hooks.installSlashCommand({ dryRun });
+      if (!slash.installed) console.log(`  \x1b[33m/vibe not installed: ${slash.reason} (${slash.file})\x1b[0m`);
+      else console.log(`  ${"/vibe".padEnd(19)}→ ${dryRun ? "would write" : "control the music from inside Claude Code"} (${slash.file})`);
     }
     // Codex will not run a hook it has not been told to trust, so saying
     // "done" without this would be reporting an install that isn't live yet.
     if (note) console.log(`  \x1b[33m${note}\x1b[0m`);
   }
 
-  // Every one of these re-reads its hook file per event rather than caching it
-  // at startup, so an open session picks this up on its next prompt.
-  console.log(`  Takes effect on your next prompt - no restart needed.`);
+  if (dryRun) {
+    console.log(`\n  Run again without --dry-run to apply.\n`);
+    return;
+  }
+  // These re-read their hook file per event rather than caching it at startup,
+  // verified for each, so an open session picks this up on its next prompt.
+  const live = ids.filter((id) => hooks.TARGETS[id].liveReload !== false).map((id) => hooks.TARGETS[id].name);
+  if (live.length) console.log(`  ${live.join(", ")}: takes effect on your next prompt - no restart needed.`);
   if (ids.length > 1) {
     console.log(`  \x1b[90mOne player is shared: whichever agent you prompt last owns the music.\x1b[0m`);
   }
   console.log(`  Remove them any time with: vibe --uninstall-hooks\n`);
+}
+
+/**
+ * What --dry-run shows: for each event, whether our entry would be added,
+ * changed, left as it is or removed - read from the file as it is now against
+ * the result installHooks computed, so the preview cannot drift from the write.
+ */
+function printHookPlan({ file, backup, name, before, after, id }, t) {
+  const hooks = require("./hooks");
+  const ours = (text) => {
+    const map = new Map();
+    if (!text) return map;
+    for (const [event, entries] of hooks.hookEntries(JSON.parse(text).hooks, t)) {
+      const mine = entries.filter((e) => hooks.isVibeHook(e, id));
+      if (mine.length) map.set(event, JSON.stringify(mine));
+    }
+    return map;
+  };
+  const was = ours(before);
+  const will = ours(after);
+
+  console.log(`\x1b[1m${name}\x1b[0m — would ${before === null ? "create" : "edit"} ${file}`);
+  if (backup) console.log(`  would back up the current file to ${backup}`);
+  for (const event of new Set([...was.keys(), ...will.keys()])) {
+    const mark = !was.has(event) ? "\x1b[32m+ add   \x1b[0m"
+      : !will.has(event) ? "\x1b[31m- remove\x1b[0m"
+      : was.get(event) === will.get(event) ? "\x1b[90m= same  \x1b[0m" : "\x1b[33m~ change\x1b[0m";
+    console.log(`  ${mark} ${event}`);
+  }
+  if (before !== null) console.log(`  \x1b[90mEverything else in the file stays as it is.\x1b[0m`);
 }
 
 /**
@@ -429,6 +483,7 @@ function uninstallHookTargets() {
     }
   }
 
+  if (hooks.uninstallSlashCommand()) console.log(`\x1b[32m✔ Removed the /vibe command from Claude Code\x1b[0m`);
   if (total === 0) console.log(`\x1b[90mNo VibeAudio hooks were installed.\x1b[0m`);
 
   // Nothing will ever send a stop event once the hooks are gone, so a daemon
@@ -581,8 +636,9 @@ function detectAiTools(hooked = new Set()) {
     { cmd: "codex", name: "Codex", integration: viaHooks("codex") },
     { cmd: "cursor-agent", name: "Cursor", integration: viaHooks("cursor") },
     { cmd: "grok", name: "Grok", integration: viaHooks("grok") },
-    { cmd: "gemini", name: "Gemini CLI", integration: "MCP — see the README" },
-    { cmd: "copilot", name: "GitHub Copilot CLI", integration: "MCP, or wrap it" },
+    { cmd: "gemini", name: "Gemini CLI", integration: viaHooks("gemini") },
+    { cmd: "copilot", name: "GitHub Copilot CLI", integration: viaHooks("copilot") },
+    { cmd: "qwen", name: "Qwen Code", integration: viaHooks("qwen") },
     { cmd: "aider", name: "Aider", integration: "wrapper — vibe aider" },
     { cmd: "ollama", name: "Ollama", integration: "wrapper — vibe ollama run <model>" }
   ];
@@ -614,7 +670,7 @@ function previewGenre(genre, volume) {
   spawnSync(backend.cmd, backend.args(audioFile, volume), { stdio: "ignore" });
 }
 
-function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, tools }) {
+function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, tools, dryRun }) {
   const hooks = require("./hooks");
 
   switch (action) {
@@ -658,7 +714,7 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, 
       return;
 
     case "install-hooks":
-      return installHookTargets(resolveTargets(tools), genre, volume, reactive);
+      return installHookTargets(resolveTargets(tools), genre, volume, reactive, dryRun);
 
     case "uninstall-hooks":
       return uninstallHookTargets();
@@ -818,6 +874,7 @@ async function run() {
     hookAction,
     mcp,
     reactive,
+    dryRun,
     tools,
     cmdArgs
   } = parseArgs(process.argv);
@@ -832,7 +889,7 @@ async function run() {
 
   if (hookAction) {
     try {
-      return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive, tools });
+      return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive, tools, dryRun });
     } catch (e) {
       // Settings problems are the user's to fix — report them, don't stack-trace.
       console.error(`\x1b[31m[vibeaudio] ${e.message}\x1b[0m`);
