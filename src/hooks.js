@@ -6,8 +6,8 @@
  * tears it down and plays the chime. This tracks the agent's actual thinking
  * window instead of guessing from a wrapped process's lifetime.
  *
- * The three agents differ only in where the file lives, what the events are
- * called and how one entry is shaped - TARGETS holds those three facts and
+ * The supported agents differ only in where the file lives, what the events
+ * are called and how one entry is shaped - TARGETS holds those three facts and
  * everything else below is shared.
  */
 
@@ -27,9 +27,9 @@ const CLI_ENTRY = path.join(__dirname, "..", "bin", "vibeaudio.js");
  * sparse, edits bring in the groove, shelling out and subagents go to peak.
  * Unknown tools sit in the middle rather than swinging the mix.
  *
- * Each agent names its tools differently, so all three vocabularies live here:
- * Claude Code's PascalCase set, Codex's snake_case one, and Cursor's short
- * names. They don't collide, so one flat map covers every target.
+ * The agents don't agree on tool names, so every vocabulary lives here: Claude
+ * Code's PascalCase set (which Grok shares), Codex's snake_case one, and
+ * Cursor's short names. They don't collide, so one flat map covers them all.
  */
 const TOOL_TIERS = {
   // Claude Code

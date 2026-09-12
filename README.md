@@ -518,7 +518,7 @@ Step 3 only reclaims disk — the audio cache, pruned to the 3 most recent proje
 
 | Leftover | Why, and how to remove it |
 | :--- | :--- |
-| `~/.claude/settings.json.vibeaudio.bak` | Your settings as they were before the first install — a safety net we won't delete for you. `rm` it once you're happy the real file is correct. |
+| `*.vibeaudio.bak` next to each hook config | Your config as it was before the first install — one per agent you installed for (`~/.claude/settings.json.vibeaudio.bak`, `~/.codex/hooks.json.vibeaudio.bak`, `~/.cursor/hooks.json.vibeaudio.bak`). A safety net we won't delete for you; `rm` them once you're happy the real files are correct. `vibe --uninstall-hooks` prints the path of every one it finds. |
 | `vibeaudio` entries in other apps' MCP configs | VibeAudio never edits those files, so it can't clean them either. Drop the entry from [whichever config you added it to](#-everything-else-gemini-cli-claude-desktop-antigravity-via-mcp). |
 
 Apart from those two, the three commands above remove everything VibeAudio writes.
