@@ -63,7 +63,7 @@ Procedural focus music while your AI coding tools think.
       --preview <genre>        Play one loop of a genre and exit
       --status                 Show what is installed, running and detected, then exit
       --stop                   Stop the background player, then exit
-      --mute                   Silence everything until you unmute (for a call), then exit
+      --mute [minutes]         Silence everything for a call (default: 60 min, 0 = until unmuted)
       --unmute                 Resume normal playback, then exit
       --clear-cache            Delete cached audio, then exit
       --mcp                    Run as Model Context Protocol (MCP) server for Desktop apps
@@ -101,6 +101,7 @@ function parseArgs(argv) {
   let statusFlag = false;
   let stopFlag = false;
   let muteFlag = null;
+  let muteMinutes = null;
   let hookAction = null;
   let reactive = false;
   let tools = null;
@@ -191,6 +192,12 @@ function parseArgs(argv) {
     if (arg === "--mute" || arg === "--unmute") {
       muteFlag = arg === "--mute";
       i += 1;
+      // Optional duration: `--mute 30`. Only a bare number counts, so
+      // `vibe --mute claude` still parses as a mute plus a command.
+      if (muteFlag && args[i] !== undefined && /^\d+$/.test(args[i])) {
+        muteMinutes = parseInt(args[i], 10);
+        i += 1;
+      }
       continue;
     }
 
@@ -267,6 +274,7 @@ function parseArgs(argv) {
     status: statusFlag,
     stop: stopFlag,
     mute: muteFlag,
+    muteMinutes,
     hookAction,
     reactive,
     tools,
@@ -380,9 +388,10 @@ function printStatus() {
 
   console.log(`\n\x1b[1m\x1b[36mVibeAudio\x1b[0m v${pkg.version}\n`);
 
-  const since = require("./player").mutedSince();
-  if (since !== null) {
-    console.log(`\x1b[33m🔇 Muted since ${since}\x1b[0m — nothing will play until: vibe --unmute\n`);
+  const { muteState, muteRemainingText } = require("./player");
+  const mute = muteState();
+  if (mute !== null) {
+    console.log(`\x1b[33m🔇 Muted ${muteRemainingText(mute)}\x1b[0m \x1b[90m(since ${mute.since})\x1b[0m\n`);
   } else if (playbackDisabled()) {
     console.log(`\x1b[33m⏸ Muted by VIBE_DISABLE=${process.env.VIBE_DISABLE}\x1b[0m — automatic playback is off (--preview still works).\n`);
   }
@@ -725,6 +734,7 @@ async function run() {
     status: showStatus,
     stop: shouldStop,
     mute: muteChange,
+    muteMinutes,
     hookAction,
     reactive,
     tools,
@@ -748,19 +758,25 @@ async function run() {
   }
 
   if (muteChange !== null) {
-    const { setMuted } = require("./player");
-    setMuted(muteChange);
+    const { setMuted, muteRemainingText, DEFAULT_MUTE_MINUTES } = require("./player");
 
-    if (muteChange) {
-      // Muting has to silence what is playing right now, not just the next
-      // prompt - the whole point is that a call is already ringing.
-      const stopped = require("./hooks").stopDaemon();
-      console.log(`\x1b[33m🔇 Muted.\x1b[0m Hooks and settings are untouched; nothing will play until you unmute.`);
-      if (stopped) console.log(`  Stopped the player that was running.`);
-      console.log(`  Unmute with: vibe --unmute\n`);
-    } else {
+    if (!muteChange) {
+      setMuted(false);
       console.log(`\x1b[32m🔊 Unmuted.\x1b[0m Music returns on your next prompt.\n`);
+      return;
     }
+
+    const minutes = muteMinutes === null ? DEFAULT_MUTE_MINUTES : muteMinutes;
+    const state = setMuted(true, minutes);
+    // Muting has to silence what is playing right now, not just the next
+    // prompt - the whole point is that a call is already ringing.
+    const stopped = require("./hooks").stopDaemon();
+
+    console.log(`\x1b[33m🔇 Muted ${muteRemainingText(state)}.\x1b[0m`);
+    if (stopped) console.log(`  Stopped the player that was running.`);
+    console.log(`  Hooks and settings are untouched. Ending it early: vibe --unmute`);
+    if (minutes > 0) console.log(`  \x1b[90mLonger call? vibe --mute 120 — or vibe --mute 0 to stay off until you say otherwise.\x1b[0m`);
+    console.log();
     return;
   }
 

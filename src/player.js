@@ -300,30 +300,72 @@ function pruneSeedDirs(keep = 3) {
  */
 const MUTE_FILE = path.join(os.homedir(), ".vibeaudio", "muted");
 
-function playbackDisabled() {
-  const raw = (process.env.VIBE_DISABLE || "").trim().toLowerCase();
-  if (raw === "1" || raw === "true" || raw === "yes" || raw === "on") return true;
-  // Checked per playback rather than cached, so unmuting lands on the next
-  // loop or prompt without restarting anything. One stat per ~7s loop.
-  return fs.existsSync(MUTE_FILE);
-}
+// A call is a bounded thing, so a mute should be too. An indefinite one you
+// forget about is worse than no mute at all: the tool just stops working and
+// nothing ever tells you why. Expiring by default means the failure mode is
+// "music came back sooner than I wanted", not "silently broken for a week".
+const DEFAULT_MUTE_MINUTES = 60;
 
-function setMuted(muted) {
-  if (muted) {
-    fs.mkdirSync(path.dirname(MUTE_FILE), { recursive: true });
-    fs.writeFileSync(MUTE_FILE, `${new Date().toISOString()}\n`);
-  } else {
-    fs.rmSync(MUTE_FILE, { force: true });
-  }
-  return muted;
-}
-
-function mutedSince() {
+/**
+ * Reads the mute flag, expiring it in passing. Returns null when not muted.
+ * `until` is null for a mute the user explicitly asked to last indefinitely.
+ */
+function muteState() {
+  let raw;
   try {
-    return fs.readFileSync(MUTE_FILE, "utf8").trim();
+    raw = fs.readFileSync(MUTE_FILE, "utf8").trim();
   } catch (e) {
     return null;
   }
+
+  let state;
+  try {
+    state = JSON.parse(raw);
+  } catch (e) {
+    // A file written before mutes could expire held a bare timestamp.
+    state = { since: raw, until: null };
+  }
+
+  if (state.until && Date.now() >= state.until) {
+    // Self-healing: whoever notices first clears it, so an expired mute can
+    // never sit there looking like a live one.
+    fs.rmSync(MUTE_FILE, { force: true });
+    return null;
+  }
+  return state;
+}
+
+function playbackDisabled() {
+  const raw = (process.env.VIBE_DISABLE || "").trim().toLowerCase();
+  if (raw === "1" || raw === "true" || raw === "yes" || raw === "on") return true;
+  // Checked per playback rather than cached, so unmuting - or an expiry -
+  // lands on the next loop or prompt without restarting anything.
+  return muteState() !== null;
+}
+
+/**
+ * `minutes` of 0 means indefinite, which the user has to ask for explicitly.
+ */
+function setMuted(muted, minutes = DEFAULT_MUTE_MINUTES) {
+  if (!muted) {
+    fs.rmSync(MUTE_FILE, { force: true });
+    return null;
+  }
+
+  const state = {
+    since: new Date().toISOString(),
+    until: minutes > 0 ? Date.now() + minutes * 60000 : null
+  };
+  fs.mkdirSync(path.dirname(MUTE_FILE), { recursive: true });
+  fs.writeFileSync(MUTE_FILE, `${JSON.stringify(state, null, 2)}\n`);
+  return state;
+}
+
+function muteRemainingText(state) {
+  if (!state) return null;
+  if (!state.until) return "indefinitely — until you run: vibe --unmute";
+  const mins = Math.max(1, Math.round((state.until - Date.now()) / 60000));
+  return `for ${mins} more minute${mins === 1 ? "" : "s"}, then music returns on its own`;
 }
 
 function bakedGain(backend, volume) {
@@ -569,7 +611,9 @@ module.exports = {
   SHUFFLE_GENRES,
   synthFingerprint,
   setMuted,
-  mutedSince,
+  muteState,
+  muteRemainingText,
+  DEFAULT_MUTE_MINUTES,
   MUTE_FILE,
   CACHE_ROOT,
   CACHE_DIR

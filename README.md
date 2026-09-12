@@ -395,7 +395,7 @@ export VIBE_GENRE=jazz     # or synthwave, 8bit, electronic, zen, piano, drone, 
 | `--preview <genre>` | Play one loop of a genre and exit | — |
 | `--status` | Show what's installed, running and detected, then exit | — |
 | `--stop` | Stop the background player, then exit | — |
-| `--mute` | Silence everything until you unmute, then exit | — |
+| `--mute [minutes]` | Silence everything for a call, then exit | `60` min (`0` = until unmuted) |
 | `--unmute` | Resume normal playback, then exit | — |
 | `--clear-cache` | Delete all cached audio, then exit | — |
 | `--mcp` | Run as an MCP stdio server for desktop apps | — |
@@ -423,11 +423,15 @@ export VIBE_DISABLE=1           # Mute, without uninstalling anything
 **For a call that's ringing right now, use `vibe --mute` instead.** An environment variable can't help there: a hook runs as a child of your agent and inherits the environment the agent had *when it launched*, so exporting `VIBE_DISABLE` in another terminal reaches nothing already running — and restarting your agent is exactly what you can't do mid-call.
 
 ```bash
-vibe --mute      # silent immediately, and stays silent
-vibe --unmute    # music returns on your next prompt
+vibe --mute        # silent now, music returns by itself in an hour
+vibe --mute 15     # or pick the window
+vibe --mute 0      # stay off until I say otherwise
+vibe --unmute      # end it early
 ```
 
-`--mute` writes a flag file, which crosses process boundaries where a variable cannot, and stops whatever is playing on the spot. Your hooks and settings are untouched, so there's nothing to put back afterwards — and `vibe --status` shows the mute and when you set it, so a forgotten one can't quietly cost you a day of silence.
+`--mute` writes a flag file, which crosses process boundaries where a variable cannot, and stops whatever is playing on the spot. Your hooks and settings are untouched, so there's nothing to put back afterwards.
+
+**It expires after an hour by default, and that's deliberate.** A call is a bounded thing; a mute you forget about is worse than no mute, because the tool just stops working and nothing ever tells you why. Expiring means the worst case is "music came back sooner than I wanted" rather than a week of silence you never diagnose. `--mute 0` opts into indefinite explicitly, and `vibe --status` always shows how much of the window is left.
 
 Either way, `--preview` still plays: that one is an explicit request to hear something.
 

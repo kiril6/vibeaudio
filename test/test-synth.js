@@ -1001,14 +1001,44 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.ok(!alive, "no daemon may survive while muted");
     }
 
-    assert.ok(/Muted since/.test((await run(["--status"])).out), "--status must say it is muted");
+    assert.ok(/Muted/.test((await run(["--status"])).out), "--status must say it is muted");
+
+    // A mute you forget about is worse than no mute, so it expires by default.
+    const { setMuted, muteState, DEFAULT_MUTE_MINUTES } = require("../src/player");
+    assert.strictEqual(DEFAULT_MUTE_MINUTES, 60, "the default mute must be bounded, not forever");
+
+    const bounded = await run(["--mute", "15"]);
+    assert.ok(/15 more minutes/.test(bounded.out), "--mute <n> must report the window it set");
+    assert.ok(/music returns on its own/.test(bounded.out), "the user must be told it ends by itself");
+
+    const forever = await run(["--mute", "0"]);
+    assert.ok(/indefinitely/.test(forever.out), "--mute 0 must be the explicit opt-in to forever");
 
     const unmuted = await run(["--unmute"]);
     assert.strictEqual(unmuted.code, 0, "--unmute must exit 0");
     assert.ok(!fs.existsSync(path.join(home, ".vibeaudio", "muted")), "--unmute must clear the flag");
 
     fs.rmSync(home, { recursive: true, force: true });
-    console.log("   ✓ Mute is a file, so it reaches processes an env var never could.");
+
+    // Expiry must be self-healing: whoever reads it next clears it, so an
+    // expired mute can never sit there looking live.
+    const own = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-expiry-"));
+    const realHome = process.env.HOME;
+    try {
+      fs.writeFileSync(
+        require("../src/player").MUTE_FILE,
+        JSON.stringify({ since: new Date().toISOString(), until: Date.now() - 1000 })
+      );
+      assert.strictEqual(muteState(), null, "an expired mute must read as not muted");
+      assert.ok(!fs.existsSync(require("../src/player").MUTE_FILE), "reading an expired mute must delete it");
+      assert.ok(muteState() === null, "and stay deleted");
+    } finally {
+      setMuted(false);
+      fs.rmSync(own, { recursive: true, force: true });
+      process.env.HOME = realHome;
+    }
+
+    console.log("   ✓ Mute crosses process boundaries, and expires itself so it can't be forgotten.");
   }
 
   // --- 35. Sparse piano ---
