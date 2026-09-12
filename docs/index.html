@@ -224,9 +224,18 @@ section h2{ font-size:30px; text-shadow:0 0 18px rgba(0,229,255,.18); }
 .how-col .tag{ display:inline-block; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--pink); margin-bottom:12px; text-shadow:0 0 8px rgba(255,46,151,.5); }
 .how-col p{ color:var(--ink-dim); font-size:13px; }
 
-.shield-badges{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:34px; opacity:.92; }
-.shield-badges a{ line-height:0; }
-.shield-badges img{ display:block; height:20px; }
+.shield-badges{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:34px; }
+.chip{
+  --chip:var(--cyan);
+  display:inline-flex; align-items:stretch; overflow:hidden;
+  font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+  border:1px solid var(--line); border-radius:4px; text-decoration:none;
+}
+.chip span{ display:flex; align-items:center; padding:6px 10px; }
+.chip .chip-k{ color:var(--ink-faint); background:var(--bg-raised); }
+.chip .chip-v{ color:var(--chip); background:rgba(255,255,255,.03); border-left:1px solid var(--line); text-shadow:0 0 8px var(--chip); }
+a.chip{ transition:box-shadow .2s, border-color .2s; }
+a.chip:hover{ border-color:var(--chip); box-shadow:0 0 14px -2px var(--chip); }
 
 /* ---------- Works with ---------- */
 .badge-row{ display:flex; flex-wrap:wrap; gap:10px; margin-top:32px; }
@@ -265,11 +274,11 @@ footer a{ color:var(--ink-dim); }
   <div class="wrap hero-grid">
     <div>
       <div class="shield-badges">
-        <a href="https://github.com/kiril6/vibeaudio/tags"><img src="https://img.shields.io/github/v/tag/kiril6/vibeaudio?label=release&style=flat-square&labelColor=140c22&color=ff2e97" alt="Latest release"></a>
-        <img src="https://img.shields.io/badge/license-MIT-140c22?style=flat-square&labelColor=140c22&color=39ff8d" alt="License: MIT">
-        <img src="https://img.shields.io/badge/node-%E2%89%A518-140c22?style=flat-square&labelColor=140c22&color=00e5ff" alt="Node ≥18">
-        <img src="https://img.shields.io/badge/deps-zero-140c22?style=flat-square&labelColor=140c22&color=a855f7" alt="Zero dependencies">
-        <img src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-140c22?style=flat-square&labelColor=140c22&color=ffb454" alt="Platforms">
+        <a class="chip" style="--chip:var(--pink)" href="https://github.com/kiril6/vibeaudio/tags"><span class="chip-k">release</span><span class="chip-v">v0.4.0</span></a>
+        <span class="chip" style="--chip:var(--c-8bit)"><span class="chip-k">license</span><span class="chip-v">MIT</span></span>
+        <span class="chip" style="--chip:var(--cyan)"><span class="chip-k">node</span><span class="chip-v">&ge;18</span></span>
+        <span class="chip" style="--chip:var(--purple)"><span class="chip-k">deps</span><span class="chip-v">zero</span></span>
+        <span class="chip" style="--chip:var(--amber)"><span class="chip-k">platform</span><span class="chip-v">macOS · Linux · Windows</span></span>
       </div>
       <span class="eyebrow">procedural · zero dependencies</span>
       <h1>Focus music<br>while your <em>AI</em> codes.</h1>
