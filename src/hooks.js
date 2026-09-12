@@ -424,7 +424,10 @@ function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = fa
 
   const { settings, raw } = loadSettings(file, t);
   let backup = null;
-  if (raw !== null) {
+  // Only worth backing up a file that holds someone else's config. A dedicated
+  // target's file is ours alone, so a backup of it would just be a copy of our
+  // own last install, left behind after the uninstall deletes the original.
+  if (raw !== null && !t.dedicated) {
     backup = `${file}.vibeaudio.bak`;
     fs.writeFileSync(backup, raw);
   }
