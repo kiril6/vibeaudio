@@ -22,10 +22,17 @@ function isInstalled(cmd) {
 // is the escape hatch for anything not listed. Entries are sorted so what is
 // actually installed floats to the top, which is what lets this list grow
 // without turning into a wall of things the user does not have.
+// `hookTarget` is the id in hooks.js TARGETS, and it is the only thing that
+// decides whether this tool gets the delivery and reactive questions. It is
+// not the same string as `check`: Cursor's CLI is `cursor-agent` while its
+// target id is `cursor`, which is exactly the kind of mismatch a second
+// hand-kept list gets wrong.
 const AI_TOOLS = [
-  { name: "Claude Code", cmd: ["claude"], check: "claude" },
+  { name: "Claude Code", cmd: ["claude"], check: "claude", hookTarget: "claude" },
   { name: "Gemini CLI", cmd: ["gemini"], check: "gemini" },
-  { name: "Codex CLI", cmd: ["codex"], check: "codex" },
+  { name: "Codex CLI", cmd: ["codex"], check: "codex", hookTarget: "codex" },
+  { name: "Grok CLI", cmd: ["grok"], check: "grok", hookTarget: "grok" },
+  { name: "Cursor CLI", cmd: ["cursor-agent"], check: "cursor-agent", hookTarget: "cursor" },
   { name: "GitHub Copilot CLI", cmd: ["copilot"], check: "copilot" },
   { name: "Aider", cmd: ["aider"], check: "aider" },
   { name: "Ollama (Llama 3)", cmd: ["ollama", "run", "llama3"], check: "ollama" },
@@ -176,9 +183,29 @@ const VOLUMES = [
   { name: "📢 Loud (75%)", desc: "Audible across the room", vol: 0.75 }
 ];
 
-// The tools VibeAudio installs hooks for. Anything else gets the wrapper, so
-// there is no delivery choice worth asking about.
-const HOOK_TOOLS = ["claude", "codex"];
+/**
+ * Which target's hooks this menu entry can install, or null for the tools that
+ * only get the wrapper - and so have no delivery choice worth asking about.
+ *
+ * Read out of hooks.js TARGETS rather than listed again here. A hand-kept copy
+ * is how Grok became a fully supported hook target - its own file, its own
+ * event names, a row in the README - that this menu could never install for:
+ * picking it offered the wrapper and nothing else. Deriving it means adding a
+ * target wires up the menu too, or fails loudly on a typo'd id.
+ *
+ * Required lazily: hooks.js reaches back into this module for isInstalled().
+ */
+function hookTargetOf(tool) {
+  if (!tool || !tool.hookTarget) return null;
+  const { TARGETS } = require("./hooks");
+  if (!TARGETS[tool.hookTarget]) {
+    throw new Error(
+      `launcher entry '${tool.name}' names hook target '${tool.hookTarget}', ` +
+      `which is not one of: ${Object.keys(TARGETS).join(", ")}`
+    );
+  }
+  return tool.hookTarget;
+}
 
 const DELIVERY_FRESH = [
   {
@@ -215,7 +242,13 @@ const REACTIVE = [
   { id: true, name: "Reactive", desc: "Intensity follows the tool in use - noticeable, by design" }
 ];
 
-async function promptInteractive({ hooksInstalled = false } = {}) {
+/**
+ * `hooksInstalledFor` is asked about the tool the user picked, not about
+ * Claude: the caller cannot know which tool that is until this menu runs, and
+ * answering for Claude every time told a Grok user with Grok hooks already
+ * installed that they had none.
+ */
+async function promptInteractive({ hooksInstalledFor = () => false } = {}) {
   console.log(`\n\x1b[1m\x1b[35m🎧 VibeAudio — Interactive AI Launcher\x1b[0m\n`);
 
   // 1. Select AI Tool
@@ -247,10 +280,12 @@ async function promptInteractive({ hooksInstalled = false } = {}) {
   // Without this the menu asks for a genre and volume that installed hooks
   // then ignore - three questions asked, one honoured.
   let delivery = "wrapper";
-  if (HOOK_TOOLS.includes(selectedTool.check)) {
+  const hookTarget = hookTargetOf(selectedTool);
+  if (hookTarget) {
+    const installed = hooksInstalledFor(hookTarget);
     const chosen = await selectMenu(
-      hooksInstalled ? "Hooks are already installed. What now?" : "How should the music run?",
-      hooksInstalled ? DELIVERY_INSTALLED : DELIVERY_FRESH,
+      installed ? "Hooks are already installed. What now?" : "How should the music run?",
+      installed ? DELIVERY_INSTALLED : DELIVERY_FRESH,
       (item, num) => `${num}. ${item.name} \x1b[90m— ${item.desc}\x1b[0m`
     );
     delivery = chosen.id;
@@ -294,9 +329,9 @@ async function promptInteractive({ hooksInstalled = false } = {}) {
     installHooks: delivery === "hooks",
     // The menu asked about one tool, so it installs for that one - auto-detect
     // belongs to the bare --install-hooks flag, where nothing was chosen.
-    hookTarget: delivery === "hooks" ? selectedTool.check : null,
+    hookTarget: delivery === "hooks" ? hookTarget : null,
     reactive
   };
 }
 
-module.exports = { promptInteractive, tokenizeCommand, isInstalled };
+module.exports = { promptInteractive, tokenizeCommand, isInstalled, hookTargetOf, AI_TOOLS };

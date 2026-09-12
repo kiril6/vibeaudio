@@ -543,9 +543,14 @@ function readDaemonPid(file) {
  */
 function detectAiTools(hooked = new Set()) {
   const viaHooks = (id) => (hooked.has(id) ? "hooks — installed" : "hooks — run: vibe --install-hooks");
+  // Every hook target belongs here, or "AI tools found" contradicts the Hooks
+  // section directly above it - which is what a Grok user saw: their hooks
+  // listed as installed, and no tools found on the machine.
   const CANDIDATES = [
     { cmd: "claude", name: "Claude Code", integration: viaHooks("claude") },
     { cmd: "codex", name: "Codex", integration: viaHooks("codex") },
+    { cmd: "cursor-agent", name: "Cursor", integration: viaHooks("cursor") },
+    { cmd: "grok", name: "Grok", integration: viaHooks("grok") },
     { cmd: "gemini", name: "Gemini CLI", integration: "MCP — see the README" },
     { cmd: "copilot", name: "GitHub Copilot CLI", integration: "MCP, or wrap it" },
     { cmd: "aider", name: "Aider", integration: "wrapper — vibe aider" },
@@ -855,7 +860,11 @@ async function run() {
     // `vibe && deploy` would chain on a run that never happened.
     let selection;
     try {
-      selection = await promptInteractive({ hooksInstalled: hooksAlreadyCover(["claude"]) });
+      selection = await promptInteractive({
+        // Answered per target, once the menu knows which tool was picked -
+        // hooksAlreadyCover takes an argv, and TARGETS holds each one's CLI.
+        hooksInstalledFor: (id) => hooksAlreadyCover([require("./hooks").TARGETS[id].cmd])
+      });
     } catch (e) {
       process.exit(0);
     }

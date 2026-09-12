@@ -121,9 +121,11 @@ Which AI companion would you like to launch?
   2. Gemini CLI           [✓ installed]
   3. Codex CLI            [✓ installed]
   4. GitHub Copilot CLI   [✓ installed]
-  5. Aider                (not found in PATH)
-  6. Ollama (Llama 3)     (not found in PATH)
-  7. Custom command...
+  5. Grok CLI             (not found in PATH)
+  6. Cursor CLI           (not found in PATH)
+  7. Aider                (not found in PATH)
+  8. Ollama (Llama 3)     (not found in PATH)
+  9. Custom command...
 
 Choose your sound vibe:
 ❯ 1. ☕ Lo-Fi Focus        — Warm Rhodes electric piano & Kalimba drops

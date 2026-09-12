@@ -14,6 +14,36 @@ const { generateJazzLoop } = require("../src/synth/jazz");
 const { generateChime } = require("../src/synth/chime");
 const { parseArgs } = require("../src/cli");
 
+/**
+ * Hook targets with no launcher entry, and why. A target here is one you
+ * cannot start from a menu, not one nobody got round to adding - test [38]
+ * exists so that distinction has to be made on purpose. Empty is the healthy
+ * state: every agent VibeAudio can hook, it can also launch.
+ */
+const UNLAUNCHABLE_TARGETS = [];
+
+/**
+ * A PATH containing only fake tools cannot answer `which`, so isInstalled()
+ * fails for every candidate and a test meaning "exactly one tool is
+ * discoverable" silently becomes "none are" - which still passes when the
+ * expected winner is simply first in the list. Shipping a `which` that only
+ * sees this directory makes the sandbox answer honestly.
+ */
+function sandboxPathWith(names) {
+  const fs = require("fs");
+  const path = require("path");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-bin-"));
+  for (const name of names) {
+    fs.writeFileSync(path.join(dir, name), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  }
+  fs.writeFileSync(
+    path.join(dir, "which"),
+    `#!/bin/sh\n[ -x "${dir}/$1" ] && echo "${dir}/$1" || exit 1\n`,
+    { mode: 0o755 }
+  );
+  return dir;
+}
+
 console.log("Running VibeAudio Verification Tests...\n");
 
 // 1. Math and Note frequencies
@@ -581,8 +611,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
 
     // Make exactly one tool discoverable, so the installed-first sort puts
     // Claude Code at position 1 no matter what the host has installed.
-    const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-bin-"));
-    fs.writeFileSync(path.join(binDir, "claude"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const binDir = sandboxPathWith(["claude"]);
     const realPath = process.env.PATH;
     const realStdin = Object.getOwnPropertyDescriptor(process, "stdin");
     process.env.PATH = binDir;
@@ -617,7 +646,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
 
     // Claude Code -> hooks -> lofi -> Normal -> Reactive
     const hooksRun = drive(["1", "1", "1", "1", "2"]);
-    const withHooks = await promptInteractive({ hooksInstalled: false });
+    const withHooks = await promptInteractive({ hooksInstalledFor: () => false });
     assert.deepStrictEqual(withHooks.cmd, ["claude"], "first entry must be the one installed tool");
     assert.strictEqual(withHooks.installHooks, true, "the hooks branch must report itself");
     assert.strictEqual(withHooks.reactive, true, "reactive must be selectable from the menu");
@@ -627,7 +656,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
 
     // Claude Code -> this session only -> lofi -> Normal, and no reactive step
     const wrapperRun = drive(["1", "2", "1", "1", "2"]);
-    const withWrapper = await promptInteractive({ hooksInstalled: false });
+    const withWrapper = await promptInteractive({ hooksInstalledFor: () => false });
     assert.strictEqual(withWrapper.installHooks, false, "the wrapper branch must not install");
     assert.strictEqual(withWrapper.reactive, false, "reactive is meaningless without hooks");
     assert.strictEqual(wrapperRun.pending(), 1, "the wrapper branch must not ask the reactive question");
@@ -635,7 +664,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     // With hooks installed, option 1 launches without asking anything else:
     // a genre and volume the hooks ignore must not be collected at all.
     const installedRun = drive(["1", "1", "1", "1", "1"]);
-    const withInstalled = await promptInteractive({ hooksInstalled: true });
+    const withInstalled = await promptInteractive({ hooksInstalledFor: () => true });
     assert.strictEqual(withInstalled.installHooks, false, "launching must not reinstall");
     assert.strictEqual(withInstalled.genre, undefined, "no genre is collected when hooks own it");
     assert.strictEqual(withInstalled.volume, undefined, "no volume is collected when hooks own it");
@@ -1280,7 +1309,92 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ The backup keeps naming the config it claims to be.");
   }
 
-  console.log("\n\x1b[32mAll 37 tests passed successfully!\x1b[0m");
+  // 38. The launcher list and the hook targets must not drift apart.
+  {
+    console.log("\n\x1b[1m[38] Launcher covers every hook target\x1b[0m");
+    const fs = require("fs");
+    const path = require("path");
+    const { AI_TOOLS, hookTargetOf, promptInteractive } = require("../src/interactive");
+    const { TARGETS } = require("../src/hooks");
+
+    // a. Every id the menu names must be a real target. Grok was a complete
+    //    hook target - own file, own events, its own row in the README - that
+    //    the menu had no entry for at all.
+    for (const tool of AI_TOOLS) {
+      assert.doesNotThrow(() => hookTargetOf(tool), `${tool.name} names an unknown hook target`);
+    }
+    assert.throws(
+      () => hookTargetOf({ name: "Bogus", hookTarget: "nope" }),
+      /not one of/,
+      "a typo'd target id must fail loudly rather than silently offer the wrapper"
+    );
+
+    // b. Every hook target must be reachable from the menu, or picking that
+    //    agent offers the wrapper and nothing else.
+    const menuTargets = AI_TOOLS.map(hookTargetOf).filter(Boolean);
+    for (const id of Object.keys(TARGETS)) {
+      assert.ok(
+        menuTargets.includes(id) || UNLAUNCHABLE_TARGETS.includes(id),
+        `hook target '${id}' has no launcher entry — add one, or list it in UNLAUNCHABLE_TARGETS with a reason`
+      );
+    }
+
+    if (process.platform === "win32") {
+      console.log("   ✓ List checks pass (menu drive skipped on Windows).");
+    } else {
+      // c. Drive the menu as a Grok user and confirm the hooks branch is
+      //    offered at all, and that it reports the right target to install for.
+      const binDir = sandboxPathWith(["grok"]);
+      const realPath = process.env.PATH;
+      const realStdin = Object.getOwnPropertyDescriptor(process, "stdin");
+      const realWrite = process.stdout.write.bind(process.stdout);
+      const realLog = console.log;
+      process.env.PATH = binDir;
+      process.stdout.write = () => true;
+      console.log = () => {};
+
+      const drive = (keys) => {
+        const queue = [...keys];
+        const fake = new (require("events").EventEmitter)();
+        Object.assign(fake, { isTTY: true, setRawMode() {}, resume() {}, pause() {}, setEncoding() {} });
+        const realOn = fake.on.bind(fake);
+        fake.on = (event, fn) => {
+          const out = realOn(event, fn);
+          if (event === "data" && queue.length) setImmediate(() => fake.emit("data", queue.shift()));
+          return out;
+        };
+        Object.defineProperty(process, "stdin", { value: fake, configurable: true });
+      };
+
+      let asked = null;
+      try {
+        // Grok is the only tool on PATH, so it sorts to position 1.
+        // Grok -> hooks -> lofi -> Normal -> Steady
+        drive(["1", "1", "1", "1", "1"]);
+        const picked = await promptInteractive({
+          hooksInstalledFor: (id) => { asked = id; return false; }
+        });
+        assert.deepStrictEqual(picked.cmd, ["grok"], "Grok must be selectable from the launcher");
+        assert.strictEqual(picked.installHooks, true, "Grok must reach the hooks branch");
+        assert.strictEqual(picked.hookTarget, "grok", "and install for Grok, not for Claude");
+      } finally {
+        process.stdout.write = realWrite;
+        console.log = realLog;
+        process.env.PATH = realPath;
+        Object.defineProperty(process, "stdin", realStdin);
+        fs.rmSync(binDir, { recursive: true, force: true });
+      }
+
+      // d. The "already installed?" question follows the picked tool. It used
+      //    to be answered for Claude every time, so a Grok user with Grok
+      //    hooks installed was told they had none.
+      assert.strictEqual(asked, "grok", "hooksInstalledFor must be asked about the tool that was picked");
+
+      console.log("   ✓ Grok is selectable, reaches hooks, and is asked about as itself.");
+    }
+  }
+
+  console.log("\n\x1b[32mAll 38 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);
