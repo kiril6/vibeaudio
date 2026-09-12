@@ -276,6 +276,26 @@ function parseArgs(argv) {
       continue;
     }
 
+    // `--` ends our flags: everything after it is the command, even if it
+    // starts with a dash. The conventional escape hatch, and the reason the
+    // check below can be strict.
+    if (arg === "--") {
+      cmdArgs = args.slice(i + 1);
+      break;
+    }
+
+    // A mistyped flag used to fall through here and be spawned as a program,
+    // so `vibe --typo npm test` reported `spawn --typo ENOENT` - an error
+    // about the wrong thing entirely. A bare "-" is left alone; some commands
+    // use it to mean stdin.
+    if (arg.length > 1 && arg.startsWith("-")) {
+      console.error(
+        `\x1b[31m[vibeaudio] Unknown option '${arg}'.\x1b[0m Run vibe --help for the list.\n` +
+        `  If you meant to run a command that starts with a dash: vibe -- ${arg} ...`
+      );
+      process.exit(1);
+    }
+
     // Everything from here is the child command
     cmdArgs = args.slice(i);
     break;

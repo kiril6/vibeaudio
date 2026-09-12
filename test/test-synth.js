@@ -570,8 +570,14 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
   assert.strictEqual(bakedGain(null, 0.25), 1, "no backend at all must not try to bake");
   assert.strictEqual(bakedGain({ volume: false }, 0.001), 0.05, "gain is floored, never silent by accident");
 
-  const fullPath = audioPath("jazz", 2, 42, 1);
-  const quietPath = audioPath("jazz", 2, 42, 0.25);
+  // Seed dirs land in the real ~/.vibeaudio/cache, and pruneSeedDirs keeps
+  // only the three most recent - so a test that leaves one behind can evict
+  // the cache of a project the user actually works in. Clean up after.
+  const gainSeed = 42;
+  const gainDir = path.join(require("../src/player").CACHE_DIR, `s${gainSeed}`);
+
+  const fullPath = audioPath("jazz", 2, gainSeed, 1);
+  const quietPath = audioPath("jazz", 2, gainSeed, 0.25);
   assert.notStrictEqual(fullPath, quietPath, "each gain needs its own cache entry");
   assert.ok(/_g25\.wav$/.test(quietPath), "the gain belongs in the filename");
 
@@ -598,6 +604,8 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
   assert.strictEqual(flat.readInt16LE(44), 500, "positive samples scale");
   assert.strictEqual(flat.readInt16LE(46), -500, "negative samples round symmetrically (-500.5 -> -500)");
   assert.throws(() => applyGain(Buffer.alloc(8), 0.5), /canonical/, "a non-WAV buffer must be rejected, not silently mangled");
+
+  fs.rmSync(gainDir, { recursive: true, force: true });
   console.log("   ✓ Volume is baked into the PCM when the player cannot attenuate.");
 
   // 28. The launcher menu must only offer reactive where it does something
@@ -1203,6 +1211,21 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     }
     assert.deepStrictEqual(fs.readdirSync(sandboxHome), [], "refusing must write nothing at all");
     fs.rmSync(sandboxHome, { recursive: true, force: true });
+
+    // b3. A mistyped flag must name itself, not be spawned as a program -
+    //     `vibe --typo npm test` used to report `spawn --typo ENOENT`, an
+    //     error about entirely the wrong thing. `--` stays the escape hatch.
+    const typo = spawnSync(process.execPath, [CLI, "--typo", "npm", "test"], { encoding: "utf8" });
+    assert.strictEqual(typo.status, 1, "an unknown option must exit 1");
+    assert.ok(/Unknown option '--typo'/.test(typo.stderr), "and say which option it was");
+
+    const dashed = parseArgs(["node", "vibe", "--grace", "0", "--", "--weird-binary", "-x"]);
+    assert.deepStrictEqual(dashed.cmdArgs, ["--weird-binary", "-x"], "-- hands everything after it to the child");
+    assert.strictEqual(dashed.grace, 0, "and flags before -- are still ours");
+
+    // A command's own flags, after the command, are untouched.
+    const passthrough = parseArgs(["node", "vibe", "npm", "test", "--verbose"]);
+    assert.deepStrictEqual(passthrough.cmdArgs, ["npm", "test", "--verbose"]);
 
     // c. Every MCP request must leave with a response, including malformed
     //    ones - a throw used to leave the client blocked forever.
