@@ -158,6 +158,8 @@ Should the music react to what the agent is doing?
   2. Reactive             — Intensity follows the tool in use - noticeable, by design
 ```
 
+Once hooks are installed, that first question becomes **Just launch Claude Code** / **Reconfigure the hooks** — and launching skips the genre and volume prompts entirely, since the hooks own those.
+
 Choosing hooks installs them with the genre and volume you picked, then launches `claude` — the same thing `vibe --genre <g> --volume <n> --reactive --install-hooks` does, without memorising flags. The reactive question is only asked on that branch, because `--reactive` does nothing without hooks.
 
 Installed tools sort to the top. This list is a shortcut, not a compatibility list — **`vibe` wraps any command at all**, and "Custom command..." takes one you type (quoted arguments survive intact). Adding an entry is one line in [`src/interactive.js`](src/interactive.js) if you'd rather your tool be one keystroke.

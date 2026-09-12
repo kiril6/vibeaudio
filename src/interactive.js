@@ -178,7 +178,7 @@ const VOLUMES = [
 // has a real choice to offer. Everything else runs through the wrapper.
 const HOOK_TOOL = "claude";
 
-const DELIVERY = [
+const DELIVERY_FRESH = [
   {
     id: "hooks",
     name: "Claude Code hooks",
@@ -188,6 +188,23 @@ const DELIVERY = [
     id: "wrapper",
     name: "This session only",
     desc: "Music plays while the process lives - fine for one-shot commands"
+  }
+];
+
+// With hooks already installed, the wrapper plays nothing for an interactive
+// claude - so offering "this session only" would be offering silence. The
+// honest second option is to just launch, and to stop asking for a genre and
+// volume the hooks are going to ignore.
+const DELIVERY_INSTALLED = [
+  {
+    id: "launch",
+    name: "Just launch Claude Code",
+    desc: "Your installed hooks already handle the music"
+  },
+  {
+    id: "hooks",
+    name: "Reconfigure the hooks",
+    desc: "Pick a new genre, volume or reactive setting"
   }
 ];
 
@@ -231,13 +248,15 @@ async function promptInteractive({ hooksInstalled = false } = {}) {
   if (selectedTool.check === HOOK_TOOL) {
     const chosen = await selectMenu(
       hooksInstalled ? "Hooks are already installed. What now?" : "How should the music run?",
-      DELIVERY,
-      (item, num) => {
-        const label = item.id === "hooks" && hooksInstalled ? `${item.name} (reconfigure)` : item.name;
-        return `${num}. ${label} \x1b[90m— ${item.desc}\x1b[0m`;
-      }
+      hooksInstalled ? DELIVERY_INSTALLED : DELIVERY_FRESH,
+      (item, num) => `${num}. ${item.name} \x1b[90m— ${item.desc}\x1b[0m`
     );
     delivery = chosen.id;
+  }
+
+  // Nothing downstream reads a genre or volume on this path, so don't ask for one.
+  if (delivery === "launch") {
+    return { cmd: finalCmd, installHooks: false, reactive: false };
   }
 
   // 3. Select Music Genre

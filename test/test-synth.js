@@ -626,12 +626,21 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     assert.strictEqual(withWrapper.reactive, false, "reactive is meaningless without hooks");
     assert.strictEqual(wrapperRun.pending(), 1, "the wrapper branch must not ask the reactive question");
 
+    // With hooks installed, option 1 launches without asking anything else:
+    // a genre and volume the hooks ignore must not be collected at all.
+    const installedRun = drive(["1", "1", "1", "1", "1"]);
+    const withInstalled = await promptInteractive({ hooksInstalled: true });
+    assert.strictEqual(withInstalled.installHooks, false, "launching must not reinstall");
+    assert.strictEqual(withInstalled.genre, undefined, "no genre is collected when hooks own it");
+    assert.strictEqual(withInstalled.volume, undefined, "no volume is collected when hooks own it");
+    assert.strictEqual(installedRun.pending(), 3, "only the tool and the delivery question are asked");
+
     process.stdout.write = realWrite;
     console.log = realLog;
     process.env.PATH = realPath;
     Object.defineProperty(process, "stdin", realStdin);
     fs.rmSync(binDir, { recursive: true, force: true });
-    console.log("   ✓ Reactive is offered on the hooks branch and withheld from the wrapper one.");
+    console.log("   ✓ Reactive is offered on the hooks branch, withheld from the wrapper, and dead questions are skipped when hooks already own the music.");
   }
 
   console.log("\n\x1b[32mAll 28 tests passed successfully!\x1b[0m");
