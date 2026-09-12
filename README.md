@@ -23,6 +23,7 @@ AI coding agents take 15–45 seconds to reason, read files and write code. Star
 * 🛡️ **A grace window.** Fast commands stay 100% silent — music starts only past 1.5s (`--grace`).
 * 📈 **Escalating layers.** Tier 1 (0–15s) gentle intro → Tier 2 (15–45s) main groove → Tier 3 (45s+) deep focus. You can hear how deep into the task the agent is.
 * 🔔 **Outcome-aware chimes.** Ascending on success, a soft descending minor chord on failure, and **silence on `Ctrl+C`** — an abort is never reported as done.
+* ✋ **A "your turn" chime.** When Claude Code stops to ask permission (or an MCP server asks for input), the music pauses and a rising two-note chime asks for you; it picks back up once you've answered.
 * 🧮 **Honest exit codes.** Your command's status passes straight through (`130` on `Ctrl+C`), so `vibe claude && next-step` behaves exactly as it would without the wrapper.
 * 🌊 **Terminal title HUD.** A live ASCII wave and elapsed timer in the window title, where it can't corrupt a full-screen TUI.
 * 🔌 **Universal drop-in.** Hooks for **Claude Code, Codex, Cursor and Grok**; MCP for **Gemini CLI, Claude Desktop, Antigravity**; the wrapper (`vibe <command>`) for anything else.
@@ -187,13 +188,19 @@ Each tool spells the same three events its own way, and VibeAudio writes whichev
 | **Music starts** | `UserPromptSubmit` | `UserPromptSubmit` | `beforeSubmitPrompt` | `UserPromptSubmit` |
 | **Music stops + chime** | `Stop` | `Stop` | `stop` | `Stop` |
 | **Reactive** (opt-in) | `PreToolUse` | `PreToolUse` | `preToolUse` | `PreToolUse` |
+| **Music pauses + "your turn" chime** | `PermissionRequest`, `Elicitation` | — | — | — |
+| **Music resumes** | `PostToolUse`, `PostToolUseFailure`, `ElicitationResult` | — | — | — |
+| **Turn ends on an API error** (failure chime) | `StopFailure` | — | — | — |
+| **Session closes mid-turn** (silent) | `SessionEnd` | — | — | — |
 
 That's it — run your agent normally, with no `vibe` prefix.
 
-Three things differ per agent, and none of them need any action from you except the first:
+Five things differ per agent, and none of them need any action from you except the first:
 
 | | |
 | :--- | :--- |
+| **Only Claude Code tells you it's waiting on you** | Its `PermissionRequest` fires whenever a permission dialog opens — in the terminal, the desktop app and IDEs alike — and `Elicitation` whenever an MCP server asks you for input, so the music stops rather than sounding busy while the agent is stuck on you. It resumes once the thing you answered has run. The other agents have no equivalent event that's been verified, so they keep playing through a prompt. |
+| **Claude Code turns that never reach `Stop` still end the music** | An API error or rate limit ends the turn with `StopFailure` instead, which plays the failure chime. Interrupting (Esc, or the stop button in the desktop app) fires no hook at all, so the background player watches the session transcript for Claude Code's interrupt entry and stops silently within half a second — whether the agent was writing or running a tool. Closing the session mid-turn stops it too — but only if that session started the music, so closing an idle terminal never silences another one. |
 | **Codex asks you to trust the hook once** | Codex keeps a per-hook trust hash in `~/.codex/config.toml` and won't run a hook it hasn't been told to trust, so the install isn't live until you approve it the first time it fires. |
 | **Only Cursor can play the failure chime** | Its stop event reports whether the turn completed, aborted or errored. The others send no verdict, so a turn there always ends on the success chime — VibeAudio won't invent a failure the agent never claimed. |
 | **Grok gets a file of its own** | It reads every `*.json` in `~/.grok/hooks/`, so VibeAudio writes `vibeaudio.json` rather than merging into anyone else's — which makes uninstalling it a delete, and leaves no backup file behind. |
@@ -477,6 +484,10 @@ Hooks
     ✔ Stop
     ✔ UserPromptSubmit     jazz @ 25%, reactive
     ✔ PreToolUse
+    ✔ PermissionRequest
+    ✔ PostToolUse          jazz @ 25%, reactive
+    ✔ StopFailure
+    ✔ SessionEnd
   Codex        not installed — run: vibe --install-hooks
   Cursor       not installed — run: vibe --install-hooks
   Grok         not installed (not found on this machine)

@@ -27,6 +27,9 @@ const HOOK_ACTIONS = [
   "--hook-start",
   "--hook-stop",
   "--hook-tool",
+  "--hook-wait",
+  "--hook-resume",
+  "--hook-end",
   "--daemon"
 ];
 
@@ -383,6 +386,12 @@ function installHookTargets(ids, genre, volume, reactive) {
     if (reactive) {
       console.log(`  ${events.tool.padEnd(19)}→ intensity follows the tool in use (reactive mode)`);
     }
+    if (events.wait) {
+      console.log(`  ${events.wait[0].padEnd(19)}→ music pauses + "your turn" chime`);
+      console.log(`  ${events.resume[0].padEnd(19)}→ music resumes once you've answered`);
+      console.log(`  ${events.failure.padEnd(19)}→ music stops + failure chime (API error)`);
+      console.log(`  ${events.end.padEnd(19)}→ music stops if that session started it`);
+    }
     // Codex will not run a hook it has not been told to trust, so saying
     // "done" without this would be reporting an install that isn't live yet.
     if (note) console.log(`  \x1b[33m${note}\x1b[0m`);
@@ -531,13 +540,14 @@ function dirSize(dir) {
 
 function readVibeHooks(file, t = null) {
   const commands = t ? t.commands : (entry) => (entry.hooks || []).map((h) => h.command);
+  const { VIBE_HOOK_FLAG } = require("./hooks");
   try {
     const settings = JSON.parse(fs.readFileSync(file, "utf8"));
     const out = [];
     for (const [event, entries] of Object.entries(settings.hooks || {})) {
       for (const entry of entries || []) {
         for (const command of commands(entry)) {
-          if (/--hook-(start|stop|tool)\b/.test(command || "")) out.push({ event, command });
+          if (VIBE_HOOK_FLAG.test(command || "")) out.push({ event, command });
         }
       }
     }
@@ -612,7 +622,10 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, 
       return hooks.runDaemon(genre, volume, { reactive });
 
     case "hook-start":
-      hooks.hookStart(genre, volume, { reactive });
+      // The payload names the session (so SessionEnd can tell this session's
+      // music from another's) and the transcript (so an interrupt, which
+      // fires no hook, can still stop it).
+      hooks.readPayload((raw) => hooks.hookStart(genre, volume, { reactive, turn: hooks.newTurn(raw) }));
       return;
 
     case "hook-stop":
@@ -631,6 +644,18 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, 
 
     case "hook-tool":
       return hooks.hookTool();
+
+    case "hook-wait":
+      hooks.readPayload((raw) => hooks.hookWait(raw, { volume, chimeVolume, noChime }));
+      return;
+
+    case "hook-resume":
+      hooks.readPayload((raw) => hooks.hookResume(raw, genre, volume, { reactive }));
+      return;
+
+    case "hook-end":
+      hooks.readPayload((raw) => hooks.hookEnd(raw));
+      return;
 
     case "install-hooks":
       return installHookTargets(resolveTargets(tools), genre, volume, reactive);

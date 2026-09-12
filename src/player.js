@@ -16,7 +16,7 @@ const { generateZenLoop } = require("./synth/zen");
 const { generateDroneLoop } = require("./synth/drone");
 const { generatePianoLoop } = require("./synth/piano");
 const { generateJazzLoop } = require("./synth/jazz");
-const { generateSuccessChime, generateFailureChime } = require("./synth/chime");
+const { generateSuccessChime, generateFailureChime, generateAttentionChime } = require("./synth/chime");
 const { hashString } = require("./synth/generator");
 const pkg = require("../package.json");
 
@@ -444,14 +444,19 @@ function getAudioPath(genre, tier = 2, seed = projectSeed(), gain = 1) {
   return filePath;
 }
 
+const CHIMES = {
+  success: generateSuccessChime,
+  failure: generateFailureChime,
+  attention: generateAttentionChime
+};
+
 function getChimePath(outcome = "success", gain = 1) {
   ensureCacheDir();
-  const isFailure = outcome === "failure" || outcome === "error";
-  const name = `chime_${isFailure ? "failure" : "success"}${gainSuffix(gain)}.wav`;
-  const filePath = path.join(CACHE_DIR, name);
+  const kind = outcome === "error" ? "failure" : CHIMES[outcome] ? outcome : "success";
+  const filePath = path.join(CACHE_DIR, `chime_${kind}${gainSuffix(gain)}.wav`);
 
   if (!fs.existsSync(filePath)) {
-    writeCacheFileAtomic(filePath, applyGain(isFailure ? generateFailureChime() : generateSuccessChime(), gain));
+    writeCacheFileAtomic(filePath, applyGain(CHIMES[kind](), gain));
   }
   return filePath;
 }
