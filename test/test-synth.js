@@ -830,7 +830,28 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ Codex and Cursor hooks install, stay idempotent and uninstall cleanly.");
   }
 
-  console.log("\n\x1b[32mAll 33 tests passed successfully!\x1b[0m");
+  // --- 34. Shuffle stays musical ---
+  console.log("\n\x1b[1m[34] Shuffle never lands on the no-melody genre\x1b[0m");
+  {
+    const { resolveGenre: resolve, SHUFFLE_GENRES, AVAILABLE_GENRES: ALL } = require("../src/player");
+
+    assert.ok(!SHUFFLE_GENRES.includes("drone"), "drone must be out of the shuffle pool");
+    assert.strictEqual(SHUFFLE_GENRES.length, ALL.length - 1, "shuffle must drop exactly one genre");
+
+    const seen = new Set();
+    for (let i = 0; i < 4000; i++) seen.add(resolve("random"));
+    assert.ok(!seen.has("drone"), "random must never resolve to drone");
+    // 4000 draws from 6 options: a genre missing here means the pool is wrong,
+    // not that the dice were unkind (P(miss) is about 6 * 0.833^4000).
+    assert.strictEqual(seen.size, SHUFFLE_GENRES.length, "shuffle must still reach every other genre");
+
+    for (const name of ["drone", "noise", "focus"]) {
+      assert.strictEqual(resolve(name), "drone", `${name} must still reach drone on purpose`);
+    }
+    console.log("   ✓ random stays musical; drone remains reachable by name and alias.");
+  }
+
+  console.log("\n\x1b[32mAll 34 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);

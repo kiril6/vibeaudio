@@ -392,7 +392,12 @@ function printStatus() {
     if (installed.length) hooked.add(id);
 
     if (!installed.length) {
-      const why = detected.includes(id) ? `${off("not installed")} — run: vibe --install-hooks` : off("not on this machine");
+      // "not on this machine" alone is a dead end for someone who has the tool
+      // but has never launched it, so every line still says "not installed"
+      // and only the reason for skipping it varies.
+      const why = detected.includes(id)
+        ? `${off("not installed")} — run: vibe --install-hooks`
+        : `${off("not installed")} ${off("(not found on this machine)")}`;
       console.log(`  ${t.name.padEnd(13)}${why}`);
       continue;
     }

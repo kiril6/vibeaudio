@@ -23,6 +23,14 @@ const CACHE_ROOT = path.join(os.homedir(), ".vibeaudio", "cache");
 const CACHE_DIR = path.join(CACHE_ROOT, `v${pkg.version}`);
 const AVAILABLE_GENRES = ["lofi", "synthwave", "8bit", "electronic", "jazz", "zen", "drone"];
 
+/**
+ * What `random` may land on. Drone is deliberately excluded: it is the "no
+ * melody at all" option people choose on purpose, not a mood in the same
+ * series as the others. Rolling it by chance reads as broken audio rather
+ * than as variety, so it stays opt-in by name (or via the noise/focus alias).
+ */
+const SHUFFLE_GENRES = AVAILABLE_GENRES.filter((g) => g !== "drone");
+
 // Next loop starts slightly before the current one ends, so the per-loop
 // boundary fades crossfade instead of leaving a process-spawn gap.
 const LOOP_OVERLAP_MS = 120;
@@ -165,7 +173,7 @@ function normalizeVolume(raw, fallback = 0.4) {
 function resolveGenre(genre) {
   const normalized = (genre || "lofi").toLowerCase();
   if (normalized === "random" || normalized === "shuffle") {
-    return AVAILABLE_GENRES[Math.floor(Math.random() * AVAILABLE_GENRES.length)];
+    return SHUFFLE_GENRES[Math.floor(Math.random() * SHUFFLE_GENRES.length)];
   }
   return GENRE_ALIASES[normalized] || normalized;
 }
@@ -482,6 +490,7 @@ module.exports = {
   projectSeed,
   wavDurationMs,
   AVAILABLE_GENRES,
+  SHUFFLE_GENRES,
   CACHE_ROOT,
   CACHE_DIR
 };

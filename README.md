@@ -341,7 +341,7 @@ Playback stops automatically if the desktop client disconnects, and caps out aft
 
 ## 🎨 Music Genres
 
-VibeAudio includes **6 procedural music styles** synthesized entirely in code:
+VibeAudio includes **7 procedural music styles** synthesized entirely in code:
 
 | Genre | Style | Vibe |
 | :--- | :--- | :--- |
@@ -352,11 +352,13 @@ VibeAudio includes **6 procedural music styles** synthesized entirely in code:
 | `jazz` | 🎷 **Midnight Jazz** | Classic ii-V-I jazz piano chords & walking upright bass |
 | `zen` | 🎋 **Zen Ambient** | Meditative Tibetan singing bowls & celestial drone (zero rhythm) |
 | `drone` | 🌫️ **Deep Drone** | A held tone and filtered noise — **no melody at all** |
-| `random` | 🎲 **Shuffle Mode** | Picks a surprise genre for the run |
+| `random` | 🎲 **Shuffle Mode** | Picks a surprise genre for the run — **never `drone`** |
 
 Aliases also work: `chiptune` → `8bit`, `downtempo` → `electronic`, `bossa` → `jazz`, `ambient` → `zen`, `noise`/`focus` → `drone`.
 
 > **If any melody distracts you, use `drone`.** Every other genre plays something — notes, a progression, a bass line — and some people can't read while that happens. `drone` holds one low tone under a slow-breathing noise bed and never moves: closer to a fan or rainfall than to music. Tiers add weight rather than movement.
+>
+> For the same reason **`random` never picks it**. Shuffle is for a surprise *mood*, and drone isn't one — landing on a fan noise when you asked for variety reads as broken audio, not as range. Ask for it by name (or `noise` / `focus`) when you want it.
 
 ### Usage Examples:
 ```bash
