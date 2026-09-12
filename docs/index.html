@@ -224,6 +224,10 @@ section h2{ font-size:30px; text-shadow:0 0 18px rgba(0,229,255,.18); }
 .how-col .tag{ display:inline-block; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--pink); margin-bottom:12px; text-shadow:0 0 8px rgba(255,46,151,.5); }
 .how-col p{ color:var(--ink-dim); font-size:13px; }
 
+.shield-badges{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:26px; }
+.shield-badges a{ line-height:0; }
+.shield-badges img{ display:block; height:20px; border-radius:3px; }
+
 /* ---------- Works with ---------- */
 .badge-row{ display:flex; flex-wrap:wrap; gap:10px; margin-top:32px; }
 .badge{ border:1px solid rgba(168,85,247,.4); background:rgba(168,85,247,.06); color:var(--ink-dim); font-size:13px; padding:9px 16px; border-radius:20px; transition:box-shadow .2s, border-color .2s; }
@@ -260,6 +264,13 @@ footer a{ color:var(--ink-dim); }
 <header class="hero">
   <div class="wrap hero-grid">
     <div>
+      <div class="shield-badges">
+        <a href="https://github.com/kiril6/vibeaudio/tags"><img src="https://img.shields.io/github/v/tag/kiril6/vibeaudio?label=release" alt="Latest release"></a>
+        <img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT">
+        <img src="https://img.shields.io/badge/node-%E2%89%A518-brightgreen" alt="Node ≥18">
+        <img src="https://img.shields.io/badge/deps-zero-blue" alt="Zero dependencies">
+        <img src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-blue" alt="Platforms">
+      </div>
       <span class="eyebrow">procedural · zero dependencies</span>
       <h1>Focus music<br>while your <em>AI</em> codes.</h1>
       <p class="sub">Every note synthesized on the spot — no MP3s, no audio assets. Your project gets its own arrangement, tiers escalate as the agent digs in, and a chime tells you when it's your turn again.</p>
