@@ -395,6 +395,8 @@ export VIBE_GENRE=jazz     # or synthwave, 8bit, electronic, zen, piano, drone, 
 | `--preview <genre>` | Play one loop of a genre and exit | — |
 | `--status` | Show what's installed, running and detected, then exit | — |
 | `--stop` | Stop the background player, then exit | — |
+| `--mute` | Silence everything until you unmute, then exit | — |
+| `--unmute` | Resume normal playback, then exit | — |
 | `--clear-cache` | Delete all cached audio, then exit | — |
 | `--mcp` | Run as an MCP stdio server for desktop apps | — |
 | `--install-hooks` | Wire music into your agent's hooks (no wrapper needed) | — |
@@ -416,7 +418,18 @@ export VIBE_SEED=7              # Same arrangement everywhere, ignoring the dire
 export VIBE_DISABLE=1           # Mute, without uninstalling anything
 ```
 
-**`VIBE_DISABLE=1` is the quiet switch for a meeting or a screen share.** It silences automatic playback everywhere — hooks, wrapper and MCP — while leaving your hooks and settings exactly as they are, so there's nothing to put back afterwards. It's read at playback time, so it takes effect on your next prompt. `--preview` still plays: that one is an explicit request to hear something.
+**`VIBE_DISABLE=1` is for a shell you always want quiet** — a CI job, a shared machine, a terminal profile you keep silent. It's read at playback time and covers hooks, wrapper and MCP alike.
+
+**For a call that's ringing right now, use `vibe --mute` instead.** An environment variable can't help there: a hook runs as a child of your agent and inherits the environment the agent had *when it launched*, so exporting `VIBE_DISABLE` in another terminal reaches nothing already running — and restarting your agent is exactly what you can't do mid-call.
+
+```bash
+vibe --mute      # silent immediately, and stays silent
+vibe --unmute    # music returns on your next prompt
+```
+
+`--mute` writes a flag file, which crosses process boundaries where a variable cannot, and stops whatever is playing on the spot. Your hooks and settings are untouched, so there's nothing to put back afterwards — and `vibe --status` shows the mute and when you set it, so a forgotten one can't quietly cost you a day of silence.
+
+Either way, `--preview` still plays: that one is an explicit request to hear something.
 
 ---
 

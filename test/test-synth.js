@@ -968,6 +968,49 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ Editing a generator invalidates the cache on its own.");
   }
 
+  // --- 34e. The mute switch crosses process boundaries ---
+  console.log("\n\x1b[1m[34e] Mute survives where an env var cannot\x1b[0m");
+  {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-mute-"));
+    const run = (args, env = {}) =>
+      new Promise((resolve) => {
+        const child = spawn(process.execPath, [CLI, ...args], {
+          env: { ...process.env, HOME: home, USERPROFILE: home, VIBE_DISABLE: "", ...env },
+          stdio: ["ignore", "pipe", "pipe"]
+        });
+        let out = "";
+        child.stdout.on("data", (c) => (out += c));
+        child.stderr.on("data", (c) => (out += c));
+        child.on("close", (code) => resolve({ code, out }));
+      });
+
+    const muted = await run(["--mute"]);
+    assert.strictEqual(muted.code, 0, "--mute must exit 0");
+    assert.ok(fs.existsSync(path.join(home, ".vibeaudio", "muted")), "--mute must leave a flag a later process can see");
+
+    // The whole point: a hook inherits the agent's environment from launch
+    // time, so a variable set afterwards never reaches it. A file does.
+    const started = await run(["--hook-start", "--genre", "zen", "--volume", "5"]);
+    assert.strictEqual(started.code, 0, "a muted hook-start must still exit cleanly");
+    await new Promise((r) => setTimeout(r, 400));
+    const pidFile = path.join(home, ".vibeaudio", "daemon.pid");
+    if (fs.existsSync(pidFile)) {
+      const pid = parseInt(fs.readFileSync(pidFile, "utf8").trim(), 10);
+      let alive = true;
+      try { process.kill(pid, 0); } catch (e) { alive = false; }
+      assert.ok(!alive, "no daemon may survive while muted");
+    }
+
+    assert.ok(/Muted since/.test((await run(["--status"])).out), "--status must say it is muted");
+
+    const unmuted = await run(["--unmute"]);
+    assert.strictEqual(unmuted.code, 0, "--unmute must exit 0");
+    assert.ok(!fs.existsSync(path.join(home, ".vibeaudio", "muted")), "--unmute must clear the flag");
+
+    fs.rmSync(home, { recursive: true, force: true });
+    console.log("   ✓ Mute is a file, so it reaches processes an env var never could.");
+  }
+
   // --- 35. Sparse piano ---
   console.log("\n\x1b[1m[35] Sparse Piano Generator\x1b[0m");
   {

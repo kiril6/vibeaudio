@@ -289,9 +289,41 @@ function pruneSeedDirs(keep = 3) {
  * the next prompt. It deliberately does not gag `--preview`: that path spawns
  * the player directly and is an explicit request to hear something.
  */
+/**
+ * The mute switch has to be a file, not just an env var.
+ *
+ * A hook runs as a child of the agent and inherits the environment the agent
+ * had when it launched, so `export VIBE_DISABLE=1` in some other terminal
+ * reaches nothing already running - which is exactly the moment you need it,
+ * when a call is ringing and restarting the agent is not an option. A file
+ * crosses that boundary; an environment variable cannot.
+ */
+const MUTE_FILE = path.join(os.homedir(), ".vibeaudio", "muted");
+
 function playbackDisabled() {
   const raw = (process.env.VIBE_DISABLE || "").trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+  if (raw === "1" || raw === "true" || raw === "yes" || raw === "on") return true;
+  // Checked per playback rather than cached, so unmuting lands on the next
+  // loop or prompt without restarting anything. One stat per ~7s loop.
+  return fs.existsSync(MUTE_FILE);
+}
+
+function setMuted(muted) {
+  if (muted) {
+    fs.mkdirSync(path.dirname(MUTE_FILE), { recursive: true });
+    fs.writeFileSync(MUTE_FILE, `${new Date().toISOString()}\n`);
+  } else {
+    fs.rmSync(MUTE_FILE, { force: true });
+  }
+  return muted;
+}
+
+function mutedSince() {
+  try {
+    return fs.readFileSync(MUTE_FILE, "utf8").trim();
+  } catch (e) {
+    return null;
+  }
 }
 
 function bakedGain(backend, volume) {
@@ -437,6 +469,14 @@ class AudioPlayer {
   playLoop() {
     if (!this.isPlaying) return;
 
+    // Muting mid-run has to reach a wrapper too, which has no daemon for
+    // `--mute` to stop. Silence starts at this loop boundary rather than
+    // cutting the current bar off.
+    if (playbackDisabled()) {
+      this.stop({ playChime: false });
+      return;
+    }
+
     // Adaptive Time Escalation:
     // 0 - 15s  -> Tier 1 (Ambient intro / gentle pads)
     // 15 - 45s -> Tier 2 (Main progression & bassline)
@@ -528,6 +568,9 @@ module.exports = {
   AVAILABLE_GENRES,
   SHUFFLE_GENRES,
   synthFingerprint,
+  setMuted,
+  mutedSince,
+  MUTE_FILE,
   CACHE_ROOT,
   CACHE_DIR
 };

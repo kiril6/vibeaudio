@@ -63,6 +63,8 @@ Procedural focus music while your AI coding tools think.
       --preview <genre>        Play one loop of a genre and exit
       --status                 Show what is installed, running and detected, then exit
       --stop                   Stop the background player, then exit
+      --mute                   Silence everything until you unmute (for a call), then exit
+      --unmute                 Resume normal playback, then exit
       --clear-cache            Delete cached audio, then exit
       --mcp                    Run as Model Context Protocol (MCP) server for Desktop apps
       --install-hooks          Wire music into your agent's hooks (no wrapper needed)
@@ -98,6 +100,7 @@ function parseArgs(argv) {
   let clearCacheFlag = false;
   let statusFlag = false;
   let stopFlag = false;
+  let muteFlag = null;
   let hookAction = null;
   let reactive = false;
   let tools = null;
@@ -185,6 +188,12 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--mute" || arg === "--unmute") {
+      muteFlag = arg === "--mute";
+      i += 1;
+      continue;
+    }
+
     if (HOOK_ACTIONS.includes(arg)) {
       hookAction = arg.slice(2);
       i += 1;
@@ -257,6 +266,7 @@ function parseArgs(argv) {
     clearCache: clearCacheFlag,
     status: statusFlag,
     stop: stopFlag,
+    mute: muteFlag,
     hookAction,
     reactive,
     tools,
@@ -370,7 +380,10 @@ function printStatus() {
 
   console.log(`\n\x1b[1m\x1b[36mVibeAudio\x1b[0m v${pkg.version}\n`);
 
-  if (playbackDisabled()) {
+  const since = require("./player").mutedSince();
+  if (since !== null) {
+    console.log(`\x1b[33m🔇 Muted since ${since}\x1b[0m — nothing will play until: vibe --unmute\n`);
+  } else if (playbackDisabled()) {
     console.log(`\x1b[33m⏸ Muted by VIBE_DISABLE=${process.env.VIBE_DISABLE}\x1b[0m — automatic playback is off (--preview still works).\n`);
   }
 
@@ -711,6 +724,7 @@ async function run() {
     clearCache: shouldClear,
     status: showStatus,
     stop: shouldStop,
+    mute: muteChange,
     hookAction,
     reactive,
     tools,
@@ -731,6 +745,23 @@ async function run() {
     console.error(
       "\x1b[33m[vibeaudio] --reactive only applies to --install-hooks; ignoring it here.\x1b[0m"
     );
+  }
+
+  if (muteChange !== null) {
+    const { setMuted } = require("./player");
+    setMuted(muteChange);
+
+    if (muteChange) {
+      // Muting has to silence what is playing right now, not just the next
+      // prompt - the whole point is that a call is already ringing.
+      const stopped = require("./hooks").stopDaemon();
+      console.log(`\x1b[33m🔇 Muted.\x1b[0m Hooks and settings are untouched; nothing will play until you unmute.`);
+      if (stopped) console.log(`  Stopped the player that was running.`);
+      console.log(`  Unmute with: vibe --unmute\n`);
+    } else {
+      console.log(`\x1b[32m🔊 Unmuted.\x1b[0m Music returns on your next prompt.\n`);
+    }
+    return;
   }
 
   if (shouldStop) {
