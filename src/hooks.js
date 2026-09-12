@@ -427,9 +427,18 @@ function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = fa
   // Only worth backing up a file that holds someone else's config. A dedicated
   // target's file is ours alone, so a backup of it would just be a copy of our
   // own last install, left behind after the uninstall deletes the original.
+  //
+  // Written once and never overwritten: the second --install-hooks reads a
+  // file that already contains our entries, so re-backing up would replace the
+  // user's actual pre-VibeAudio config with a copy of our own last install -
+  // while uninstall goes on calling it "your pre-VibeAudio config backup".
+  // The first one is the only one that is true.
   if (raw !== null && !t.dedicated) {
-    backup = `${file}.vibeaudio.bak`;
-    fs.writeFileSync(backup, raw);
+    const backupFile = `${file}.vibeaudio.bak`;
+    if (!fs.existsSync(backupFile)) {
+      fs.writeFileSync(backupFile, raw);
+      backup = backupFile;
+    }
   }
 
   const ev = t.events;

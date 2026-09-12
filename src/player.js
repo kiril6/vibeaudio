@@ -398,6 +398,25 @@ function applyGain(wav, gain) {
   return wav;
 }
 
+/**
+ * A cache file must never be visible half-written. `existsSync` goes true the
+ * instant the file is created, so a plain writeFileSync of a ~1 MB loop leaves
+ * a window in which another process - a second agent's daemon, a wrapper run,
+ * the MCP server - sees the path, spawns the backend at it and plays a
+ * truncated WAV. Writing beside it and renaming closes that window: rename is
+ * atomic within a directory, so the path either isn't there or is complete.
+ */
+function writeCacheFileAtomic(filePath, buffer) {
+  const tmp = `${filePath}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, buffer);
+    fs.renameSync(tmp, filePath);
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
+}
+
 function getAudioPath(genre, tier = 2, seed = projectSeed(), gain = 1) {
   ensureCacheDir();
   const normalizedGenre = resolveGenre(genre);
@@ -408,7 +427,7 @@ function getAudioPath(genre, tier = 2, seed = projectSeed(), gain = 1) {
 
   if (!fs.existsSync(filePath)) {
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(filePath, applyGain(generateLoop(normalizedGenre, safeTier, seed >>> 0), gain));
+    writeCacheFileAtomic(filePath, applyGain(generateLoop(normalizedGenre, safeTier, seed >>> 0), gain));
     pruneSeedDirs();
   }
 
@@ -422,7 +441,7 @@ function getChimePath(outcome = "success", gain = 1) {
   const filePath = path.join(CACHE_DIR, name);
 
   if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, applyGain(isFailure ? generateFailureChime() : generateSuccessChime(), gain));
+    writeCacheFileAtomic(filePath, applyGain(isFailure ? generateFailureChime() : generateSuccessChime(), gain));
   }
   return filePath;
 }

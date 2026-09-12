@@ -47,7 +47,10 @@ class TerminalHud {
     }, 120);
   }
 
-  stop({ outcome = "success", code = 0, interrupted = false } = {}) {
+  // `chimed` is what actually played, not what the outcome was: --no-chime and
+  // a mute both leave the sound off, and announcing a chime nobody heard sends
+  // the user looking for a broken speaker.
+  stop({ outcome = "success", code = 0, interrupted = false, chimed = true } = {}) {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
@@ -69,9 +72,11 @@ class TerminalHud {
     if (interrupted) {
       process.stdout.write(`\n\x1b[90m■ [VibeAudio] Interrupted after ${timeStr}s\x1b[0m\n`);
     } else if (code === 0) {
-      process.stdout.write(`\n\x1b[32m✔ [VibeAudio] Done in ${timeStr}s • Ascending resolution chime\x1b[0m\n`);
+      const tail = chimed ? " • Ascending resolution chime" : "";
+      process.stdout.write(`\n\x1b[32m✔ [VibeAudio] Done in ${timeStr}s${tail}\x1b[0m\n`);
     } else {
-      process.stdout.write(`\n\x1b[33m✖ [VibeAudio] Command exited with code ${code} in ${timeStr}s • Descending minor tone\x1b[0m\n`);
+      const tail = chimed ? " • Descending minor tone" : "";
+      process.stdout.write(`\n\x1b[33m✖ [VibeAudio] Command exited with code ${code} in ${timeStr}s${tail}\x1b[0m\n`);
     }
   }
 }

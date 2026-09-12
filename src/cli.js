@@ -51,8 +51,8 @@ Procedural focus music while your AI coding tools think.
 
 \x1b[1mOPTIONS:\x1b[0m
   -g, --genre <name>           Select genre: lofi (default), synthwave, 8bit, electronic, jazz, zen, piano, drone, random
-  -v, --volume <0-100>         Set playback volume (default: 40)
-  -cv, --chime-volume <0-100>   Set independent completion chime volume
+  -v, --volume <5-100>         Set playback volume (default: 40)
+  -cv, --chime-volume <5-100>   Set independent completion chime volume
       --grace <ms>             Silence window before music starts, in ms (default: ${DEFAULT_GRACE_PERIOD_MS})
       --seed <n>               Force a specific arrangement (default: derived from the project directory)
       --whisper                Preset: 15% volume (late night / headphones)
@@ -76,13 +76,28 @@ Procedural focus music while your AI coding tools think.
 
 \x1b[1mENVIRONMENT:\x1b[0m
   VIBE_GENRE=<name>            Set persistent default genre (e.g. export VIBE_GENRE=jazz)
-  VIBE_VOLUME=<0-100>          Set persistent default volume (e.g. export VIBE_VOLUME=25)
-  VIBE_CHIME_VOLUME=<0-100>    Set persistent chime volume (e.g. export VIBE_CHIME_VOLUME=60)
+  VIBE_VOLUME=<5-100>          Set persistent default volume (e.g. export VIBE_VOLUME=25)
+  VIBE_CHIME_VOLUME=<5-100>    Set persistent chime volume (e.g. export VIBE_CHIME_VOLUME=60)
   VIBE_GRACE_MS=<ms>           Set persistent grace window in ms (e.g. export VIBE_GRACE_MS=3000)
   VIBE_SEED=<n>                Pin the arrangement instead of deriving it from the directory
   VIBE_DISABLE=1               Mute automatic playback without uninstalling anything
 `);
 }
+
+/**
+ * Flags that consume the next argument. Without this list a trailing
+ * `vibe --genre` falls through every branch below and lands in cmdArgs, so the
+ * wrapper tries to spawn a program called `--genre` and reports ENOENT on it -
+ * the one error message that says nothing about the actual mistake.
+ */
+const VALUE_FLAGS = new Set([
+  "-g", "--genre",
+  "-v", "--volume",
+  "-cv", "--chime-volume",
+  "--grace",
+  "--seed",
+  "--tools"
+]);
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -103,6 +118,7 @@ function parseArgs(argv) {
   let muteFlag = null;
   let muteMinutes = null;
   let hookAction = null;
+  let mcp = false;
   let reactive = false;
   let tools = null;
   let cmdArgs = [];
@@ -110,6 +126,11 @@ function parseArgs(argv) {
   let i = 0;
   while (i < args.length) {
     const arg = args[i];
+
+    if (VALUE_FLAGS.has(arg) && i + 1 >= args.length) {
+      console.error(`\x1b[31m[vibeaudio] ${arg} needs a value.\x1b[0m Run vibe --help for the options.`);
+      process.exit(1);
+    }
 
     if (arg === "-h" || arg === "--help") {
       printHelp();
@@ -201,6 +222,12 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--mcp") {
+      mcp = true;
+      i += 1;
+      continue;
+    }
+
     if (HOOK_ACTIONS.includes(arg)) {
       hookAction = arg.slice(2);
       i += 1;
@@ -276,6 +303,7 @@ function parseArgs(argv) {
     mute: muteFlag,
     muteMinutes,
     hookAction,
+    mcp,
     reactive,
     tools,
     cmdArgs
@@ -294,8 +322,15 @@ function resolveTargets(explicit) {
   const hooks = require("./hooks");
   const known = Object.keys(hooks.TARGETS);
 
-  if (explicit) {
+  // Absent is null; anything else was typed, empty string included. Testing
+  // truthiness instead let `--tools ""` fall through to auto-detection and
+  // install for every agent on the machine - the opposite of naming one.
+  if (explicit !== null && explicit !== undefined) {
     const ids = explicit.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    // `--tools ""` or `--tools ,` names nothing, and silently installing
+    // everywhere - or reporting success over an empty loop - is worse than
+    // saying so.
+    if (!ids.length) throw new Error(`--tools named no agent — expected one of: ${known.join(", ")}`);
     const bad = ids.filter((id) => !known.includes(id));
     if (bad.length) throw new Error(`unknown --tools value '${bad.join(", ")}' — expected: ${known.join(", ")}`);
     return ids;
@@ -674,7 +709,7 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRA
     // A deliberate abort is not an outcome worth chiming about.
     const shouldChime = musicStarted && !noChime && !interrupted && elapsed > grace;
 
-    if (hud) hud.stop({ outcome, code, interrupted });
+    if (hud) hud.stop({ outcome, code, interrupted, chimed: shouldChime });
     player.stop({
       playChime: shouldChime,
       outcome,
@@ -717,11 +752,6 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRA
 }
 
 async function run() {
-  if (process.argv.includes("--mcp")) {
-    const { startMcpServer } = require("./mcp");
-    return startMcpServer();
-  }
-
   const {
     genre,
     volume,
@@ -736,10 +766,19 @@ async function run() {
     mute: muteChange,
     muteMinutes,
     hookAction,
+    mcp,
     reactive,
     tools,
     cmdArgs
   } = parseArgs(process.argv);
+
+  // Parsed as a flag rather than matched anywhere in argv: the loop stops at
+  // the first non-flag, so a `--mcp` belonging to the wrapped command
+  // (`vibe npm test -- --mcp`) stays the child's and does not start a server.
+  if (mcp) {
+    const { startMcpServer } = require("./mcp");
+    return startMcpServer();
+  }
 
   if (hookAction) {
     try {
@@ -805,32 +844,36 @@ async function run() {
   }
 
   if (cmdArgs.length === 0) {
-    if (process.stdin.isTTY) {
-      try {
-        const selection = await promptInteractive({
-          hooksInstalled: hooksAlreadyCover(["claude"])
-        });
-        const chosenVol = selection.volume !== undefined ? selection.volume : volume;
-
-        if (selection.installHooks) {
-          // The install can refuse (npx checkout) or abort (malformed
-          // settings). Either way, say so and still launch the tool the user
-          // asked for - they came here to start an agent, not to configure.
-          try {
-            installHookTargets([selection.hookTarget], selection.genre, chosenVol, selection.reactive);
-          } catch (err) {
-            console.error(`\x1b[31m[vibeaudio] ${err.message}\x1b[0m`);
-          }
-        }
-
-        return executeCommand(selection.cmd, selection.genre, chosenVol, chimeVolume, grace, noChime, noHud);
-      } catch (e) {
-        process.exit(0);
-      }
-    } else {
+    if (!process.stdin.isTTY) {
       printHelp();
       process.exit(1);
     }
+
+    // Only the menu itself exits quietly - abandoning it is a normal way to
+    // leave. Wrapping the launch too turned every real failure below into a
+    // silent exit 0, which is the worst possible thing for a wrapper to do:
+    // `vibe && deploy` would chain on a run that never happened.
+    let selection;
+    try {
+      selection = await promptInteractive({ hooksInstalled: hooksAlreadyCover(["claude"]) });
+    } catch (e) {
+      process.exit(0);
+    }
+
+    const chosenVol = selection.volume !== undefined ? selection.volume : volume;
+
+    if (selection.installHooks) {
+      // The install can refuse (npx checkout) or abort (malformed settings).
+      // Either way, say so and still launch the tool the user asked for -
+      // they came here to start an agent, not to configure one.
+      try {
+        installHookTargets([selection.hookTarget], selection.genre, chosenVol, selection.reactive);
+      } catch (err) {
+        console.error(`\x1b[31m[vibeaudio] ${err.message}\x1b[0m`);
+      }
+    }
+
+    return executeCommand(selection.cmd, selection.genre, chosenVol, chimeVolume, grace, noChime, noHud);
   }
 
   executeCommand(cmdArgs, genre, volume, chimeVolume, grace, noChime, noHud);

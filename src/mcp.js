@@ -6,7 +6,7 @@
  */
 
 const readline = require("readline");
-const { AudioPlayer, AVAILABLE_GENRES, normalizeVolume, playbackDisabled } = require("./player");
+const { AudioPlayer, AVAILABLE_GENRES, normalizeVolume, playbackDisabled, isKnownGenre } = require("./player");
 const pkg = require("../package.json");
 
 // A desktop client that crashes never sends vibe_stop, so playback needs its
@@ -126,10 +126,17 @@ function handleMessage(player, msg) {
   }
 
   if (method === "tools/call") {
-    const { name, arguments: args = {} } = params;
+    // A request with no params used to throw here, and the only thing that
+    // caught it wrote to stderr - leaving the client waiting on a response
+    // that never came. Every request must leave with an answer.
+    const { name, arguments: args = {} } = params || {};
 
     if (name === "vibe_play") {
-      const genre = args.genre || process.env.VIBE_GENRE || "lofi";
+      const requested = args.genre || process.env.VIBE_GENRE || "lofi";
+      // An unknown genre already fell back to lofi inside the generator, but
+      // player.genre kept the name nobody implements - so the model told the
+      // user it was playing something that does not exist.
+      const genre = isKnownGenre(requested) ? requested : "lofi";
       // Both the tool argument and the env default go through the same parser
       // as the CLI, so a mistyped VIBE_VOLUME falls back instead of reaching
       // the player as NaN.
@@ -139,8 +146,11 @@ function handleMessage(player, msg) {
       // start() returns false for three unrelated reasons, and the model
       // relays whatever we say here to the user. Reporting a deliberate mute
       // as a missing audio player sends them debugging their sound stack.
+      const fallbackNote = genre === requested
+        ? ""
+        : ` (requested genre '${requested}' is not one of ${AVAILABLE_GENRES.join(", ")}, random)`;
       const text = started
-        ? `Started playing ${player.genre} procedural focus music at ${Math.round(volume * 100)}% volume.`
+        ? `Started playing ${player.genre} procedural focus music at ${Math.round(volume * 100)}% volume.${fallbackNote}`
         : player.isPlaying
           ? `Already playing ${player.genre} at ${Math.round(player.volume * 100)}% volume — nothing changed.`
           : playbackDisabled()
@@ -238,15 +248,28 @@ function startMcpServer() {
     const trimmed = line.trim();
     if (!trimmed) return;
 
+    let msg;
     try {
-      const msg = JSON.parse(trimmed);
-      const response = handleMessage(player, msg);
-      if (response) {
-        process.stdout.write(JSON.stringify(response) + "\n");
-      }
+      msg = JSON.parse(trimmed);
     } catch (err) {
+      // Unparseable: there is no id to answer to, so stderr is all we have.
       process.stderr.write(`[vibeaudio] Failed to parse JSON-RPC line: ${err.message}\n`);
+      return;
     }
+
+    let response;
+    try {
+      response = handleMessage(player, msg);
+    } catch (err) {
+      process.stderr.write(`[vibeaudio] Handler error: ${err.message}\n`);
+      // A request (one with an id) must always get a reply. Swallowing the
+      // throw left the client blocked on a response that never came.
+      if (msg && msg.id !== undefined && msg.id !== null) {
+        response = { jsonrpc: "2.0", id: msg.id, error: { code: -32603, message: `Internal error: ${err.message}` } };
+      }
+    }
+
+    if (response) process.stdout.write(JSON.stringify(response) + "\n");
   });
 
   // Client disconnected - never leave audio looping behind.
