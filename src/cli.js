@@ -60,6 +60,8 @@ Procedural focus music while your AI coding tools think.
       --no-chime               Disable the resolution completion chime
       --no-hud                 Disable terminal window/tab title animation
       --preview <genre>        Play one loop of a genre and exit
+      --status                 Show what is installed, running and detected, then exit
+      --stop                   Stop the background player, then exit
       --clear-cache            Delete cached audio, then exit
       --mcp                    Run as Model Context Protocol (MCP) server for Desktop apps
       --install-hooks          Wire music into Claude Code hooks (no wrapper needed)
@@ -74,6 +76,7 @@ Procedural focus music while your AI coding tools think.
   VIBE_CHIME_VOLUME=<0-100>    Set persistent chime volume (e.g. export VIBE_CHIME_VOLUME=60)
   VIBE_GRACE_MS=<ms>           Set persistent grace window in ms (e.g. export VIBE_GRACE_MS=3000)
   VIBE_SEED=<n>                Pin the arrangement instead of deriving it from the directory
+  VIBE_DISABLE=1               Mute automatic playback without uninstalling anything
 `);
 }
 
@@ -91,6 +94,8 @@ function parseArgs(argv) {
   let noHud = false;
   let preview = null;
   let clearCacheFlag = false;
+  let statusFlag = false;
+  let stopFlag = false;
   let hookAction = null;
   let reactive = false;
   let cmdArgs = [];
@@ -165,6 +170,18 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--status") {
+      statusFlag = true;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--stop") {
+      stopFlag = true;
+      i += 1;
+      continue;
+    }
+
     if (HOOK_ACTIONS.includes(arg)) {
       hookAction = arg.slice(2);
       i += 1;
@@ -229,6 +246,8 @@ function parseArgs(argv) {
     noHud,
     preview,
     clearCache: clearCacheFlag,
+    status: statusFlag,
+    stop: stopFlag,
     hookAction,
     reactive,
     cmdArgs
@@ -255,6 +274,134 @@ function installHooksFromMenu(genre, volume, reactive) {
   }
   console.log(`  Takes effect on your next prompt - no restart needed.`);
   console.log(`  Remove them any time with: vibe --uninstall-hooks\n`);
+}
+
+/**
+ * One place to answer "why am I hearing nothing / what is this configured to
+ * do". Every line is read from live state rather than assumed, because the
+ * usual cause of confusion is a mismatch between config and what is running.
+ */
+function printStatus() {
+  const hooks = require("./hooks");
+  const { playbackDisabled, detectPlayer: detect, CACHE_ROOT } = require("./player");
+  const on = (s) => `\x1b[32m${s}\x1b[0m`;
+  const off = (s) => `\x1b[90m${s}\x1b[0m`;
+
+  console.log(`\n\x1b[1m\x1b[36mVibeAudio\x1b[0m v${pkg.version}\n`);
+
+  if (playbackDisabled()) {
+    console.log(`\x1b[33m⏸ Muted by VIBE_DISABLE=${process.env.VIBE_DISABLE}\x1b[0m — automatic playback is off (--preview still works).\n`);
+  }
+
+  // Audio backend
+  const backend = detect();
+  console.log(`\x1b[1mAudio\x1b[0m`);
+  console.log(backend
+    ? `  player    ${on(backend.cmd)}${backend.volume ? "" : off("  (no volume support — gain is baked into the file)")}`
+    : `  player    \x1b[31mnone found — VibeAudio runs silently\x1b[0m`);
+  console.log(`  cache     ${dirSize(CACHE_ROOT)}`);
+
+  // Claude Code hooks
+  console.log(`\n\x1b[1mClaude Code hooks\x1b[0m`);
+  const installed = readVibeHooks(hooks.settingsPath());
+  if (!installed.length) {
+    console.log(`  ${off("not installed")} — run: vibe --install-hooks`);
+  } else {
+    for (const { event, command } of installed) {
+      const settings = /--genre (\S+)/.exec(command);
+      const vol = /--volume (\d+)/.exec(command);
+      const extra = settings ? `  ${settings[1]} @ ${vol ? vol[1] : "?"}%${/--reactive/.test(command) ? ", reactive" : ""}` : "";
+      console.log(`  ${on("✔")} ${extra ? event.padEnd(17) : event}${extra ? off(extra) : ""}`);
+    }
+  }
+
+  // Background player
+  console.log(`\n\x1b[1mBackground player\x1b[0m`);
+  const pid = readDaemonPid(hooks.PID_FILE);
+  if (pid === null) {
+    console.log(`  ${off("not running")}`);
+  } else if (!hooks.isOurDaemon(pid)) {
+    console.log(`  ${off(`stale pid file (${pid} is not ours) — cleared on the next prompt`)}`);
+  } else {
+    console.log(`  ${on(`running`)} pid ${pid}${off("   stop it with: vibe --stop")}`);
+  }
+
+  // Which tools are actually here, and what each one can use
+  console.log(`\n\x1b[1mAI tools found\x1b[0m`);
+  const found = detectAiTools(installed.length > 0);
+  if (!found.length) {
+    console.log(`  ${off("none on PATH — the wrapper still runs any command")}`);
+  } else {
+    for (const tool of found) {
+      console.log(`  ${on("✔")} ${tool.name.padEnd(20)}${off(tool.integration)}`);
+    }
+  }
+  console.log();
+}
+
+function dirSize(dir) {
+  try {
+    let total = 0;
+    const walk = (d) => {
+      for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+        const full = path.join(d, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else total += fs.statSync(full).size;
+      }
+    };
+    walk(dir);
+    return `${(total / 1024 / 1024).toFixed(1)} MB in ${dir}`;
+  } catch (e) {
+    return "empty";
+  }
+}
+
+function readVibeHooks(file) {
+  try {
+    const settings = JSON.parse(fs.readFileSync(file, "utf8"));
+    const out = [];
+    for (const [event, entries] of Object.entries(settings.hooks || {})) {
+      for (const entry of entries || []) {
+        for (const h of entry.hooks || []) {
+          if (/--hook-(start|stop|tool)\b/.test(h.command || "")) out.push({ event, command: h.command });
+        }
+      }
+    }
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+
+function readDaemonPid(file) {
+  try {
+    const pid = parseInt(fs.readFileSync(file, "utf8").trim(), 10);
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * What is on this machine, and which integration each one can actually use -
+ * so the answer to "will this work with my tool" is read off the user's own
+ * PATH instead of a table in the README that ages.
+ */
+function detectAiTools(hooksInstalled) {
+  const CANDIDATES = [
+    {
+      cmd: "claude",
+      name: "Claude Code",
+      integration: hooksInstalled ? "hooks — installed" : "hooks — run: vibe --install-hooks"
+    },
+    { cmd: "codex", name: "Codex", integration: "MCP — see the README" },
+    { cmd: "gemini", name: "Gemini CLI", integration: "MCP — see the README" },
+    { cmd: "copilot", name: "GitHub Copilot CLI", integration: "MCP, or wrap it" },
+    { cmd: "aider", name: "Aider", integration: "wrapper — vibe aider" },
+    { cmd: "ollama", name: "Ollama", integration: "wrapper — vibe ollama run <model>" }
+  ];
+  const { isInstalled } = require("./interactive");
+  return CANDIDATES.filter((c) => isInstalled(c.cmd));
 }
 
 function signalExitCode(signal) {
@@ -479,6 +626,8 @@ async function run() {
     noHud,
     preview,
     clearCache: shouldClear,
+    status: showStatus,
+    stop: shouldStop,
     hookAction,
     reactive,
     cmdArgs
@@ -498,6 +647,21 @@ async function run() {
     console.error(
       "\x1b[33m[vibeaudio] --reactive only applies to --install-hooks; ignoring it here.\x1b[0m"
     );
+  }
+
+  if (shouldStop) {
+    const hooks = require("./hooks");
+    const stopped = hooks.stopDaemon();
+    console.log(
+      stopped
+        ? "\x1b[32m✔ Stopped the background player.\x1b[0m"
+        : "\x1b[90mNothing was playing.\x1b[0m"
+    );
+    return;
+  }
+
+  if (showStatus) {
+    return printStatus();
   }
 
   if (shouldClear) {

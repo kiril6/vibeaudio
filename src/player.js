@@ -236,6 +236,20 @@ function pruneSeedDirs(keep = 3) {
  * Returns 1 when the backend can attenuate on its own - that path keeps the
  * existing cache files and stays bit-identical.
  */
+/**
+ * A global mute. Hooks and config stay exactly as they are - this is for a
+ * screen share or a meeting, where uninstalling and reinstalling hooks is too
+ * much ceremony for ten minutes of quiet.
+ *
+ * Read at playback time rather than cached, so exporting it takes effect on
+ * the next prompt. It deliberately does not gag `--preview`: that path spawns
+ * the player directly and is an explicit request to hear something.
+ */
+function playbackDisabled() {
+  const raw = (process.env.VIBE_DISABLE || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
 function bakedGain(backend, volume) {
   if (!backend || backend.volume) return 1;
   return Math.max(0.05, Math.min(1, volume));
@@ -350,6 +364,8 @@ class AudioPlayer {
       this.stop({ playChime: false });
     }
 
+    if (playbackDisabled()) return false;
+
     if (!detectPlayer()) {
       warnNoPlayer();
       return false;
@@ -432,7 +448,7 @@ class AudioPlayer {
     this.killProcs();
     activePlayers.delete(this);
 
-    if (playChime) {
+    if (playChime && !playbackDisabled()) {
       const backend = detectPlayer();
       if (!backend) return wasPlaying;
 
@@ -459,6 +475,7 @@ module.exports = {
   detectPlayer,
   bakedGain,
   applyGain,
+  playbackDisabled,
   resolveGenre,
   isKnownGenre,
   normalizeVolume,

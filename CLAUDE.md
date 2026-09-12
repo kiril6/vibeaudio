@@ -25,7 +25,7 @@ There is no build step, linter, or bundler — it's plain CommonJS Node (`engine
 **Entry points**: `bin/vibeaudio.js` → `src/cli.js#run()`. `run()` branches:
 - `--mcp` flag → `src/mcp.js#startMcpServer()` (stdio JSON-RPC server for desktop apps)
 - a `HOOK_ACTIONS` flag → `runHookAction()` → `src/hooks.js` (Claude Code hooks)
-- `--preview` / `--clear-cache` → one-shot utility paths
+- `--preview` / `--clear-cache` / `--status` / `--stop` → one-shot utility paths
 - no command args + interactive TTY → `src/interactive.js#promptInteractive()` (menu to pick AI tool / delivery / genre / volume / reactive)
 - command args given → `executeCommand()` spawns the wrapped command directly
 
@@ -46,6 +46,7 @@ Exit handling is the subtle part, and two invariants must hold:
 - Playback backend is detected once from `PLAYER_CANDIDATES` (`afplay` → `paplay` → `ffplay` → `aplay`, plus PowerShell `SoundPlayer` on Windows). If nothing is found, it warns once and runs silently — audio must never block the wrapped command.
 - `aplay` and PowerShell `SoundPlayer` take no volume argument. `bakedGain()` decides per backend: 1 when the player attenuates itself (macOS and most Linux keep the existing cache files, bit-identical), otherwise the volume, which `applyGain()` scales into the PCM and `gainSuffix()` puts in the cache filename (`loop_jazz_t2_g25.wav`). **Exactly one of the two must apply** — a file that is both pre-scaled and passed to `-v` is attenuated twice.
 - A module-level `process.on("exit")` hook kills live player processes, so an abrupt exit can't orphan audio.
+- `VIBE_DISABLE` is checked by `playbackDisabled()` inside `start()` and the chime branch of `stop()` — the two points every *automatic* path funnels through, so the wrapper, the hook daemon and MCP are all covered by one gate. `--preview` spawns the backend directly and is deliberately not gated: it is an explicit request to hear something. Read per playback rather than cached, so exporting it applies on the next prompt.
 
 **Synthesis** (`src/synth/`): `generator.js` holds the shared primitives — `noteToFreq()` (note name → Hz), oscillators (`sine`, `triangle`, `softPulse`, `analogSaw`), `createWavBuffer()` (raw Float samples → 16-bit PCM WAV `Buffer`), and the determinism helpers `makeRng()` (mulberry32), `hashString()` (FNV-1a), `pick()` and `ornamentRng()`. Each genre exports `generate<Genre>Loop(durationSeconds, tier, seed)` and returns a WAV buffer. `chime.js` generates the two outcome chimes (seed-independent).
 

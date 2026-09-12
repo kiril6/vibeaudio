@@ -388,6 +388,8 @@ export VIBE_GENRE=jazz     # or synthwave, electronic, zen, drone, random
 | `--no-chime` | Disable the resolution completion chime | `false` |
 | `--no-hud` | Disable terminal window/tab title animation | `false` |
 | `--preview <genre>` | Play one loop of a genre and exit | — |
+| `--status` | Show what's installed, running and detected, then exit | — |
+| `--stop` | Stop the background player, then exit | — |
 | `--clear-cache` | Delete all cached audio, then exit | — |
 | `--mcp` | Run as an MCP stdio server for desktop apps | — |
 | `--install-hooks` | Wire music into Claude Code hooks (no wrapper needed) | — |
@@ -405,7 +407,10 @@ export VIBE_VOLUME=25           # Background music at 25%
 export VIBE_CHIME_VOLUME=70     # Crisp completion chime at 70%
 export VIBE_GRACE_MS=3000       # Wait 3s of thinking before any music
 export VIBE_SEED=7              # Same arrangement everywhere, ignoring the directory
+export VIBE_DISABLE=1           # Mute, without uninstalling anything
 ```
+
+**`VIBE_DISABLE=1` is the quiet switch for a meeting or a screen share.** It silences automatic playback everywhere — hooks, wrapper and MCP — while leaving your hooks and settings exactly as they are, so there's nothing to put back afterwards. It's read at playback time, so it takes effect on your next prompt. `--preview` still plays: that one is an explicit request to hear something.
 
 ---
 
@@ -436,6 +441,38 @@ vibe --clear-cache
 
 **Volume flag does nothing**
 Shouldn't happen any more — where the player can't attenuate (`aplay`, PowerShell), the gain is baked into the audio instead. If you changed `--volume` and hear no difference, you're most likely on hooks, which ignore the wrapper's flags: re-run `vibe --volume 25 --install-hooks`.
+
+---
+
+## 🩺 What's actually running
+
+```bash
+vibe --status
+```
+
+Reads live state rather than guessing — the fastest answer to "why do I hear nothing" or "which genre is this set to":
+
+```
+Audio
+  player    afplay
+  cache     7.6 MB in ~/.vibeaudio/cache
+
+Claude Code hooks
+  ✔ Stop
+  ✔ UserPromptSubmit   jazz @ 25%, reactive
+  ✔ PreToolUse
+
+Background player
+  running pid 59078   stop it with: vibe --stop
+
+AI tools found
+  ✔ Claude Code         hooks — installed
+  ✔ Codex               MCP — see the README
+  ✔ Gemini CLI          MCP — see the README
+  ✔ GitHub Copilot CLI  MCP, or wrap it
+```
+
+The last block is detected from your own `PATH`, so it answers "will this work with my tool" without you matching yourself against a table. `vibe --stop` kills the background player on the spot; the next prompt starts a fresh one.
 
 ---
 

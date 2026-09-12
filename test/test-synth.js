@@ -723,7 +723,61 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
   assert.ok(Math.abs(d2.readInt16LE(d2.length - 2)) < 33, "loop must end in silence");
   console.log("   ✓ Drone escalates, stays level-matched to the melodic genres and loops seamlessly.");
 
-  console.log("\n\x1b[32mAll 30 tests passed successfully!\x1b[0m");
+  // 31. VIBE_DISABLE must mute automatic playback without touching config
+  console.log("31. Testing VIBE_DISABLE Mute Switch...");
+  const { AudioPlayer, playbackDisabled } = require("../src/player");
+  const realDisable = process.env.VIBE_DISABLE;
+
+  delete process.env.VIBE_DISABLE;
+  assert.strictEqual(playbackDisabled(), false, "silent by default would be a bad default");
+  for (const on of ["1", "true", "yes", "on", "TRUE", " 1 "]) {
+    process.env.VIBE_DISABLE = on;
+    assert.strictEqual(playbackDisabled(), true, `${JSON.stringify(on)} must mute`);
+  }
+  for (const offValue of ["0", "false", "", "no"]) {
+    process.env.VIBE_DISABLE = offValue;
+    assert.strictEqual(playbackDisabled(), false, `${JSON.stringify(offValue)} must not mute`);
+  }
+
+  // The gate lives in start(), which every automatic path goes through.
+  process.env.VIBE_DISABLE = "1";
+  const muted = new AudioPlayer();
+  assert.strictEqual(muted.start("lofi", 0.3), false, "start() must refuse while muted");
+  assert.strictEqual(muted.isPlaying, false, "a muted player must not claim to be playing");
+  assert.strictEqual(muted.stop({ playChime: true }), false, "nothing was playing, so nothing to stop");
+
+  if (realDisable === undefined) delete process.env.VIBE_DISABLE;
+  else process.env.VIBE_DISABLE = realDisable;
+  console.log("   ✓ VIBE_DISABLE mutes automatic playback and leaves config alone.");
+
+  // 32. --status and --stop must run clean on a machine with nothing set up
+  console.log("32. Testing --status And --stop...");
+  const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-status-"));
+  const runFlag = (flag) =>
+    new Promise((resolve) => {
+      const child = spawn(process.execPath, [CLI, flag], {
+        env: { ...process.env, HOME: emptyHome, USERPROFILE: emptyHome, VIBE_DISABLE: "" },
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+      let out = "";
+      child.stdout.on("data", (c) => (out += c));
+      child.stderr.on("data", (c) => (out += c));
+      child.on("close", (code) => resolve({ code, out }));
+    });
+
+  const status = await runFlag("--status");
+  assert.strictEqual(status.code, 0, "--status must exit 0 with nothing installed");
+  assert.ok(/not installed/.test(status.out), "--status must say when hooks are missing");
+  assert.ok(/not running/.test(status.out), "--status must say when no player is running");
+
+  const stopped = await runFlag("--stop");
+  assert.strictEqual(stopped.code, 0, "--stop must exit 0 when nothing is playing");
+  assert.ok(/Nothing was playing/.test(stopped.out), "--stop must say so rather than claim a kill");
+
+  fs.rmSync(emptyHome, { recursive: true, force: true });
+  console.log("   ✓ --status reports missing pieces and --stop is safe with nothing running.");
+
+  console.log("\n\x1b[32mAll 32 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);
