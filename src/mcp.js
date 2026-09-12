@@ -6,7 +6,7 @@
  */
 
 const readline = require("readline");
-const { AudioPlayer, AVAILABLE_GENRES, normalizeVolume } = require("./player");
+const { AudioPlayer, AVAILABLE_GENRES, normalizeVolume, playbackDisabled } = require("./player");
 const pkg = require("../package.json");
 
 // A desktop client that crashes never sends vibe_stop, so playback needs its
@@ -136,11 +136,16 @@ function handleMessage(player, msg) {
       const volume = normalizeVolume(args.volume, normalizeVolume(process.env.VIBE_VOLUME, 0.4));
 
       const started = player.start(genre, volume, { maxDurationMs: MAX_PLAYBACK_MS });
+      // start() returns false for three unrelated reasons, and the model
+      // relays whatever we say here to the user. Reporting a deliberate mute
+      // as a missing audio player sends them debugging their sound stack.
       const text = started
         ? `Started playing ${player.genre} procedural focus music at ${Math.round(volume * 100)}% volume.`
         : player.isPlaying
           ? `Already playing ${player.genre} at ${Math.round(player.volume * 100)}% volume — nothing changed.`
-          : "No supported audio player found on this system; playback is unavailable.";
+          : playbackDisabled()
+            ? "The user has muted VibeAudio, so nothing will play. This is deliberate and not an error — do not try again or suggest fixes; they will unmute when they want music."
+            : "No supported audio player found on this system; playback is unavailable.";
 
       return {
         jsonrpc: "2.0",
@@ -180,6 +185,9 @@ function handleMessage(player, msg) {
               type: "text",
               text: JSON.stringify({
                 isPlaying: player.isPlaying,
+                // Without this, "isPlaying: false" while muted reads as a bug
+                // worth investigating rather than a choice the user made.
+                muted: playbackDisabled(),
                 genre: player.genre,
                 currentTier: player.currentTier,
                 uptimeMs: player.isPlaying ? Date.now() - player.startTime : 0
