@@ -138,9 +138,10 @@ Choose your sound vibe:
   3. 🕹️ Cozy 8-Bit         — Filtered retro chiptune arpeggios
   4. ⚡ Melodic Electronic  — Downtempo resonant plucks & tech pulse
   5. 🎷 Midnight Jazz      — ii-V-I piano chords & walking upright bass
-  6. 🎋 Zen Ambient        — Meditative singing bowls & celestial pads
-  7. 🌫️ Deep Drone         — Held tone & filtered noise — no melody at all
-  8. 🎲 Shuffle / Random   — Picks a surprise vibe each time
+  6. 🎋 Zen Ambient        — Meditative singing bowls & floating celestial pads
+  7. 🎹 Sparse Piano       — Single struck notes & long silences — Satie-ish
+  8. 🌫️ Deep Drone         — Held tone & filtered noise — no melody at all
+  9. 🎲 Shuffle / Random   — Picks a surprise vibe each time
 
 Choose your volume level:
 ❯ 1. ☕ Normal (40%)       — Balanced focus background [Default]
@@ -482,7 +483,8 @@ Hooks
     ✔ UserPromptSubmit     jazz @ 25%, reactive
     ✔ PreToolUse
   Codex        not installed — run: vibe --install-hooks
-  Cursor       not on this machine
+  Cursor       not installed — run: vibe --install-hooks
+  Grok         not installed (not found on this machine)
 
 Background player
   running pid 59078   stop it with: vibe --stop
