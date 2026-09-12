@@ -174,8 +174,9 @@ const VOLUMES = [
   { name: "📢 Loud (75%)", desc: "Audible across the room", vol: 0.75 }
 ];
 
-// Only Claude Code has a hook system, so it is the only tool where the menu
-// has a real choice to offer. Everything else runs through the wrapper.
+// Claude Code is the only tool VibeAudio installs hooks for today, so it is
+// the only one where the menu has a real choice to offer. (Codex has its own
+// hook system we don't write to yet - extend HOOK_TOOL when that lands.)
 const HOOK_TOOL = "claude";
 
 const DELIVERY_FRESH = [

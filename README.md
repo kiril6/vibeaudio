@@ -184,6 +184,8 @@ vibe --preview jazz
 
 ## 🪝 Claude Code Hooks (no wrapper needed)
 
+> **`--install-hooks` works with Claude Code only.** Other AI tools use the [wrapper or MCP](#-everything-else-codex-gemini-cli-claude-desktop-antigravity-via-mcp) instead.
+
 Wrapping (`vibe claude`) infers "the AI is thinking" from how long the process runs. Hooks know for certain — so music starts the moment you submit a prompt and stops the moment the agent finishes, with no grace-window guessing and no aliases.
 
 Once hooks are installed they take over: running `vibe claude` anyway plays no music of its own and says so, rather than layering a session-long loop on top of the hooks' per-prompt one.
@@ -256,7 +258,7 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 
 ## 🖥️ Everything Else (Codex, Gemini CLI, Claude Desktop, Antigravity… via MCP)
 
-Hooks exist only in Claude Code. Every other AI tool that takes a **Model Context Protocol** server can run VibeAudio the same way: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
+**VibeAudio's hooks support only Claude Code today** — that's a limit of this project, not of the tools. Codex has its own hook system (`~/.codex/hooks.json`) that VibeAudio doesn't write to yet; [issues welcome](https://github.com/kiril6/vibeaudio/issues) if you want it. For everything else, MCP is the way in: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
 
 > **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On Claude Code — terminal or desktop app — use [hooks](#-claude-code-hooks-no-wrapper-needed) instead.**
 
