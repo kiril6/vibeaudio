@@ -70,7 +70,7 @@ function generateChiptuneLoop(durationSec = 7.5, tier = 2, seed = 0) {
       const t = i / SAMPLE_RATE;
       const env = Math.min(1.0, t * 75.0) * Math.max(0.0, 1.0 - (t / (m.dur * secPerBeat)));
       const vib = t > 0.15 ? Math.sin(2 * Math.PI * 5.5 * t) * 3.5 : 0.0;
-      const sample = softPulse((f + vib) * t, 0.32) * env * 0.22;
+      const sample = softPulse((f + vib) * t) * env * 0.22;
 
       left[idx] += sample;
       right[idx] += sample;
@@ -88,14 +88,14 @@ function generateChiptuneLoop(durationSec = 7.5, tier = 2, seed = 0) {
     const chord = chords[chordIdx];
     const noteIdx = Math.floor(t / arpSpeed) % chord.length;
     const f = noteToFreq(chord[noteIdx]);
-    const sample = softPulse(f * t, 0.5) * (tier === 1 ? 0.09 : 0.075);
+    const sample = softPulse(f * t) * (tier === 1 ? 0.09 : 0.075);
 
     left[i] += sample * 0.85;
     right[i] += sample * 0.85;
 
     // Tier 3: octave-up shimmer arpeggio doubling
     if (tier >= 3) {
-      const shimmer = softPulse(f * 2.0 * t, 0.35) * 0.03;
+      const shimmer = softPulse(f * 2.0 * t) * 0.03;
       left[i] += shimmer * 1.1;
       right[i] += shimmer * 0.9;
     }

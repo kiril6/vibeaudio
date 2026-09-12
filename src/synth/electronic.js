@@ -64,7 +64,7 @@ function generateElectronicLoop(durationSec = 6.4, tier = 2, seed = 0) {
       const env = Math.exp(-tNote * 7.0);
 
       // Resonant pluck wave: mixture of soft pulse and harmonics modulated by filter cutoff
-      const osc = softPulse(f * t, 0.4) * 0.7 + analogSaw(f * t) * 0.3 * filterCutoff;
+      const osc = softPulse(f * t) * 0.7 + analogSaw(f * t) * 0.3 * filterCutoff;
       const sample = osc * env * (tier === 1 ? 0.19 : 0.16);
 
       const pan = 0.5 + 0.3 * Math.sin(2 * Math.PI * 0.8 * t);
@@ -73,7 +73,7 @@ function generateElectronicLoop(durationSec = 6.4, tier = 2, seed = 0) {
 
       // Tier 3: octave-up counter-pluck for peak energy
       if (tier >= 3) {
-        const counter = softPulse(f * 2.0 * t, 0.3) * env * 0.05;
+        const counter = softPulse(f * 2.0 * t) * env * 0.05;
         left[i] += counter * pan;
         right[i] += counter * (1.0 - pan);
       }

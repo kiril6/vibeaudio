@@ -80,7 +80,21 @@ function triangle(phase) {
   return 4.0 * Math.abs(p - 0.5) - 1.0;
 }
 
-function softPulse(phase, duty = 0.3) {
+/**
+ * A saturated two-harmonic pulse: fundamental plus its octave, driven into
+ * tanh so the tops square off.
+ *
+ * It took a `duty` argument for a long time and never read it. Five call sites
+ * passed 0.3, 0.32, 0.35, 0.4 and 0.5, so chiptune's bass and its lead were
+ * asking for different widths and getting one waveform - pulse-width
+ * variation, the thing that makes a chiptune sound like a chiptune, was never
+ * wired up. The parameter is gone rather than implemented because implementing
+ * it changes how 8bit and electronic sound, and a level and voicing tuned by
+ * ear has to be re-checked by ear. If you want real PWM, add it here
+ * deliberately (compare `p` against the duty instead of summing harmonics),
+ * then re-level both genres against the house RMS and listen to every tier.
+ */
+function softPulse(phase) {
   const p = ((phase % 1.0) + 1.0) % 1.0;
   const s = Math.sin(2.0 * Math.PI * p) + 0.35 * Math.sin(4.0 * Math.PI * p);
   return Math.tanh(s * 2.8);
