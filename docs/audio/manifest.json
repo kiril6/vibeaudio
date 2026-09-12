@@ -1,0 +1,58 @@
+{
+  "lofi": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 12560,
+    "tier3StartMs": 25120,
+    "chimeStartMs": 37800,
+    "totalMs": 39400
+  },
+  "synthwave": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 13360,
+    "tier3StartMs": 26720,
+    "chimeStartMs": 40200,
+    "totalMs": 41800
+  },
+  "8bit": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 14760,
+    "tier3StartMs": 29520,
+    "chimeStartMs": 44400,
+    "totalMs": 46000
+  },
+  "electronic": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 12174,
+    "tier3StartMs": 24348,
+    "chimeStartMs": 36641,
+    "totalMs": 38241
+  },
+  "jazz": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 11499,
+    "tier3StartMs": 22998,
+    "chimeStartMs": 34617,
+    "totalMs": 36217
+  },
+  "zen": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 14160,
+    "tier3StartMs": 28320,
+    "chimeStartMs": 42600,
+    "totalMs": 44200
+  },
+  "piano": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 14960,
+    "tier3StartMs": 29920,
+    "chimeStartMs": 45000,
+    "totalMs": 46600
+  },
+  "drone": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 13760,
+    "tier3StartMs": 27520,
+    "chimeStartMs": 41400,
+    "totalMs": 43000
+  }
+}

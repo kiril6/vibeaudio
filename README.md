@@ -8,6 +8,8 @@
 
 **[Install](#-install)** · **[Agent hooks](#-agent-hooks-no-wrapper-needed)** · **[Genres](#-music-genres)** · **[Flags](#-options--flags)** · **[Troubleshooting](#-troubleshooting)** · **[Uninstall](#-uninstall)**
 
+> **🔊 [Listen to every genre →](https://kiril6.github.io/vibeaudio/)** — hear all 8 genres, the tier escalation, and the three chimes, rendered from the real synth.
+
 > **In a hurry?** `npm i -g github:kiril6/vibeaudio`, then `vibe --install-hooks`. Your next prompt has music.
 
 ---

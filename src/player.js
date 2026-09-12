@@ -652,6 +652,7 @@ module.exports = {
   normalizeVolume,
   projectSeed,
   wavDurationMs,
+  generateLoop,
   AVAILABLE_GENRES,
   SHUFFLE_GENRES,
   synthFingerprint,
