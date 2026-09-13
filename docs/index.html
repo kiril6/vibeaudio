@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>VibeAudio</title>
 <meta name="description" content="Procedural focus music while your AI coding agent thinks. Zero MP3s, zero dependencies — every note synthesized in code, a different arrangement per project.">
 <meta property="og:title" content="VibeAudio — focus music while your AI codes">
@@ -94,6 +94,7 @@ html{ scroll-behavior:smooth; }
 @media (prefers-reduced-motion: reduce){ html{ scroll-behavior:auto; } }
 .topnav{
   position:sticky; top:0; z-index:30;
+  padding-top:env(safe-area-inset-top);
   background:rgba(7,5,13,.78); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
   border-bottom:1px solid var(--line);
 }
