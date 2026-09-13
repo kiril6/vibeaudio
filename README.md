@@ -10,7 +10,7 @@
 
 > **🔊 [Listen to every genre →](https://kiril6.github.io/vibeaudio/)** — hear all 8 genres, the tier escalation, and the three chimes, rendered from the real synth.
 
-> **In a hurry?** `npm i -g github:kiril6/vibeaudio`, then `vibe --install-hooks`. Your next prompt has music.
+> **In a hurry?** `npm i -g vibeaudio`, then `vibe --install-hooks`. Your next prompt has music.
 
 ---
 
@@ -69,12 +69,10 @@ If no player is found, VibeAudio prints a one-line notice and runs your command 
 One line. No clone, no build step, no dependencies to resolve:
 
 ```bash
-npm i -g github:kiril6/vibeaudio
+npm i -g vibeaudio
 ```
 
 That puts `vibe` and `vibeaudio` on your `PATH`. Re-run the same command to update, or see [Uninstall](#-uninstall) to remove it cleanly.
-
-> **Note:** VibeAudio isn't on the npm registry yet, so plain `npx vibeaudio` won't resolve — use the `github:` form above.
 
 ### Then pick how it runs
 
@@ -100,8 +98,8 @@ vibe claude -p "explain this repo"
 ### Try it without installing
 
 ```bash
-npx github:kiril6/vibeaudio --preview jazz   # hear a loop right now
-npx github:kiril6/vibeaudio sleep 8          # hear the wrapper: music, then the done chime
+npx vibeaudio --preview jazz   # hear a loop right now
+npx vibeaudio sleep 8          # hear the wrapper: music, then the done chime
 ```
 
 > **Heard nothing?** Music only starts once the wrapped command has run longer than the 1.5s grace window — that's [the point](#-why), so quick commands stay silent. `sleep 8` is the reliable demo; something like `npm test` is silent if the tests finish fast or the command errors out immediately.
