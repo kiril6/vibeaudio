@@ -377,6 +377,7 @@ footer a{ color:var(--ink-dim); }
   <span class="eyebrow">seeded, not random</span>
   <h2 style="font-size:30px;">Your repo, your sound.</h2>
   <p style="color:var(--ink-dim);max-width:60ch;margin-top:10px;">Your working directory seeds the arrangement — the seed <em>picks among hand-written, in-key progressions</em>, it never invents harmony. Same repo, same sound, every time you come back.</p>
+  <p style="color:var(--ink-dim);max-width:60ch;margin-top:10px;">Want one project to sound different on purpose? <code>vibe --genre zen --here</code> saves a genre for that directory and everything under it, leaving your default alone.</p>
   <div class="seed-grid" id="seed-grid"></div>
 </section>
 
@@ -428,7 +429,7 @@ footer a{ color:var(--ink-dim); }
 
 <section class="wrap" id="get-started">
   <span class="eyebrow">get started</span>
-  <h2 style="font-size:30px;">Three commands.</h2>
+  <h2 style="font-size:30px;">Four commands.</h2>
   <div class="steps">
     <div class="step"><span class="n">1</span><div>
       <p style="color:var(--ink-dim);margin-bottom:8px;">Install globally.</p>
@@ -441,6 +442,10 @@ footer a{ color:var(--ink-dim); }
     <div class="step"><span class="n">3</span><div>
       <p style="color:var(--ink-dim);margin-bottom:8px;">Audition a genre before committing.</p>
       <div class="code-copy"><code>vibe --preview jazz</code><button class="copy-btn" data-copy="vibe --preview jazz" title="Copy">⧉</button></div>
+    </div></div>
+    <div class="step"><span class="n">4</span><div>
+      <p style="color:var(--ink-dim);margin-bottom:8px;">Keep the one you liked. Installed hooks pick it up on your next prompt — nothing to reinstall.</p>
+      <div class="code-copy"><code>vibe --genre jazz --volume 25</code><button class="copy-btn" data-copy="vibe --genre jazz --volume 25" title="Copy">⧉</button></div>
     </div></div>
   </div>
   <p style="margin-top:28px;color:var(--ink-dim);">Every flag, every troubleshooting note, every hook dialect: <a href="https://github.com/kiril6/vibeaudio#readme">the full README</a>.</p>

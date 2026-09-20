@@ -159,7 +159,9 @@ Should the music react to what the agent is doing?
   2. Reactive             — Intensity follows the tool in use - noticeable, by design
 ```
 
-Choosing hooks installs them for the tool you picked, then launches it — the same thing `vibe --genre <g> --volume <n> --reactive --install-hooks` does, without memorising flags. Once they're installed the first question becomes **Just launch it** / **Reconfigure the hooks**, and launching skips the genre and volume prompts, since the hooks own those.
+**Press `p` to hear the highlighted genre.** Nine names and a one-line description each is not much to choose from; a loop renders in about 150ms, so auditioning is just a keypress, and moving on replaces it. Leaving the menu stops it.
+
+Choosing hooks installs them for the tool you picked, then launches it — the same thing `vibe --genre <g> --volume <n> --reactive --install-hooks` does, without memorising flags. Once they're installed the first question becomes **Just launch it** / **Reconfigure the hooks**, and launching skips the genre and volume prompts, since your saved default already answers those (`vibe --genre zen` changes it any time).
 
 Installed tools sort to the top. The list is a shortcut, not a compatibility list — **`vibe` wraps any command at all**, and "Custom command..." takes one you type (quoted arguments survive intact). Adding an entry is one line in [`src/interactive.js`](src/interactive.js).
 
@@ -176,7 +178,7 @@ Once hooks are installed they take over: running `vibe claude` (or `vibe codex`)
 ```bash
 vibe --install-hooks                             # every agent found on this machine
 vibe --install-hooks --tools codex               # or just one of them
-vibe --genre jazz --volume 25 --install-hooks    # pin the genre and volume
+vibe --genre jazz --volume 25 --install-hooks    # install, and save these as your default
 vibe --install-hooks --dry-run                   # show what would change, write nothing
 ```
 
@@ -251,23 +253,32 @@ It asks Claude to run the matching `vibe` command, so Claude Code will ask permi
 
 ### Changing the sound later
 
-Re-run the install with the settings you want. It replaces the existing entry rather than adding a second one:
+One command, and it reaches everything:
 
 ```bash
-vibe --genre electronic --volume 25 --install-hooks
+vibe --genre electronic --volume 25
 ```
 
-The change applies to your next prompt — no restart. Audition first with `vibe --preview electronic`.
+That saves your default to `~/.vibeaudio/config.json`. **Installed hooks read it on their next prompt** — nothing to reinstall, nothing to restart. The same file is what the wrapper and the MCP server use, so there is one answer to "what genre am I on" rather than three. `vibe --status` shows it.
 
-**The flags compose** — set everything you want in one command, including [reactive mode](#reactive-mode-opt-in):
+Audition before you commit: `vibe --preview electronic`.
+
+A flag still beats an environment variable, which still beats the saved file — so a one-off stays a one-off:
 
 ```bash
-vibe --genre jazz --volume 25 --reactive --install-hooks
+vibe --genre 8bit npm test      # this run only, nothing saved
 ```
 
-Two things to know: the reinstall **replaces** the whole entry, so flags you don't repeat are dropped (leave off `--reactive` and reactive mode goes away). And music already playing keeps the old genre until the next prompt swaps the daemon — `pkill -f "vibeaudio.js --daemon"` cuts it short.
+**Coming from an older install?** Its genre and volume were frozen into the hook entries. The first `vibe --install-hooks` after upgrading carries them over into the config file, so nothing about your music changes — unless you name a new genre or volume, or have already saved one.
 
-> **`VIBE_GENRE` / `VIBE_VOLUME` won't change an installed hook.** They're read once, at install time, and written into the hook command — so exporting a new value later does nothing until you reinstall. The same goes for `vibe --genre <name>` on its own: with no command after it that opens the launcher menu, which asks for a genre and uses its own answer. Changing hook music always means re-running `--install-hooks`.
+[Reactive mode](#reactive-mode-opt-in) is the exception, because it isn't a setting the music reads — it decides which hooks exist at all. Turning it on or off means an install:
+
+```bash
+vibe --reactive --install-hooks     # on
+vibe --install-hooks                # off again
+```
+
+Music already playing keeps the old genre until the next prompt swaps the daemon — `vibe --stop` cuts it short.
 
 Removing them is one command:
 
@@ -410,17 +421,31 @@ vibe --genre random claude       # Surprise vibe each run
 
 ### ⚙️ Set Your Favorite Genre as Default
 
-How you change it depends on how you run VibeAudio — **a shell `export` only reaches the wrapper**:
+```bash
+vibe --genre jazz --volume 25
+```
 
-| You run it via | Change the genre with |
-| :--- | :--- |
-| **Wrapper** (`vibe <command>`) | `export VIBE_GENRE=jazz` — or `--genre` per run |
-| **Agent hooks** (Claude Code, Codex, Cursor, Grok) | re-run `vibe --genre jazz --install-hooks` — [why](#changing-the-sound-later) |
-| **MCP** (Gemini CLI, Claude Desktop, …) | ask the assistant, or the config's `env` block — [how](#changing-the-genre-here) |
+Saved to `~/.vibeaudio/config.json` and read by all three ways of running VibeAudio — wrapper, agent hooks, MCP. It applies on your next prompt.
 
 ```bash
-export VIBE_GENRE=jazz     # or synthwave, 8bit, electronic, zen, piano, drone, random
+vibe --genre jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, random
+vibe --volume 25           # or --whisper / --quiet / --loud
+vibe --chime-volume 70
+vibe --status              # what's saved, and what's overriding it
 ```
+
+An `export VIBE_GENRE=jazz` still works and takes precedence in that shell — useful for one terminal you want different, not needed for a default any more.
+
+**One project that should sound different:**
+
+```bash
+cd ~/work/api
+vibe --genre zen --here      # this directory and everything under it
+```
+
+Your global default is untouched, and an agent launched from a subdirectory still gets it — the lookup walks up, so `~/work/api/src` finds what you saved at `~/work/api`. `vibe --status` says which one answered (`saved for this project` / `saved` / `default`).
+
+The full order, highest first: **a flag** → **an environment variable** → **`--here`** → **your global default** → `lofi` at 40%.
 
 ---
 
@@ -428,10 +453,11 @@ export VIBE_GENRE=jazz     # or synthwave, 8bit, electronic, zen, piano, drone, 
 
 | Flag | Description | Default |
 | :--- | :--- | :--- |
-| `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `random` | `lofi` |
-| `-v, --volume <5-100>` | Set playback volume | `40` |
+| `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `random`. With no command after it, saves your default | `lofi` |
+| `-v, --volume <5-100>` | Set playback volume. With no command after it, saves your default | `40` |
 | `-cv, --chime-volume <5-100>` | Set independent completion chime volume | `volume × 1.1`, kept within 35–65 |
 | `--grace <ms>` | Silence window before music starts | `1500` |
+| `--here` | With a saved setting: this directory tree only, not everywhere | off |
 | `--seed <n>` | Force a specific arrangement | derived from the project directory |
 | `--whisper` | Quick preset: 15% volume (headphones / late night) | — |
 | `--quiet` | Quick preset: 25% volume (focus / open office) | — |
@@ -454,7 +480,8 @@ export VIBE_GENRE=jazz     # or synthwave, 8bit, electronic, zen, piano, drone, 
 | `--version` | Show version | — |
 
 ### ⚙️ Environment Variables
-Set persistent defaults in your `~/.zshrc` or `~/.bashrc`:
+
+**Defaults live in `~/.vibeaudio/config.json` now** — `vibe --genre jazz` is the short way to set one. These override it for a single shell, which is what you want for one terminal that should sound different, or for a machine you don't want writing config at all:
 
 ```bash
 export VIBE_GENRE=jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, random
@@ -522,7 +549,7 @@ This needs a PulseAudio-compatible sound server on **your local machine**: a Lin
 If the second connection fails with the socket "already in use", an earlier session left it behind: `rm /tmp/vibe-pulse.sock` on the server, or set `StreamLocalBindUnlink yes` in the server's `sshd_config`. If `paplay` says access denied, your local PulseAudio requires its cookie — copy `~/.config/pulse/cookie` to the same path on the server.
 
 **Volume flag does nothing**
-Shouldn't happen any more — where the player can't attenuate (`aplay`, PowerShell), the gain is baked into the audio instead. If you changed `--volume` and hear no difference, you're most likely on hooks, which ignore the wrapper's flags: re-run `vibe --volume 25 --install-hooks`.
+Shouldn't happen any more — where the player can't attenuate (`aplay`, PowerShell), the gain is baked into the audio instead. A `--volume` change lands at the next loop boundary, and on hooks at your next prompt; `vibe --status` shows the volume in effect and what set it.
 
 ---
 
@@ -573,14 +600,14 @@ The last block is detected from your own `PATH`, so it answers "will this work w
 ```bash
 vibe --uninstall-hooks          # 1. unwire every agent, and stop any player still running
 npm rm -g vibeaudio             # 2. remove the CLI
-rm -rf ~/.vibeaudio             # 3. optional: cached audio + daemon state
+rm -rf ~/.vibeaudio             # 3. optional: cached audio, saved settings, daemon state
 ```
 
 Step 1 also **stops a background player that's still going**. That matters: once the hooks are gone nothing will ever send the `Stop` event, and after step 2 there's no `vibe` left to stop it with — music would simply play on until its 15-minute cap. If you ever need to do it by hand: `pkill -f "vibeaudio.js --daemon"`.
 
 > **Order matters.** `npm rm -g` deletes the binary but not your hook config. Removing the package first strands hook entries that point at a path that no longer exists, and your agent will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.cursor/hooks.json`, `~/.gemini/settings.json` and `~/.qwen/settings.json` by hand, and delete `~/.grok/hooks/vibeaudio.json`, `~/.copilot/hooks/vibeaudio.json` and `~/.claude/commands/vibe.md`.
 
-Step 3 only reclaims disk — the audio cache, pruned to the 3 most recent projects — and it's regenerated on next use, so skip it if you're reinstalling.
+Step 3 reclaims disk — the audio cache, pruned to the 3 most recent projects — and drops your saved genre and volume. Both come back on their own, so skip it if you're reinstalling.
 
 **Two things are deliberately left behind:**
 
