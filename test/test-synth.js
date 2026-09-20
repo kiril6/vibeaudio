@@ -1533,25 +1533,11 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     fs.rmSync(home, { recursive: true, force: true });
 
     // b. The intensity file must not carry one prompt's activity into the
-    //    next: hookStart and hookStop both clear it.
-    const hooks = require("../src/hooks");
-    const INTENSITY = path.join(os.homedir(), ".vibeaudio", "intensity");
-    const hadFile = fs.existsSync(INTENSITY);
-    const saved = hadFile ? fs.readFileSync(INTENSITY, "utf8") : null;
-    try {
-      fs.mkdirSync(path.dirname(INTENSITY), { recursive: true });
-      fs.writeFileSync(INTENSITY, "3");
-      hooks.hookStop({ noChime: true });
-      assert.ok(!fs.existsSync(INTENSITY), "hookStop must clear the intensity file");
-    } finally {
-      if (hadFile) fs.writeFileSync(INTENSITY, saved);
-      else fs.rmSync(INTENSITY, { force: true });
-    }
-
-    //    hookStart clears it too, and that half was the one left uncovered.
-    //    It spawns a detached daemon, so per CLAUDE.md it runs in a child with
-    //    HOME redirected - never by setting process.env.HOME in this suite,
-    //    which would operate on the real ~/.vibeaudio and clobber a live pid.
+    //    next: hookStart and hookStop both clear it. Both run in a child with
+    //    HOME redirected - hookStart spawns a detached daemon, and hookStop
+    //    consults every session on record, so in this process either would
+    //    operate on the real ~/.vibeaudio: clobbering a live pid, or seeing the
+    //    developer's own agent session as "another one still working".
     const startHome = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-start-"));
     const probe = path.join(startHome, "probe.js");
     fs.writeFileSync(probe, `
@@ -1560,8 +1546,11 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, "3");
       const hooks = require(${JSON.stringify(path.join(__dirname, "..", "src", "hooks"))});
+      hooks.hookStop({ noChime: true });
+      const stopCleared = !fs.existsSync(file);
+      fs.writeFileSync(file, "3");
       hooks.hookStart("lofi", 0.4, {});
-      console.log(JSON.stringify({ cleared: !fs.existsSync(file) }));
+      console.log(JSON.stringify({ stopCleared, cleared: !fs.existsSync(file) }));
       hooks.stopDaemon();
       process.exit(0);
     `);
@@ -1571,8 +1560,10 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       env: { ...process.env, HOME: startHome, USERPROFILE: startHome, VIBE_DISABLE: "1" }
     });
     assert.strictEqual(probeRun.status, 0, `intensity probe failed: ${probeRun.stderr}`);
+    const probeOut = JSON.parse(probeRun.stdout.trim().split("\n").pop());
+    assert.strictEqual(probeOut.stopCleared, true, "hookStop must clear the intensity file");
     assert.strictEqual(
-      JSON.parse(probeRun.stdout.trim().split("\n").pop()).cleared, true,
+      probeOut.cleared, true,
       "hookStart must clear the intensity file so the last prompt's activity cannot leak in"
     );
     fs.rmSync(startHome, { recursive: true, force: true });
@@ -1900,7 +1891,10 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         spawnSync(process.execPath, [CLI, ...args], { input: payload, env, timeout: 20000 });
       const state = path.join(dir, ".vibeaudio");
       const pidFile = path.join(state, "daemon.pid");
-      const waitingFile = path.join(state, "waiting");
+      const sessionPath = (id) => path.join(state, "sessions", `${id}.json`);
+      const waitingFile = sessionPath("anon");
+      // What a session is paused on: null while working, and no file once its turn ended.
+      const waitingOn = (id = "anon") => (fs.existsSync(sessionPath(id)) ? JSON.parse(fs.readFileSync(sessionPath(id), "utf8")).waiting : undefined);
       const settle = async (what, check) => {
         for (let i = 0; i < 100 && !check(); i++) await new Promise((r) => setTimeout(r, 100));
         assert.ok(check(), what);
@@ -1912,7 +1906,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         // Nothing playing: a dialog after the turn ended has nobody to interrupt.
         cli(["--hook-wait"], bash);
         assert.ok(!/chime_attention/.test(fs.readFileSync(log, "utf8")), "no chime when no music was playing");
-        assert.ok(!fs.existsSync(waitingFile), "and no wait recorded");
+        assert.strictEqual(waitingOn(), undefined, "and no wait recorded");
 
         cli(["--hook-start", "--genre", "zen", "--volume", "5"]);
         await settle("the daemon must reach the backend", () => /loop_zen_/.test(fs.readFileSync(log, "utf8")));
@@ -1925,7 +1919,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         assert.ok(!/chime_success/.test(fs.readFileSync(log, "utf8")), "not the done chime");
         assert.ok(!fs.existsSync(pidFile), "the music must stop while waiting");
         await settle("the daemon must actually exit", () => !alive(firstPid));
-        assert.strictEqual(fs.readFileSync(waitingFile, "utf8"), "Bash", "the wait must remember which tool it is for");
+        assert.strictEqual(waitingOn(), "Bash", "the wait must remember which tool it is for");
 
         // A different tool finishing (a parallel read) is not the approval.
         cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ tool_name: "Read" }));
@@ -1933,7 +1927,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
 
         cli(["--hook-resume", "--genre", "zen", "--volume", "5"], bash);
         assert.ok(fs.existsSync(pidFile), "the approved tool's PostToolUse must resume the music");
-        assert.ok(!fs.existsSync(waitingFile), "and end the wait");
+        assert.strictEqual(waitingOn(), null, "and end the wait");
         const resumedPid = parseInt(fs.readFileSync(pidFile, "utf8"), 10);
         await settle("the resumed daemon must be running", () => alive(resumedPid));
 
@@ -1943,7 +1937,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         fs.writeFileSync(log, "");
         cli(["--hook-stop"], "{}");
         assert.ok(/chime_success/.test(fs.readFileSync(log, "utf8")), "a turn ending while paused must still chime done");
-        assert.ok(!fs.existsSync(waitingFile), "Stop must clear the wait");
+        assert.strictEqual(waitingOn(), undefined, "Stop must clear the wait");
 
         const start = (session) =>
           cli(["--hook-start", "--genre", "zen", "--volume", "5"], JSON.stringify({ session_id: session }));
@@ -1951,28 +1945,28 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
 
         // An MCP server asking for input is a wait too, ended by its own result.
         start("s1");
-        const elicit = JSON.stringify({ hook_event_name: "Elicitation", mcp_server_name: "github" });
+        const elicit = JSON.stringify({ session_id: "s1", hook_event_name: "Elicitation", mcp_server_name: "github" });
         cli(["--hook-wait"], elicit);
         assert.ok(!playing(), "an elicitation must pause the music");
-        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ hook_event_name: "ElicitationResult", mcp_server_name: "slack" }));
+        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ session_id: "s1", hook_event_name: "ElicitationResult", mcp_server_name: "slack" }));
         assert.ok(!playing(), "another server's result is not the answer");
-        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ hook_event_name: "ElicitationResult", mcp_server_name: "github" }));
+        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ session_id: "s1", hook_event_name: "ElicitationResult", mcp_server_name: "github" }));
         assert.ok(playing(), "its ElicitationResult must resume it");
 
         // Copilot and Gemini announce the dialog as a Notification, among
         // others that are not waits, and name no tool - so any tool resumes.
         start("s1");
         await settle("s1's music must start", () => playing());
-        cli(["--hook-wait"], JSON.stringify({ hook_event_name: "Notification", notification_type: "idle_prompt" }));
+        cli(["--hook-wait"], JSON.stringify({ session_id: "s1", hook_event_name: "Notification", notification_type: "idle_prompt" }));
         assert.ok(playing(), "a notification that is not a dialog must not pause");
-        cli(["--hook-wait"], JSON.stringify({ hook_event_name: "Notification", notification_type: "ToolPermission" }));
+        cli(["--hook-wait"], JSON.stringify({ session_id: "s1", hook_event_name: "Notification", notification_type: "ToolPermission" }));
         assert.ok(!playing(), "Gemini's ToolPermission notification must pause");
-        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ tool_name: "run_shell_command" }));
+        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ session_id: "s1", tool_name: "run_shell_command" }));
         assert.ok(playing(), "a wait that named no tool resumes on whichever tool finishes");
 
         // An API error never reaches Stop; StopFailure is the only end.
         fs.writeFileSync(log, "");
-        cli(["--hook-stop"], JSON.stringify({ hook_event_name: "StopFailure", error: "rate_limit" }));
+        cli(["--hook-stop"], JSON.stringify({ session_id: "s1", hook_event_name: "StopFailure", error: "rate_limit" }));
         assert.ok(!playing(), "StopFailure must stop the music");
         assert.ok(/chime_failure/.test(fs.readFileSync(log, "utf8")), "and play the failure chime, not success");
 
@@ -2016,7 +2010,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         // daemon watches from the prompt, not from its own start, so it sees
         // the interrupt that came first and never plays.
         await startTurn();
-        cli(["--hook-wait"], bash);
+        cli(["--hook-wait"], turnPayload({ tool_name: "Bash" }));
         fs.appendFileSync(transcript, userText(INTERRUPT));
         fs.writeFileSync(log, "");
         cli(["--hook-resume", "--genre", "zen", "--volume", "5"], turnPayload({ tool_name: "Bash" }));
@@ -2033,20 +2027,87 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         cli(["--hook-end"], JSON.stringify({ session_id: "s1", reason: "prompt_input_exit" }));
         assert.ok(!playing(), "the owning session ending must stop it");
 
-        // Another agent session's Stop / wait / resume is not about this music.
-        start("s1");
-        await settle("s1's music must start again", () => playing());
-        cli(["--hook-stop"], JSON.stringify({ session_id: "s2" }));
-        assert.ok(playing(), "another session's Stop must not kill this session's music");
-        cli(["--hook-wait"], JSON.stringify({ session_id: "s2", tool_name: "Bash" }));
-        assert.ok(playing(), "another session's dialog must not pause this session's music");
-        cli(["--hook-stop"], JSON.stringify({ session_id: "s1" }));
-        assert.ok(!playing(), "the owning session's Stop must still stop it");
+        // Several sessions of one agent share the music: it plays while any of
+        // them is working, and each still gets its own chime.
+        const sid = (session, extra = {}) => JSON.stringify({ session_id: session, ...extra });
+        const goStart = (session) => cli(["--hook-start", "--genre", "zen", "--volume", "5"], sid(session));
+        cli(["--stop"]);
+
+        goStart("A");
+        await settle("A's music must start", () => playing());
+        const aPid = parseInt(fs.readFileSync(pidFile, "utf8"), 10);
+        goStart("B");
+        assert.strictEqual(parseInt(fs.readFileSync(pidFile, "utf8"), 10), aPid, "a second session's prompt must not restart A's music");
+
+        fs.writeFileSync(log, "");
+        cli(["--hook-stop"], sid("B"));
+        assert.ok(playing() && alive(aPid), "B finishing must not silence A, which is still working");
+        assert.ok(/chime_success/.test(fs.readFileSync(log, "utf8")), "but B still gets its own done chime");
+
+        cli(["--hook-wait"], sid("C", { tool_name: "Bash" }));
+        assert.ok(playing(), "a session with no turn on record cannot pause the music");
+
+        fs.writeFileSync(log, "");
+        cli(["--hook-stop"], sid("A"));
+        assert.ok(!playing(), "the last working session ending must stop the music");
+        assert.ok(/chime_success/.test(fs.readFileSync(log, "utf8")), "with A's chime");
+        await settle("the daemon must exit", () => !alive(aPid));
+
+        // More sessions working, more of the same piece: tier 2 at the next loop
+        // boundary once a second one starts, back down as it finishes.
+        const waitFor = async (what, check, ms = 12000) => {
+          for (let i = 0; i < ms / 100 && !check(); i++) await sleep(100);
+          assert.ok(check(), what);
+        };
+        const logged = () => fs.readFileSync(log, "utf8");
+        fs.writeFileSync(log, "");
+        goStart("A");
+        await waitFor("one session plays tier 1", () => /loop_zen_t1/.test(logged()));
+        assert.ok(!/loop_zen_t[23]/.test(logged()), "a lone session stays at its time-based tier");
+        goStart("B");
+        await waitFor("a second working session raises the tier", () => /loop_zen_t2/.test(logged()));
+        cli(["--hook-stop"], sid("B"));
+        cli(["--hook-stop"], sid("A"));
+        await settle("the daemon must stop", () => !playing());
+
+        // A dialog pauses the music only when nobody else is working.
+        goStart("A");
+        goStart("B");
+        cli(["--hook-wait"], sid("A", { tool_name: "Bash" }));
+        assert.ok(playing(), "A's dialog must not pause the music while B works");
+        assert.strictEqual(waitingOn("A"), "Bash");
+        cli(["--hook-wait"], sid("B", { tool_name: "Read" }));
+        assert.ok(!playing(), "every session waiting pauses it");
+        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], sid("A", { tool_name: "Read" }));
+        assert.ok(!playing(), "another session's tool finishing is not A's approval");
+        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], sid("A", { tool_name: "Bash" }));
+        assert.ok(playing(), "A's own approval resumes the music");
+        cli(["--hook-end"], sid("A"));
+        assert.ok(!playing(), "A closing leaves only B, which is waiting, so it stops");
+        assert.strictEqual(waitingOn("B"), "Read", "and B's wait survives");
+
+        // Esc in one session ends only that session's turn.
+        const tA = path.join(dir, "a.jsonl");
+        const tB = path.join(dir, "b.jsonl");
+        fs.writeFileSync(tA, "");
+        fs.writeFileSync(tB, "");
+        cli(["--stop"]);
+        cli(["--hook-start", "--genre", "zen", "--volume", "5"], sid("A", { transcript_path: tA }));
+        cli(["--hook-start", "--genre", "zen", "--volume", "5"], sid("B", { transcript_path: tB }));
+        await settle("the music must start", () => playing());
+        const bothPid = parseInt(fs.readFileSync(pidFile, "utf8"), 10);
+        fs.appendFileSync(tB, userText(INTERRUPT));
+        await settle("B's Esc must end B's turn", () => waitingOn("B") === undefined);
+        await sleep(800);
+        assert.ok(alive(bothPid) && playing(), "A is still working, so the music carries on");
+        fs.appendFileSync(tA, userText(INTERRUPT));
+        await settle("A's Esc must end the music", () => !alive(bothPid));
+        assert.ok(!playing(), "with both interrupted nothing is left to play");
       } finally {
         cli(["--stop"]);
         fs.rmSync(dir, { recursive: true, force: true });
       }
-      console.log("   ✓ Dialogs and elicitations pause and resume; API errors, Esc (via the transcript) and session end all stop the music.");
+      console.log("   ✓ Dialogs and elicitations pause and resume; API errors, Esc (via the transcript) and session end stop the music; several sessions share it and each keeps its own chime.");
     }
   }
 

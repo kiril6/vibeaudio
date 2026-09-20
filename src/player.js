@@ -498,6 +498,7 @@ class AudioPlayer {
     this.volume = 0.42;
     this.seed = projectSeed();
     this.intensity = null;
+    this.minTier = null;
     this.currentTier = 1;
     this.nextTimer = null;
     this.watchdog = null;
@@ -507,7 +508,7 @@ class AudioPlayer {
    * Returns true if playback actually started. Restarts when called with
    * different settings while playing, so a genre switch is not silently dropped.
    */
-  start(genre = "lofi", volume = 0.42, { maxDurationMs = null, intensity = null } = {}) {
+  start(genre = "lofi", volume = 0.42, { maxDurationMs = null, intensity = null, minTier = null } = {}) {
     const resolved = resolveGenre(genre);
     const targetVolume = Math.max(0.05, Math.min(1.0, volume));
 
@@ -529,6 +530,7 @@ class AudioPlayer {
     this.volume = targetVolume;
     this.seed = projectSeed();
     this.intensity = intensity;
+    this.minTier = minTier;
 
     installExitHook();
     activePlayers.add(this);
@@ -560,7 +562,8 @@ class AudioPlayer {
     // An intensity source (reactive mode) overrides this when it has a signal.
     const elapsed = Date.now() - this.startTime;
     const byTime = elapsed > TIER_3_AFTER_MS ? 3 : elapsed > TIER_2_AFTER_MS ? 2 : 1;
-    this.currentTier = (this.intensity && this.intensity()) || byTime;
+    // A floor (several sessions at once) only ever raises the tier.
+    this.currentTier = Math.max((this.intensity && this.intensity()) || byTime, (this.minTier && this.minTier()) || 1);
 
     // Either the backend attenuates, or the file is rendered pre-attenuated -
     // never both, or the volume would be applied twice.

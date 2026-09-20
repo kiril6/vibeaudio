@@ -20,10 +20,12 @@ const { AudioPlayer } = require("./player");
 const STATE_DIR = path.join(os.homedir(), ".vibeaudio");
 const PID_FILE = path.join(STATE_DIR, "daemon.pid");
 const INTENSITY_FILE = path.join(STATE_DIR, "intensity");
-// Present while the music is paused mid-turn; holds what will resume it.
-const WAITING_FILE = path.join(STATE_DIR, "waiting");
-// The turn the music belongs to: its session, and where its transcript began.
-const TURN_FILE = path.join(STATE_DIR, "turn.json");
+// One file per agent session with a turn in flight. The music plays while any of
+// them is working; each holds where its transcript began and, while paused for
+// the user, what will resume it.
+const SESSIONS_DIR = path.join(STATE_DIR, "sessions");
+// Payloads that name no session share this one slot.
+const ANON_SESSION = "anon";
 const CLI_ENTRY = path.join(__dirname, "..", "bin", "vibeaudio.js");
 
 /**
@@ -357,15 +359,15 @@ function isOurDaemon(pid) {
 }
 
 /**
- * `pause` keeps the turn's state (what resumes it, whose it is): only the hooks
- * pausing mid-turn pass it. Every other stop (new prompt, turn end, --stop,
- * uninstall) ends the turn, or a later tool call would resume music nobody is
- * waiting for.
+ * Stops the player. `keepSessions` leaves the session files alone: the hooks
+ * use it because they decide per session what is still going on. Every other
+ * stop (--stop, --mute, uninstall) ends everything, or a later tool call would
+ * resume music nobody is waiting for.
  */
-function stopDaemon({ pause = false } = {}) {
+function stopDaemon({ keepSessions = false } = {}) {
   const pid = readPid();
   fs.rmSync(PID_FILE, { force: true });
-  if (!pause) endTurnState();
+  if (!keepSessions) fs.rmSync(SESSIONS_DIR, { recursive: true, force: true });
   if (pid === null || !isOurDaemon(pid)) return false;
 
   try {
@@ -374,11 +376,6 @@ function stopDaemon({ pause = false } = {}) {
   } catch (e) {
     return false; // Already gone
   }
-}
-
-function endTurnState() {
-  fs.rmSync(WAITING_FILE, { force: true });
-  fs.rmSync(TURN_FILE, { force: true });
 }
 
 function fileSize(file) {
@@ -400,27 +397,59 @@ function newTurn(raw) {
   return { session: String(payload.session_id || ""), transcript, offset: transcript ? fileSize(transcript) : 0 };
 }
 
-function readTurn() {
+// The id ends up in a file name.
+function sessionId(id) {
+  return String(id || ANON_SESSION).replace(/[^\w.-]/g, "_").slice(0, 100);
+}
+
+function sessionFile(id) {
+  return path.join(SESSIONS_DIR, `${id}.json`);
+}
+
+function readSession(id) {
   try {
-    return JSON.parse(fs.readFileSync(TURN_FILE, "utf8"));
+    return JSON.parse(fs.readFileSync(sessionFile(id), "utf8"));
   } catch (e) {
     return null;
   }
 }
 
-/**
- * One daemon serves every agent session, and the last prompt owns it. A Stop,
- * wait or resume from any *other* session is not about this music: without the
- * check, a second agent finishing (or starting a turn that ends quickly) killed
- * the first one's music mid-turn. Fails open when either side names no session
- * (Codex/Cursor payloads, or no turn on record) - the old behaviour, not a new
- * way to leave music playing.
- */
-function ownsTurn(raw) {
-  const turn = readTurn();
-  const session = parsePayload(raw).session_id;
-  return !(turn && turn.session && session && String(session) !== turn.session);
+// Written beside the target and renamed into place: the daemon lists this
+// directory every poll and must never read half a file.
+function writeSession(id, data) {
+  fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+  const tmp = `${sessionFile(id)}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ ...data, ts: Date.now() }));
+  fs.renameSync(tmp, sessionFile(id));
 }
+
+/**
+ * Every session with a turn in flight. One that has not been touched for
+ * MAX_DAEMON_MS is a crashed agent - it never sent Stop - and is dropped here,
+ * the same ceiling the daemon itself stops at.
+ */
+function listSessions() {
+  let names;
+  try {
+    names = fs.readdirSync(SESSIONS_DIR);
+  } catch (e) {
+    return [];
+  }
+  const now = Date.now();
+  const sessions = [];
+  for (const name of names) {
+    if (!name.endsWith(".json")) continue;
+    const id = name.slice(0, -".json".length);
+    const data = readSession(id);
+    if (!data) continue;
+    if (now - (data.ts || 0) > MAX_DAEMON_MS) fs.rmSync(sessionFile(id), { force: true });
+    else sessions.push({ id, ...data });
+  }
+  return sessions;
+}
+
+// Working, as opposed to paused for the user.
+const working = (sessions) => sessions.filter((s) => s.waiting == null);
 
 // Claude Code's entry for Esc / the stop button: a user message whose text is
 // "[Request interrupted by user]" or "... for tool use]".
@@ -480,29 +509,47 @@ function interruptWatcher(transcript, offset) {
 const INTERRUPT_POLL_MS = 500;
 
 /**
- * Internal mode: holds the audio open until told to stop. The player's own
- * loop timer keeps the event loop alive.
+ * Internal mode: plays while any session is working. The player's own loop
+ * timer keeps the event loop alive.
  */
 function runDaemon(genre, volume, { reactive = false } = {}) {
-  const turn = readTurn();
-  const interrupted = turn && turn.transcript ? interruptWatcher(turn.transcript, turn.offset) : null;
+  const watchers = new Map(); // session id -> its transcript poll
+
+  // Drops sessions whose transcript shows an interrupt (Esc fires no hook, so
+  // this is the only way to learn of one) and says whether any is still working.
+  const sweep = () => {
+    const sessions = listSessions();
+    for (const id of watchers.keys()) if (!sessions.some((s) => s.id === id)) watchers.delete(id);
+    for (const s of sessions) {
+      if (!s.transcript) continue;
+      // Built from the offset taken at the prompt, so a daemon respawned mid-turn
+      // still sees an interrupt that came before it.
+      if (!watchers.has(s.id)) watchers.set(s.id, interruptWatcher(s.transcript, s.offset));
+      if (watchers.get(s.id)()) {
+        fs.rmSync(sessionFile(s.id), { force: true });
+        watchers.delete(s.id);
+      }
+    }
+    return working(listSessions()).length > 0;
+  };
 
   // Silent, like Ctrl+C in the wrapper: an interrupt is never reported as done.
-  const endInterrupted = () => {
+  const endIdle = () => {
     if (readPid() === process.pid) {
       fs.rmSync(PID_FILE, { force: true });
-      endTurnState();
       fs.rmSync(INTENSITY_FILE, { force: true });
     }
     process.exit(0);
   };
-  // Already interrupted before this daemon started - a resume respawned by the
-  // PostToolUse that an interrupted tool still fires.
-  if (interrupted && interrupted()) endInterrupted();
+  if (!sweep()) endIdle(); // Already interrupted before this daemon started.
 
   const player = new AudioPlayer();
   const started = player.start(genre, volume, {
-    intensity: reactive ? readIntensity : null
+    intensity: reactive ? readIntensity : null,
+    // The same piece with more of it, as time escalation already does: two
+    // sessions working is tier 2 at least, three or more is tier 3. Read at
+    // each loop boundary, so it lands cleanly and eases off as they finish.
+    minTier: () => Math.min(3, working(listSessions()).length)
   });
   if (!started) process.exit(0);
 
@@ -515,30 +562,44 @@ function runDaemon(genre, volume, { reactive = false } = {}) {
   process.on("SIGINT", shutdown);
   setTimeout(shutdown, MAX_DAEMON_MS);
 
-  if (interrupted) {
-    setInterval(() => {
-      if (!interrupted()) return;
-      player.stop({ playChime: false });
-      endInterrupted();
-    }, INTERRUPT_POLL_MS);
-  }
+  setInterval(() => {
+    if (sweep()) return;
+    player.stop({ playChime: false });
+    endIdle();
+  }, INTERRUPT_POLL_MS);
 }
 
-function hookStart(genre, volume, { reactive = false, turn = null } = {}) {
-  stopDaemon(); // Single instance: a new prompt replaces the previous run
-  fs.mkdirSync(STATE_DIR, { recursive: true });
-  fs.rmSync(INTENSITY_FILE, { force: true }); // Don't inherit the last prompt's activity
-  // Before the spawn: the daemon reads it on startup.
-  if (turn) fs.writeFileSync(TURN_FILE, JSON.stringify(turn));
+function daemonRunning() {
+  const pid = readPid();
+  return pid !== null && isOurDaemon(pid);
+}
 
+function spawnDaemon(genre, volume, reactive) {
   const args = [CLI_ENTRY, "--daemon", "--genre", genre, "--volume", String(Math.round(volume * 100))];
   if (reactive) args.push("--reactive");
 
   const child = spawn(process.execPath, args, { detached: true, stdio: "ignore" });
   child.unref();
 
+  fs.mkdirSync(STATE_DIR, { recursive: true });
   fs.writeFileSync(PID_FILE, String(child.pid));
   return child.pid;
+}
+
+/**
+ * A prompt. With no other session working this replaces the player, as it
+ * always did, so a genre change lands on the next prompt. With one working the
+ * music carries on: restarting it would cut every other session's stream.
+ */
+function hookStart(genre, volume, { reactive = false, turn = null } = {}) {
+  const id = sessionId(turn && turn.session);
+  // Before the spawn: the daemon reads it on startup.
+  writeSession(id, { transcript: (turn && turn.transcript) || "", offset: (turn && turn.offset) || 0, waiting: null });
+  if (working(listSessions()).some((s) => s.id !== id) && daemonRunning()) return readPid();
+
+  stopDaemon({ keepSessions: true });
+  fs.rmSync(INTENSITY_FILE, { force: true }); // Don't inherit the last prompt's activity
+  return spawnDaemon(genre, volume, reactive);
 }
 
 /**
@@ -589,25 +650,22 @@ function readPayload(done, timeoutMs = 500) {
 }
 
 function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChime = false, raw = "" } = {}) {
-  if (!ownsTurn(raw)) return false;
-  // Read before stopDaemon clears it. A turn that ends while paused for the
-  // user - a denied tool that nothing resumed after - still finished.
-  const wasWaiting = fs.existsSync(WAITING_FILE);
-  const wasPlaying = stopDaemon();
-  fs.rmSync(INTENSITY_FILE, { force: true });
-  if (!(wasPlaying || wasWaiting) || noChime) return false;
+  const id = sessionId(parsePayload(raw).session_id);
+  // A turn that ends while paused for the user - a denied tool that nothing
+  // resumed after - still finished, so its session counts either way.
+  const tracked = readSession(id) !== null;
+  fs.rmSync(sessionFile(id), { force: true });
 
-  // Chime plays in this short-lived hook process, after the daemon is gone.
+  // The music is every working session's, so it ends with the last of them.
+  // Everyone else's carries on, and this session still gets its own chime.
+  const others = working(listSessions()).length > 0;
+  const wasPlaying = others ? false : stopDaemon({ keepSessions: true });
+  if (!others) fs.rmSync(INTENSITY_FILE, { force: true });
+  if (!(tracked || wasPlaying) || noChime) return false;
+
+  // Chime plays in this short-lived hook process.
   new AudioPlayer().stop({ playChime: true, outcome, volume, chimeVolume });
   return true;
-}
-
-function readWaiting() {
-  try {
-    return fs.readFileSync(WAITING_FILE, "utf8");
-  } catch (e) {
-    return null;
-  }
 }
 
 /**
@@ -633,11 +691,12 @@ const WAIT_NOTIFICATIONS = new Set([
  * The agent is blocked on the user (a permission dialog, a question, a plan to
  * approve, an MCP server asking for input). Music that keeps playing says
  * "still working", which is the one thing that is not true, so it stops and
- * the attention chime asks instead.
+ * the attention chime asks instead - unless another session is still working,
+ * whose music is not this dialog's to end.
  *
- * Only while music is playing: after the turn has ended there is nobody to
- * interrupt, and a second dialog while already waiting keeps the first wait
- * rather than chiming twice.
+ * Only for a turn in flight: after it has ended there is nobody to interrupt,
+ * and a second dialog while already waiting keeps the first wait rather than
+ * chiming twice.
  *
  * The chime is detached: the agent waits on this hook before showing the
  * dialog, and a chime played to completion here held it back for its length.
@@ -646,10 +705,13 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
   const payload = parsePayload(raw);
   const type = payload.notification_type ?? payload.notificationType;
   if (type !== undefined && !WAIT_NOTIFICATIONS.has(String(type))) return false;
-  if (!ownsTurn(raw)) return false;
 
-  if (!stopDaemon({ pause: true })) return false;
-  fs.writeFileSync(WAITING_FILE, waitKey(raw));
+  const id = sessionId(payload.session_id);
+  const session = readSession(id);
+  if (!session || session.waiting != null) return false;
+
+  writeSession(id, { ...session, waiting: waitKey(raw) });
+  if (working(listSessions()).length === 0) stopDaemon({ keepSessions: true });
   if (!noChime) new AudioPlayer().stop({ playChime: true, outcome: "attention", volume, chimeVolume, detach: true });
   return true;
 }
@@ -659,23 +721,24 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
  * itself, so this is the first signal that work carries on after one - resume,
  * if it is the one being waited for.
  *
- * The turn is carried over rather than started afresh, so the new daemon keeps
- * watching the transcript from the prompt. An approved tool interrupted with
- * Esc still fires this PostToolUse, and must not bring the music back.
+ * The session keeps its transcript offset from the prompt, so an approved tool
+ * interrupted with Esc, which still fires this PostToolUse, is seen by the
+ * daemon and must not bring the music back.
  *
  * ponytail: matching by name means two same-named tools in one parallel batch,
  * one needing approval, can resume early - after the chime already did its
  * job. Match on tool_input as well if that ever shows up in practice.
  */
 function hookResume(raw, genre, volume, { reactive = false } = {}) {
-  const waitingFor = readWaiting();
-  if (waitingFor === null) return false; // Not waiting - the common case, on every tool call.
-  if (!ownsTurn(raw)) return false; // Another session's tool finishing is not this approval.
+  const id = sessionId(parsePayload(raw).session_id);
+  const session = readSession(id);
+  if (!session || session.waiting == null) return false; // Not waiting - the common case, on every tool call.
   // An empty key is a wait that named nothing (a Notification): the next tool
   // to finish is the first sign of work carrying on.
-  if (waitingFor !== "" && waitingFor !== waitKey(raw)) return false;
+  if (session.waiting !== "" && session.waiting !== waitKey(raw)) return false;
 
-  hookStart(genre, volume, { reactive, turn: readTurn() || newTurn(raw) });
+  writeSession(id, { ...session, waiting: null });
+  if (!daemonRunning()) spawnDaemon(genre, volume, reactive);
   return true;
 }
 
@@ -683,18 +746,20 @@ function hookResume(raw, genre, volume, { reactive = false } = {}) {
  * The agent's session is over (quit, /clear, logout). A turn cut off by it
  * never reaches Stop. Silent: nothing finished.
  *
- * Only the session that started the music may end it. SessionEnd also fires
- * for idle sessions, and one terminal closing must not silence another that is
- * mid-turn. Fails closed: with no recorded session there is no proof the music
- * is this session's, and the MAX_DAEMON_MS ceiling still applies.
+ * Only that session's own turn ends, so one terminal closing cannot silence
+ * another that is mid-turn. Fails closed on an unknown session: with none on
+ * record there is nothing of its to end, and the MAX_DAEMON_MS ceiling still
+ * applies.
  */
 function hookEnd(raw) {
-  const turn = readTurn();
-  const owner = turn && turn.session;
-  if (!owner || owner !== String(parsePayload(raw).session_id || "")) return false;
+  const id = sessionId(parsePayload(raw).session_id);
+  if (!readSession(id)) return false;
 
-  stopDaemon();
-  fs.rmSync(INTENSITY_FILE, { force: true });
+  fs.rmSync(sessionFile(id), { force: true });
+  if (working(listSessions()).length === 0) {
+    stopDaemon({ keepSessions: true });
+    fs.rmSync(INTENSITY_FILE, { force: true });
+  }
   return true;
 }
 
