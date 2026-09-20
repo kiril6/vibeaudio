@@ -26,6 +26,7 @@ AI coding agents take 15–45 seconds to reason, read files and write code. Star
 * 📈 **Escalating layers.** Tier 1 (0–15s) gentle intro → Tier 2 (15–45s) main groove → Tier 3 (45s+) deep focus. You can hear how deep into the task the agent is.
 * 🔔 **Outcome-aware chimes.** Ascending on success, a soft descending minor chord on failure, and **silence on `Ctrl+C`** — an abort is never reported as done.
 * ✋ **A "your turn" chime.** When Claude Code stops to ask permission (or an MCP server asks for input), the music pauses and a rising two-note chime asks for you; it picks back up once you've answered.
+* 🪟 **Several sessions, one soundtrack.** Run as many terminals of the same agent as you like: the music plays while *any* of them is working, and each finishes with its own chime. One session ending, pausing for a permission dialog or being interrupted never cuts off another that's still going.
 * 🧮 **Honest exit codes.** Your command's status passes straight through (`130` on `Ctrl+C`), so `vibe claude && next-step` behaves exactly as it would without the wrapper.
 * 🌊 **Terminal title HUD.** A live ASCII wave and elapsed timer in the window title, where it can't corrupt a full-screen TUI.
 * 🔌 **Universal drop-in.** Hooks for **Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI and Qwen Code**; MCP for **Claude Desktop and Antigravity**; the wrapper (`vibe <command>`) for anything else.
@@ -215,6 +216,18 @@ Six things differ per agent, and none of them need any action from you except th
 | **Codex asks you to trust the hook once** | Codex keeps a per-hook trust hash in `~/.codex/config.toml` and won't run a hook it hasn't been told to trust, so the install isn't live until you approve each one the first time it fires. |
 | **Only Cursor can play the failure chime** | Its stop event reports whether the turn completed, aborted or errored. The others send no verdict, so a turn there always ends on the success chime — VibeAudio won't invent a failure the agent never claimed. |
 | **Grok and Copilot CLI get a file of their own** | Each reads every `*.json` in its `hooks/` directory, so VibeAudio writes `vibeaudio.json` rather than merging into anyone else's — which makes uninstalling it a delete, and leaves no backup file behind. Copilot's honours `COPILOT_HOME`. |
+
+### Several sessions at once
+
+Every session of an agent is tracked separately, by the session id in its hook payload, so two terminals (or a terminal and the desktop app) share one soundtrack instead of fighting over it:
+
+* **The music plays while any session is working.** A second prompt doesn't restart it, and it stops only when the last working session finishes.
+* **More sessions, more music.** Two sessions working at once plays at least tier 2 and three or more plays tier 3 — the same piece with more layers, arriving at the next loop boundary and easing off as sessions finish. It only ever raises the tier, so it works alongside time escalation and [reactive mode](#reactive-mode-opt-in).
+* **Every session gets its own chime.** A quick question that finishes while another agent is still busy chimes "done" and the music carries on underneath.
+* **Dialogs and Esc are per session.** A permission dialog in one terminal plays the "your turn" chime but only pauses the music once *every* session is waiting; Esc ends just that session's turn.
+* **Crashed agents can't hold it hostage.** A session that never sent `Stop` is dropped after 15 minutes, the same ceiling the background player stops at.
+
+Sessions with no id in their payload share a single slot, so they behave as one. VibeAudio keeps one stream: per-session genres or several streams mixed together aren't supported.
 
 > **No restart needed, even mid-session — for Claude Code, Codex, Cursor and Grok.** Each re-reads its hook file every time a hook fires, so changes land on your **next prompt**. A daemon already playing keeps its old settings until that prompt replaces it — at most the tail of one turn. Whether an open Gemini CLI, Copilot CLI or Qwen Code session does the same hasn't been checked, so start a new session there to be sure.
 
