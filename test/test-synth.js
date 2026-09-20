@@ -2032,6 +2032,16 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         assert.ok(playing(), "an unidentified session must not stop it either");
         cli(["--hook-end"], JSON.stringify({ session_id: "s1", reason: "prompt_input_exit" }));
         assert.ok(!playing(), "the owning session ending must stop it");
+
+        // Another agent session's Stop / wait / resume is not about this music.
+        start("s1");
+        await settle("s1's music must start again", () => playing());
+        cli(["--hook-stop"], JSON.stringify({ session_id: "s2" }));
+        assert.ok(playing(), "another session's Stop must not kill this session's music");
+        cli(["--hook-wait"], JSON.stringify({ session_id: "s2", tool_name: "Bash" }));
+        assert.ok(playing(), "another session's dialog must not pause this session's music");
+        cli(["--hook-stop"], JSON.stringify({ session_id: "s1" }));
+        assert.ok(!playing(), "the owning session's Stop must still stop it");
       } finally {
         cli(["--stop"]);
         fs.rmSync(dir, { recursive: true, force: true });

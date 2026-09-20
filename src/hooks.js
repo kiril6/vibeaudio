@@ -408,6 +408,20 @@ function readTurn() {
   }
 }
 
+/**
+ * One daemon serves every agent session, and the last prompt owns it. A Stop,
+ * wait or resume from any *other* session is not about this music: without the
+ * check, a second agent finishing (or starting a turn that ends quickly) killed
+ * the first one's music mid-turn. Fails open when either side names no session
+ * (Codex/Cursor payloads, or no turn on record) - the old behaviour, not a new
+ * way to leave music playing.
+ */
+function ownsTurn(raw) {
+  const turn = readTurn();
+  const session = parsePayload(raw).session_id;
+  return !(turn && turn.session && session && String(session) !== turn.session);
+}
+
 // Claude Code's entry for Esc / the stop button: a user message whose text is
 // "[Request interrupted by user]" or "... for tool use]".
 const INTERRUPT_MARK = "[Request interrupted by user";
@@ -574,7 +588,8 @@ function readPayload(done, timeoutMs = 500) {
   setTimeout(finish, timeoutMs).unref();
 }
 
-function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChime = false } = {}) {
+function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChime = false, raw = "" } = {}) {
+  if (!ownsTurn(raw)) return false;
   // Read before stopDaemon clears it. A turn that ends while paused for the
   // user - a denied tool that nothing resumed after - still finished.
   const wasWaiting = fs.existsSync(WAITING_FILE);
@@ -631,6 +646,7 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
   const payload = parsePayload(raw);
   const type = payload.notification_type ?? payload.notificationType;
   if (type !== undefined && !WAIT_NOTIFICATIONS.has(String(type))) return false;
+  if (!ownsTurn(raw)) return false;
 
   if (!stopDaemon({ pause: true })) return false;
   fs.writeFileSync(WAITING_FILE, waitKey(raw));
@@ -654,6 +670,7 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
 function hookResume(raw, genre, volume, { reactive = false } = {}) {
   const waitingFor = readWaiting();
   if (waitingFor === null) return false; // Not waiting - the common case, on every tool call.
+  if (!ownsTurn(raw)) return false; // Another session's tool finishing is not this approval.
   // An empty key is a wait that named nothing (a Notification): the next tool
   // to finish is the first sign of work carrying on.
   if (waitingFor !== "" && waitingFor !== waitKey(raw)) return false;

@@ -693,7 +693,8 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, 
           outcome: hooks.outcomeFromPayload(raw),
           volume,
           chimeVolume,
-          noChime
+          noChime,
+          raw
         });
       });
       return;
