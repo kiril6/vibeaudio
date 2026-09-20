@@ -10,6 +10,7 @@ const {
   triangle,
   makeRng,
   pick,
+  pluckEnv,
   createWavBuffer
 } = require("./generator");
 
@@ -98,7 +99,7 @@ function generateSynthwaveLoop(durationSec = 6.8, tier = 2, seed = 0) {
       if (idx >= totalSamples) break;
       const t = i / SAMPLE_RATE;
       const tNote = t % stepSec;
-      const env = Math.exp(-tNote * 8.0);
+      const env = pluckEnv(tNote, stepSec, 8.0);
       const sample = (triangle(f * t) * 0.7 + analogSaw(f * t) * 0.3) * env * 0.20;
 
       left[idx] += sample;
@@ -119,7 +120,7 @@ function generateSynthwaveLoop(durationSec = 6.8, tier = 2, seed = 0) {
       const noteIdx = Math.floor(t / stepSec) % leadNotes.length;
       const f = noteToFreq(leadNotes[noteIdx]);
       const tNote = t % stepSec;
-      const env = Math.exp(-tNote * 6.5);
+      const env = pluckEnv(tNote, stepSec, 6.5);
       const sample = analogSaw(f * t) * env * 0.085;
 
       const pan = 0.5 + 0.35 * Math.sin(2 * Math.PI * 1.5 * t);

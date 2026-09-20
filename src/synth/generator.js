@@ -114,6 +114,32 @@ function analogSaw(phase) {
  * Encodes audio buffers (Float Arrays in [-1.0, 1.0]) into a valid 16-bit PCM WAV Buffer.
  * Supports mono (single array) or stereo (array of [left, right] or { left: [], right: [] }).
  */
+/**
+ * A plucked note's amplitude envelope, and the reason it isn't a bare
+ * `Math.exp(-tNote * decay)`.
+ *
+ * A decay curve alone is 1.0 the instant `tNote` wraps back to zero, so every
+ * note onset steps the waveform discontinuously - in synthwave's bass, from
+ * 0.113 straight to 1.0, a jump of 0.13 full-scale in a single sample. That is
+ * a click, and at eighth notes it arrives 3.7 times a second: reported as
+ * "speaker static when the music intensifies", because the layers that use it
+ * only exist from tier 2 up.
+ *
+ * Ramping the attack from zero and forcing the release back to zero makes the
+ * envelope continuous at both ends of every note. It also covers the other
+ * discontinuity in the same voices: an arpeggiator changes `f` while `t` keeps
+ * running, so the oscillator's phase jumps at each new note - inaudible only
+ * because the envelope is at zero when it happens.
+ *
+ * 3ms and 4ms are short enough to leave a pluck percussive; chiptune.js has
+ * always done this (a 25ms ramp), which is why it never clicked.
+ */
+function pluckEnv(tNote, stepSec, decay, attackSec = 0.003, releaseSec = 0.004) {
+  const attack = Math.min(1.0, tNote / attackSec);
+  const release = Math.min(1.0, Math.max(0.0, (stepSec - tNote) / releaseSec));
+  return Math.exp(-tNote * decay) * attack * release;
+}
+
 function createWavBuffer({ left, right = null, sampleRate = SAMPLE_RATE }) {
   const isStereo = right != null && right.length > 0;
   const numChannels = isStereo ? 2 : 1;
@@ -175,5 +201,6 @@ module.exports = {
   triangle,
   softPulse,
   analogSaw,
+  pluckEnv,
   createWavBuffer
 };

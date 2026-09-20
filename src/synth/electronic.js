@@ -13,6 +13,7 @@ const {
   makeRng,
   pick,
   ornamentRng,
+  pluckEnv,
   createWavBuffer
 } = require("./generator");
 
@@ -61,7 +62,7 @@ function generateElectronicLoop(durationSec = 6.4, tier = 2, seed = 0) {
       const tNote = t % stepSec;
       // Fast exponential decay filter simulation
       const filterCutoff = Math.exp(-tNote * 14.0);
-      const env = Math.exp(-tNote * 7.0);
+      const env = pluckEnv(tNote, stepSec, 7.0);
 
       // Resonant pluck wave: mixture of soft pulse and harmonics modulated by filter cutoff
       const osc = softPulse(f * t) * 0.7 + analogSaw(f * t) * 0.3 * filterCutoff;
@@ -87,7 +88,11 @@ function generateElectronicLoop(durationSec = 6.4, tier = 2, seed = 0) {
     const bar = Math.floor(t / (secPerBeat * 2.0)) % bassSeq.length;
     const f = noteToFreq(bassSeq[bar]);
     const tBeat = t % secPerBeat;
-    const env = Math.exp(-tBeat * 4.5);
+    // Same reason as the pluck above: a bare decay is 1.0 the instant tBeat
+    // wraps, which on a sub this deep is a thump rather than a note. It also
+    // lands the bar's pitch change on an envelope of zero, so the oscillator's
+    // phase jump there is inaudible.
+    const env = pluckEnv(tBeat, secPerBeat, 4.5);
 
     // Deep sine sub + triangle warmth
     const sub = (sine(f * t) * 0.75 + triangle(f * t) * 0.25) * env * 0.28;
