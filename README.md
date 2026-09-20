@@ -360,11 +360,11 @@ Restart the app afterwards. Older Gemini CLI releases predate its hook system (0
 
 ### Changing the genre here
 
-`vibe --genre` doesn't apply — the app launches the server, not you. Two ways instead:
+**Set it like anywhere else.** `vibe --genre jazz --volume 25` saves the default the server reads, and it reads it per request — so the next `vibe_play` picks it up with no restart and no config edit, even though the app launched the server and you didn't.
 
-**Just ask.** `vibe_play` takes a genre, so "play some jazz while you work on this" is enough, no config edit and no restart.
+**Or just ask.** `vibe_play` takes a genre, so "play some jazz while you work on this" is enough. A genre the assistant passes wins over the saved default.
 
-**Or set a default in the config's `env` block**, since a GUI app won't inherit `VIBE_GENRE` from your shell. Most clients support `env` alongside `command`/`args`:
+**Or pin one in the config's `env` block**, if you want this client to differ from the rest of your machine — a GUI app won't inherit `VIBE_GENRE` from your shell. Most clients support `env` alongside `command`/`args`:
 
 ```json
 "env": { "VIBE_GENRE": "jazz", "VIBE_VOLUME": "25" }
@@ -376,7 +376,7 @@ VIBE_GENRE = "jazz"
 VIBE_VOLUME = "25"
 ```
 
-Restart the app afterwards. A genre the assistant passes to `vibe_play` still wins over this default.
+Restart the app afterwards — this one is read from the environment the server was launched with, so unlike the saved default it can't change under a running client.
 
 #### Exposed MCP Tools:
 * `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `random`; `volume`: `5-100`).
