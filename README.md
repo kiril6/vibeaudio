@@ -22,20 +22,24 @@ AI coding agents take 15–45 seconds to reason, read files and write code. Star
 
 * 🧮 **Pure synthesis, zero MP3s.** Every note, chord and pad is generated in code — no audio assets, no npm dependencies, no `node-gyp`.
 * 🎼 **A different arrangement per project.** Your working directory seeds the progression, bass line and melody, so each repo has its own sound and keeps it.
-* 🛡️ **A grace window.** Fast commands stay 100% silent — music starts only past 1.5s (`--grace`).
 * 📈 **Escalating layers.** Tier 1 (0–15s) gentle intro → Tier 2 (15–45s) main groove → Tier 3 (45s+) deep focus. You can hear how deep into the task the agent is.
 * 🔔 **Outcome-aware chimes.** Ascending on success, a soft descending minor chord on failure, and **silence on `Ctrl+C`** — an abort is never reported as done.
 * ✋ **A "your turn" chime.** When Claude Code stops to ask permission (or an MCP server asks for input), the music pauses and a rising two-note chime asks for you; it picks back up once you've answered.
+* 🔌 **Universal drop-in.** Hooks for **Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI and Qwen Code**; MCP for **Claude Desktop and Antigravity**; the wrapper (`vibe <command>`) for anything else.
+
+<details>
+<summary><b>And the quieter four</b> — silence on fast commands, several sessions at once, exit codes, the HUD</summary>
+
+* 🛡️ **A grace window.** Fast commands stay 100% silent — music starts only past 1.5s (`--grace`).
 * 🪟 **Several sessions, one soundtrack.** Run as many terminals of the same agent as you like: the music plays while *any* of them is working, and each finishes with its own chime. One session ending, pausing for a permission dialog or being interrupted never cuts off another that's still going.
 * 🧮 **Honest exit codes.** Your command's status passes straight through (`130` on `Ctrl+C`), so `vibe claude && next-step` behaves exactly as it would without the wrapper.
 * 🌊 **Terminal title HUD.** A live ASCII wave and elapsed timer in the window title, where it can't corrupt a full-screen TUI.
-* 🔌 **Universal drop-in.** Hooks for **Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI and Qwen Code**; MCP for **Claude Desktop and Antigravity**; the wrapper (`vibe <command>`) for anything else.
+
+</details>
 
 ### 🎼 Every project gets its own arrangement
 
 VibeAudio seeds the composition from your **project directory**. The repo you're in picks the chord progression, the bass line, the melodic contour, and where the ornaments land — so `~/work/api` and `~/side/game` genuinely sound different, while each one sounds the *same every time you come back to it*.
-
-That's a deliberate choice. Focus music has one job: **be ignorable.** Music that reinvents itself every run keeps pulling your ear back, which is the opposite of what you want while reading an agent's output. Familiar-per-project gives you variety across contexts and predictability within one — by your third session in a repo, its loop has faded into the furniture.
 
 Pin or explore arrangements when you want to:
 
@@ -44,7 +48,14 @@ vibe --seed 42 --preview jazz    # audition one specific arrangement
 export VIBE_SEED=7               # pin the same sound everywhere
 ```
 
+<details>
+<summary><b>Why the same sound every time, rather than something new — and what "procedural" actually means</b></summary>
+
+That's a deliberate choice. Focus music has one job: **be ignorable.** Music that reinvents itself every run keeps pulling your ear back, which is the opposite of what you want while reading an agent's output. Familiar-per-project gives you variety across contexts and predictability within one — by your third session in a repo, its loop has faded into the furniture.
+
 **How "procedural" actually works** — worth being precise, since it shapes what you'll hear. Each genre is **synthesized from code** (oscillators, chord tables, envelopes rendered to PCM), not shipped as audio files. The seed selects among *hand-written, human-checked* variants — three progressions per genre, each diatonic to that genre's key, plus seeded ornament placement — so it never invents harmony and can't wander out of key. The chosen arrangement is rendered once per project, cached under `~/.vibeaudio/cache/`, and looped. Within a session you're hearing a 6–8 second bar repeat that gains layers as you cross the tier boundaries.
+
+</details>
 
 ---
 
@@ -147,6 +158,13 @@ Choose your volume level:
   4. 📢 Loud (75%)         — Audible across the room
 ```
 
+**Press `p` to hear the highlighted genre** — auditioning is just a keypress, and moving on replaces it.
+
+Installed tools sort to the top, and the list is a shortcut rather than a compatibility list: **`vibe` wraps any command at all**, and "Custom command..." takes one you type.
+
+<details>
+<summary><b>Picking a hook-capable agent asks two more questions</b></summary>
+
 Pick **Claude Code** or **Codex** and it asks how the music should run — hooks or just this session — and the hooks branch then offers [reactive mode](#reactive-mode-opt-in) too:
 
 ```
@@ -159,11 +177,11 @@ Should the music react to what the agent is doing?
   2. Reactive             — Intensity follows the tool in use - noticeable, by design
 ```
 
-**Press `p` to hear the highlighted genre.** Nine names and a one-line description each is not much to choose from; a loop renders in about 150ms, so auditioning is just a keypress, and moving on replaces it. Leaving the menu stops it.
-
 Choosing hooks installs them for the tool you picked, then launches it — the same thing `vibe --genre <g> --volume <n> --reactive --install-hooks` does, without memorising flags. Once they're installed the first question becomes **Just launch it** / **Reconfigure the hooks**, and launching skips the genre and volume prompts, since your saved default already answers those (`vibe --genre zen` changes it any time).
 
-Installed tools sort to the top. The list is a shortcut, not a compatibility list — **`vibe` wraps any command at all**, and "Custom command..." takes one you type (quoted arguments survive intact). Adding an entry is one line in [`src/interactive.js`](src/interactive.js).
+Adding an entry to the launcher is one line in [`src/interactive.js`](src/interactive.js).
+
+</details>
 
 ---
 
@@ -183,6 +201,11 @@ vibe --install-hooks --dry-run                   # show what would change, write
 ```
 
 **It auto-detects.** With no `--tools`, VibeAudio wires up each supported agent it finds on your machine — one counts as present when its config directory exists or its CLI is on your `PATH`. `--tools claude,codex,cursor,grok,gemini,copilot,qwen` overrides that. Add `--dry-run` to see, per event, what would be added or changed in each file before anything is written.
+
+That's it — run your agent normally, with no `vibe` prefix.
+
+<details>
+<summary><b>Which file and which events, per agent</b> — seven dialects, all written for you</summary>
 
 Each tool spells its events its own way, and VibeAudio writes whichever dialect the file expects:
 
@@ -207,9 +230,11 @@ Where an agent reports more than start and stop, VibeAudio listens for that too 
 | **Qwen Code** | `PermissionRequest` | `PostToolUse`, `PostToolUseFailure` | `StopFailure` | `SessionEnd` |
 | **Cursor, Grok** | — | — | — | — |
 
-That's it — run your agent normally, with no `vibe` prefix.
+</details>
 
-Six things differ per agent, and none of them need any action from you except the first:
+<details>
+<summary><b>Six things that differ per agent</b> — only the first one needs anything from you</summary>
+
 
 | | |
 | :--- | :--- |
@@ -219,23 +244,31 @@ Six things differ per agent, and none of them need any action from you except th
 | **Only Cursor can play the failure chime** | Its stop event reports whether the turn completed, aborted or errored. The others send no verdict, so a turn there always ends on the success chime — VibeAudio won't invent a failure the agent never claimed. |
 | **Grok and Copilot CLI get a file of their own** | Each reads every `*.json` in its `hooks/` directory, so VibeAudio writes `vibeaudio.json` rather than merging into anyone else's — which makes uninstalling it a delete, and leaves no backup file behind. Copilot's honours `COPILOT_HOME`. |
 
+</details>
+
 ### Several sessions at once
 
 Every session of an agent is tracked separately, by the session id in its hook payload, so two terminals (or a terminal and the desktop app) share one soundtrack instead of fighting over it:
 
 * **The music plays while any session is working.** A second prompt doesn't restart it, and it stops only when the last working session finishes.
-* **More sessions, more music.** Two sessions working at once plays at least tier 2 and three or more plays tier 3 — the same piece with more layers, arriving at the next loop boundary and easing off as sessions finish. It only ever raises the tier, so it works alongside time escalation and [reactive mode](#reactive-mode-opt-in).
 * **Every session gets its own chime.** A quick question that finishes while another agent is still busy chimes "done" and the music carries on underneath.
+
+<details>
+<summary><b>The rest of how sessions share one stream</b></summary>
+
+* **More sessions, more music.** Two sessions working at once plays at least tier 2 and three or more plays tier 3 — the same piece with more layers, arriving at the next loop boundary and easing off as sessions finish. It only ever raises the tier, so it works alongside time escalation and [reactive mode](#reactive-mode-opt-in).
 * **Dialogs and Esc are per session.** A permission dialog in one terminal plays the "your turn" chime but only pauses the music once *every* session is waiting; Esc ends just that session's turn.
 * **Crashed agents can't hold it hostage.** A session that never sent `Stop` is dropped after 15 minutes, the same ceiling the background player stops at.
 
 Sessions with no id in their payload share a single slot, so they behave as one. VibeAudio keeps one stream: per-session genres or several streams mixed together aren't supported.
 
+</details>
+
 > **No restart needed, even mid-session — for Claude Code, Codex, Cursor and Grok.** Each re-reads its hook file every time a hook fires, so changes land on your **next prompt**. A daemon already playing keeps its old settings until that prompt replaces it — at most the tail of one turn. Whether an open Gemini CLI, Copilot CLI or Qwen Code session does the same hasn't been checked, so start a new session there to be sure.
 
-> **One player is shared.** They all drive the same background player, so if you prompt two agents at once, the last prompt owns the music. One person, one set of speakers — deliberate, not a limitation being worked around.
-
 > **The Claude Code desktop app is covered too**, not just the terminal — both read the same `~/.claude/settings.json`. (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-claude-desktop-antigravity-via-mcp).)
+
+> **One player is shared.** Prompt two agents at once and the last prompt owns the music. One person, one set of speakers — deliberate, not a limitation being worked around.
 
 ### `/vibe` inside Claude Code
 
@@ -304,9 +337,10 @@ Each agent names its tools differently, and all the vocabularies are mapped. **M
 
 Changes land at the next loop boundary, so it shifts musically rather than cutting mid-bar. Without a tool signal it falls back to time-based escalation.
 
-**This is off by default on purpose.** Music that moves every time the agent switches tools is music you *notice* — which is the opposite of what focus audio is for. Try it, but if you catch yourself listening to it instead of reading, reinstall without `--reactive` (which removes the `PreToolUse` hook again).
+**Off by default on purpose** — music that moves every time the agent switches tools is music you *notice*, which is the opposite of what focus audio is for. Try it; if you catch yourself listening instead of reading, reinstall without `--reactive` and the `PreToolUse` hook goes away again.
 
-**What the installer will and won't do to your config:**
+<details>
+<summary><b>What the installer will and won't do to your config</b> — it edits a file you own, so here is the whole of it</summary>
 
 * **Merges, never replaces.** Other tools' hooks are left untouched and keep their position in the file — which is what Codex keys its trust records by.
 * **Backs up first, once.** The first install copies your file alongside as `*.vibeaudio.bak`. Later installs leave it alone — re-copying would overwrite your real pre-VibeAudio config with a copy of VibeAudio's own last install.
@@ -314,13 +348,15 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 * **Refuses rather than clobbers.** Malformed JSON aborts the write; a temporary `npx` checkout is rejected outright, since the hook records an absolute path that npm's cache eviction would later delete.
 * **Can't run away.** The background player is capped at 15 minutes, so a missed stop event can't leave music looping.
 
+</details>
+
 ---
 
 ## 🖥️ Everything Else (Claude Desktop, Antigravity… via MCP)
 
 **Claude Code, [Codex](https://github.com/openai/codex), [Cursor](https://cursor.com/docs/hooks), [Grok](https://docs.x.ai/build/features/hooks), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Copilot CLI](https://docs.github.com/en/copilot/reference/hooks-configuration) and [Qwen Code](https://github.com/QwenLM/qwen-code) have hook systems, and `--install-hooks` writes to all seven** — use [hooks](#-agent-hooks-no-wrapper-needed) there, they're strictly better. This section is for everything else. MCP is the way in: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
 
-> **This is weaker than hooks, by nature.** Hooks fire on an event — the music always starts when you submit a prompt. MCP tools are *model-invoked*: the assistant has to decide to call `vibe_play`, and to remember `vibe_stop` when it's done. The server tells it when to do that (via the MCP `instructions` field), but it's a suggestion, not a guarantee — expect the occasional silent turn, and say "play some focus music while you work on this" if you want it reliably. **On any of the seven agents above, use [hooks](#-agent-hooks-no-wrapper-needed) instead.**
+> **This is weaker than hooks, by nature.** Hooks fire on an event; MCP tools are *model-invoked*, so the assistant has to decide to call `vibe_play` and remember `vibe_stop`. Expect the occasional silent turn — say "play some focus music while you work on this" if you want it reliably. **On any of the seven agents above, use [hooks](#-agent-hooks-no-wrapper-needed) instead.**
 
 Use an **absolute path**, not the bare `vibe` command: GUI apps launched from Finder don't inherit your shell's `PATH`, and version managers like `fnm` or `nvm` put `vibe` on a per-shell path that won't resolve. Print yours with:
 
@@ -348,6 +384,11 @@ Where the file lives:
 | **Claude Desktop** (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | **Antigravity, VS Code, Zed, …** | that app's own MCP settings — same JSON shape |
 
+Restart the app afterwards.
+
+<details>
+<summary><b>Codex's TOML, and older Gemini CLI releases</b></summary>
+
 Codex uses TOML rather than JSON, in `~/.codex/config.toml` — but it has hooks, so [use those instead](#-agent-hooks-no-wrapper-needed) unless you specifically want model-invoked music:
 
 ```toml
@@ -356,7 +397,9 @@ command = "node"
 args = ["/absolute/path/from/the/command/above", "--mcp"]
 ```
 
-Restart the app afterwards. Older Gemini CLI releases predate its hook system (0.10.0 has none) — if you're on one and can't upgrade, the same JSON goes in `~/.gemini/settings.json`.
+Older Gemini CLI releases predate its hook system (0.10.0 has none) — if you're on one and can't upgrade, the same JSON goes in `~/.gemini/settings.json`.
+
+</details>
 
 ### Changing the genre here
 
@@ -494,7 +537,7 @@ export VIBE_DISABLE=1           # Mute, without uninstalling anything
 
 **`VIBE_DISABLE=1` is for a shell you always want quiet** — a CI job, a shared machine, a terminal profile you keep silent. It's read at playback time and covers hooks, wrapper and MCP alike.
 
-**For a call that's ringing right now, use `vibe --mute` instead.** An environment variable can't help there: a hook runs as a child of your agent and inherits the environment the agent had *when it launched*, so exporting `VIBE_DISABLE` in another terminal reaches nothing already running — and restarting your agent is exactly what you can't do mid-call.
+**For a call that's ringing right now, use `vibe --mute` instead** — an exported variable can't reach a hook that's already running.
 
 ```bash
 vibe --mute        # silent now, music returns by itself in an hour
@@ -503,11 +546,16 @@ vibe --mute 0      # stay off until I say otherwise
 vibe --unmute      # end it early
 ```
 
-`--mute` writes a flag file, which crosses process boundaries where a variable cannot, and stops whatever is playing on the spot. Your hooks and settings are untouched, so there's nothing to put back afterwards.
+It stops whatever is playing on the spot, leaves your hooks and settings untouched, and **expires after an hour** so you can't forget it. `--preview` still plays either way — that one is an explicit request to hear something.
 
-**It expires after an hour by default, and that's deliberate.** A call is a bounded thing; a mute you forget about is worse than no mute, because the tool just stops working and nothing ever tells you why. Expiring means the worst case is "music came back sooner than I wanted" rather than a week of silence you never diagnose. `--mute 0` opts into indefinite explicitly, and `vibe --status` always shows how much of the window is left.
+<details>
+<summary><b>Why a file, and why it expires</b></summary>
 
-Either way, `--preview` still plays: that one is an explicit request to hear something.
+A hook runs as a child of your agent and inherits the environment the agent had *when it launched*, so exporting `VIBE_DISABLE` in another terminal reaches nothing already running — and restarting your agent is exactly what you can't do mid-call. `--mute` writes a flag file, which crosses that boundary where a variable cannot.
+
+The expiry is deliberate too. A call is a bounded thing; a mute you forget about is worse than no mute, because the tool just stops working and nothing ever tells you why. Expiring means the worst case is "music came back sooner than I wanted" rather than a week of silence you never diagnose. `--mute 0` opts into indefinite explicitly, and `vibe --status` always shows how much of the window is left.
+
+</details>
 
 ---
 
@@ -603,6 +651,9 @@ npm rm -g vibeaudio             # 2. remove the CLI
 rm -rf ~/.vibeaudio             # 3. optional: cached audio, saved settings, daemon state
 ```
 
+<details>
+<summary><b>Why that order, and what stays behind</b></summary>
+
 Step 1 also **stops a background player that's still going**. That matters: once the hooks are gone nothing will ever send the `Stop` event, and after step 2 there's no `vibe` left to stop it with — music would simply play on until its 15-minute cap. If you ever need to do it by hand: `pkill -f "vibeaudio.js --daemon"`.
 
 > **Order matters.** `npm rm -g` deletes the binary but not your hook config. Removing the package first strands hook entries that point at a path that no longer exists, and your agent will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.cursor/hooks.json`, `~/.gemini/settings.json` and `~/.qwen/settings.json` by hand, and delete `~/.grok/hooks/vibeaudio.json`, `~/.copilot/hooks/vibeaudio.json` and `~/.claude/commands/vibe.md`.
@@ -617,6 +668,8 @@ Step 3 reclaims disk — the audio cache, pruned to the 3 most recent projects �
 | `vibeaudio` entries in other apps' MCP configs | VibeAudio never edits those files, so it can't clean them either. Drop the entry from [whichever config you added it to](#-everything-else-claude-desktop-antigravity-via-mcp). |
 
 Apart from those two, the three commands above remove everything VibeAudio writes.
+
+</details>
 
 ---
 
