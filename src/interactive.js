@@ -52,7 +52,48 @@ const GENRES = [
   { name: "🎲 Shuffle / Random", desc: "Picks a surprise vibe each time", id: "random" }
 ];
 
-function selectMenu(title, items, renderItem) {
+
+/**
+ * One loop of a genre, started from inside the menu and replaced on each
+ * press. Non-blocking: the menu stays interactive while it plays, so you can
+ * page through the list and hear each one.
+ *
+ * The process is module-level rather than per-menu because there is only ever
+ * one pair of speakers - a second press has to silence the first, or two
+ * genres play over each other.
+ */
+let previewChild = null;
+
+function stopPreview() {
+  if (!previewChild) return;
+  try {
+    previewChild.kill();
+  } catch (e) {
+    // Already gone - the loop ended on its own.
+  }
+  previewChild = null;
+}
+
+function playPreview(genreId) {
+  const { spawn } = require("child_process");
+  const { detectPlayer, getAudioPath, resolveGenre, normalizeVolume, loadConfig, playbackDisabled } = require("./player");
+
+  stopPreview();
+  // A muted user pressing "p" is asking to hear something, the same as
+  // `--preview` is - but a mute set for a call should still hold. Silence is
+  // the safe read, and --status says why.
+  if (playbackDisabled()) return;
+
+  const backend = detectPlayer();
+  if (!backend) return;
+
+  const volume = normalizeVolume(loadConfig().volume, 0.4);
+  const file = getAudioPath(resolveGenre(genreId), 2);
+  previewChild = spawn(backend.cmd, backend.args(file, volume), { stdio: "ignore" });
+  previewChild.on("error", () => { previewChild = null; });
+}
+
+function selectMenu(title, items, renderItem, { onPreview = null } = {}) {
   return new Promise((resolve) => {
     let selected = 0;
     const stdin = process.stdin;
@@ -92,6 +133,15 @@ function selectMenu(title, items, renderItem) {
         process.exit(0);
       }
 
+      // Auditioning is the whole reason the genre list is hard to choose from:
+      // nine names and a one-line description each, and no way to hear any of
+      // them without leaving the menu. A loop renders in ~150ms, so this is
+      // just a keypress.
+      if (onPreview && (key === "p" || key === "P")) {
+        onPreview(items[selected]);
+        return;
+      }
+
       if (key === "\u001b[A") {
         // Up arrow
         selected = (selected - 1 + items.length) % items.length;
@@ -119,6 +169,7 @@ function selectMenu(title, items, renderItem) {
     }
 
     function cleanup() {
+      if (onPreview) stopPreview();
       stdin.removeListener("data", onData);
       stdin.setRawMode(false);
       stdin.pause();
@@ -299,9 +350,10 @@ async function promptInteractive({ hooksInstalledFor = () => false } = {}) {
 
   // 3. Select Music Genre
   const selectedGenre = await selectMenu(
-    "Choose your sound vibe:",
+    "Choose your sound vibe:  \x1b[0m\x1b[90m(press p to hear the highlighted one)\x1b[0m",
     GENRES,
-    (item, num) => `${num}. ${item.name} \x1b[90m— ${item.desc}\x1b[0m`
+    (item, num) => `${num}. ${item.name} \x1b[90m— ${item.desc}\x1b[0m`,
+    { onPreview: (item) => playPreview(item.id) }
   );
 
   // 4. Select Volume Preset
@@ -335,4 +387,4 @@ async function promptInteractive({ hooksInstalledFor = () => false } = {}) {
   };
 }
 
-module.exports = { promptInteractive, tokenizeCommand, isInstalled, hookTargetOf, AI_TOOLS };
+module.exports = { promptInteractive, tokenizeCommand, isInstalled, hookTargetOf, playPreview, stopPreview, AI_TOOLS };

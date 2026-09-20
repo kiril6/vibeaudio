@@ -14,6 +14,10 @@ const {
   resolveGenre,
   isKnownGenre,
   normalizeVolume,
+  loadConfig,
+  saveConfig,
+  projectSettings,
+  saveProjectConfig,
   wavDurationMs,
   AVAILABLE_GENRES
 } = require("./player");
@@ -44,6 +48,7 @@ Procedural focus music while your AI coding tools think.
 
 \x1b[1mEXAMPLES:\x1b[0m
   vibe --install-hooks           \x1b[90m# best for interactive agents — music follows thinking\x1b[0m
+  vibe --genre jazz --volume 25  \x1b[90m# save your default — reaches hooks, wrapper and MCP\x1b[0m
   vibe --install-hooks --tools codex   \x1b[90m# wire up one agent instead of every one found\x1b[0m
   vibe npm test                  \x1b[90m# wrap any command that exits when it's done\x1b[0m
   vibe claude -p "explain this"
@@ -51,12 +56,14 @@ Procedural focus music while your AI coding tools think.
   vibe --genre 8bit sleep 5
   vibe --volume 30 npm test
   vibe --preview jazz
+  vibe                           \x1b[90m# menu: pick a tool and a sound (p auditions a genre)\x1b[0m
 
 \x1b[1mOPTIONS:\x1b[0m
   -g, --genre <name>           Select genre: lofi (default), synthwave, 8bit, electronic, jazz, zen, piano, drone, random
   -v, --volume <5-100>         Set playback volume (default: 40)
   -cv, --chime-volume <5-100>   Set independent completion chime volume
       --grace <ms>             Silence window before music starts, in ms (default: ${DEFAULT_GRACE_PERIOD_MS})
+      --here                   With a saved setting: this directory only, not everywhere
       --seed <n>               Force a specific arrangement (default: derived from the project directory)
       --whisper                Preset: 15% volume (late night / headphones)
       --quiet                  Preset: 25% volume (focus / open office)
@@ -78,11 +85,22 @@ Procedural focus music while your AI coding tools think.
   -h, --help                   Show this help message
       --version                Show version
 
+\x1b[1mSETTINGS:\x1b[0m
+  A genre or volume with no command after it is saved as your default:
+
+      vibe --genre zen               \x1b[90m# applies on the next prompt, nothing to reinstall\x1b[0m
+      vibe --genre zen --here        \x1b[90m# this project only — the default stays as it was\x1b[0m
+
+  Saved to ~/.vibeaudio/config.json and read by the wrapper, your agent hooks
+  and the MCP server alike. A flag beats an environment variable beats a
+  \x1b[1m--here\x1b[0m setting beats the global one, so a one-off
+  \x1b[1mvibe --genre 8bit npm test\x1b[0m stays a one-off.
+
 \x1b[1mENVIRONMENT:\x1b[0m
-  VIBE_GENRE=<name>            Set persistent default genre (e.g. export VIBE_GENRE=jazz)
-  VIBE_VOLUME=<5-100>          Set persistent default volume (e.g. export VIBE_VOLUME=25)
-  VIBE_CHIME_VOLUME=<5-100>    Set persistent chime volume (e.g. export VIBE_CHIME_VOLUME=60)
-  VIBE_GRACE_MS=<ms>           Set persistent grace window in ms (e.g. export VIBE_GRACE_MS=3000)
+  VIBE_GENRE=<name>            Override the saved genre for this shell
+  VIBE_VOLUME=<5-100>          Override the saved volume for this shell
+  VIBE_CHIME_VOLUME=<5-100>    Override the saved chime volume for this shell
+  VIBE_GRACE_MS=<ms>           Override the saved grace window, in ms
   VIBE_SEED=<n>                Pin the arrangement instead of deriving it from the directory
   VIBE_DISABLE=1               Mute automatic playback without uninstalling anything
 `);
@@ -105,13 +123,33 @@ const VALUE_FLAGS = new Set([
 
 function parseArgs(argv) {
   const args = argv.slice(2);
-  let genre = (process.env.VIBE_GENRE || "lofi").toLowerCase();
 
-  let volume = normalizeVolume(process.env.VIBE_VOLUME, 0.40);
-  let chimeVolume = normalizeVolume(process.env.VIBE_CHIME_VOLUME, null);
+  // Flag beats env var beats saved config beats the built-in default. The
+  // saved config is what makes "set my genre" have one answer instead of three
+  // - see loadConfig() in player.js - and it sits below the env var so a shell
+  // that exports one keeps winning, as it always did.
+  const saved = loadConfig();
+  // A setting saved for this directory sits between the environment and the
+  // global default: `--here` is a deliberate choice about one project, so it
+  // outranks the machine-wide one, and an export still outranks both.
+  const here = projectSettings(saved);
+  const setting = (key) => (here[key] !== undefined ? here[key] : saved[key]);
+
+  let genre = (process.env.VIBE_GENRE || setting("genre") || "lofi").toLowerCase();
+
+  let volume = normalizeVolume(process.env.VIBE_VOLUME, normalizeVolume(setting("volume"), 0.40));
+  let chimeVolume = normalizeVolume(process.env.VIBE_CHIME_VOLUME, normalizeVolume(setting("chimeVolume"), null));
 
   const envGrace = process.env.VIBE_GRACE_MS ? parseInt(process.env.VIBE_GRACE_MS, 10) : NaN;
-  let grace = !isNaN(envGrace) ? Math.max(0, envGrace) : DEFAULT_GRACE_PERIOD_MS;
+  let grace = !isNaN(envGrace) ? Math.max(0, envGrace)
+    : Number.isFinite(setting("grace")) ? Math.max(0, setting("grace"))
+    : DEFAULT_GRACE_PERIOD_MS;
+
+  // What the user typed on THIS command line, as opposed to what was inherited
+  // from the environment or the saved file. `vibe --genre jazz` with nothing
+  // after it is a request to change the default, and this is how run() tells
+  // that apart from a genre that merely happens to be in effect.
+  const typed = {};
 
   let noChime = false;
   let noHud = false;
@@ -124,6 +162,7 @@ function parseArgs(argv) {
   let hookAction = null;
   let mcp = false;
   let reactive = false;
+  let here_flag = false;
   let dryRun = false;
   let tools = null;
   let cmdArgs = [];
@@ -150,6 +189,7 @@ function parseArgs(argv) {
     if (arg === "-g" || arg === "--genre") {
       if (i + 1 < args.length) {
         genre = args[i + 1].toLowerCase();
+        typed.genre = genre;
         i += 2;
         continue;
       }
@@ -158,6 +198,7 @@ function parseArgs(argv) {
     if (arg === "-v" || arg === "--volume") {
       if (i + 1 < args.length) {
         volume = normalizeVolume(args[i + 1], volume);
+        typed.volume = volume;
         i += 2;
         continue;
       }
@@ -166,6 +207,7 @@ function parseArgs(argv) {
     if (arg === "-cv" || arg === "--chime-volume") {
       if (i + 1 < args.length) {
         chimeVolume = normalizeVolume(args[i + 1], chimeVolume);
+        typed.chimeVolume = chimeVolume;
         i += 2;
         continue;
       }
@@ -176,6 +218,7 @@ function parseArgs(argv) {
         const parsed = parseInt(args[i + 1], 10);
         if (!isNaN(parsed)) {
           grace = Math.max(0, parsed);
+          typed.grace = grace;
         }
         i += 2;
         continue;
@@ -239,6 +282,12 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--here") {
+      here_flag = true;
+      i += 1;
+      continue;
+    }
+
     if (arg === "--reactive") {
       reactive = true;
       i += 1;
@@ -259,18 +308,21 @@ function parseArgs(argv) {
 
     if (arg === "--whisper") {
       volume = 0.15;
+      typed.volume = volume;
       i += 1;
       continue;
     }
 
     if (arg === "--quiet") {
       volume = 0.25;
+      typed.volume = volume;
       i += 1;
       continue;
     }
 
     if (arg === "--loud") {
       volume = 0.75;
+      typed.volume = volume;
       i += 1;
       continue;
     }
@@ -313,11 +365,22 @@ function parseArgs(argv) {
   }
 
   if (!isKnownGenre(genre)) {
+    // A typo that would be SAVED is a different thing from a typo on a run:
+    // falling back to lofi here would quietly overwrite the default the user
+    // already had, on the strength of a misspelling. Refuse and change nothing.
+    if (typed.genre !== undefined && cmdArgs.length === 0) {
+      console.error(
+        `\x1b[31m[vibeaudio] Unknown genre '${genre}' — nothing saved.\x1b[0m\n` +
+          `  Available: ${AVAILABLE_GENRES.join(", ")}, random`
+      );
+      process.exit(1);
+    }
     console.error(
       `\x1b[33m[vibeaudio] Unknown genre '${genre}' — falling back to lofi.\x1b[0m\n` +
         `  Available: ${AVAILABLE_GENRES.join(", ")}, random`
     );
     genre = "lofi";
+    if (typed.genre) typed.genre = "lofi";
   }
 
   return {
@@ -338,6 +401,8 @@ function parseArgs(argv) {
     reactive,
     dryRun,
     tools,
+    typed,
+    hereOnly: here_flag,
     cmdArgs
   };
 }
@@ -382,9 +447,44 @@ function resolveTargets(explicit) {
  * The one install path. Both --install-hooks and the menu's hooks branch call
  * this, so the two entry points can't drift in what they write or report.
  */
-function installHookTargets(ids, genre, volume, reactive, dryRun = false) {
+function installHookTargets(ids, genre, volume, reactive, dryRun = false, typed = {}) {
   const hooks = require("./hooks");
+
+  // Migrating off a pinned install must not change what is playing: those
+  // entries carry the settings the user has actually been hearing, while the
+  // config file may not exist yet - so an untyped reinstall inherits from the
+  // entries it is about to replace.
+  //
+  // A pin fills a gap and never overrides. Once a setting is saved, somebody
+  // chose it, and a legacy pin left in some other agent's config is the older
+  // fact of the two - without this, installing for every detected agent lets
+  // four untouched installs outvote the genre the user picked a minute ago.
+  const saved = loadConfig();
+  const inherited = [];
+  const gap = (key) => typed[key] === undefined && saved[key] === undefined;
+
+  if (gap("genre") || gap("volume")) {
+    const pinned = pinnedSettingsFor(ids);
+    if (gap("genre") && pinned.genre && pinned.genre !== genre) {
+      genre = pinned.genre;
+      inherited.push(`genre ${genre}`);
+    }
+    if (gap("volume") && pinned.volume !== null && pinned.volume !== volume) {
+      volume = pinned.volume;
+      inherited.push(`volume ${Math.round(volume * 100)}%`);
+    }
+  }
+
   if (dryRun) console.log(`\x1b[1mDry run\x1b[0m — nothing below is written.\n`);
+  if (inherited.length) {
+    console.log(`\x1b[90mKeeping your current ${inherited.join(" and ")} — pass --genre/--volume to change it.\x1b[0m`);
+  }
+
+  // The hook entries no longer carry the genre and volume, so this is where
+  // they live. Saved here rather than inside installHooks(), which stays a
+  // pure config edit that tests can point at a throwaway file - the same
+  // reason the slash command and stopDaemon() are driven from this layer.
+  if (!dryRun) saveConfig({ genre, volume: Math.round(volume * 100) });
 
   for (const id of ids) {
     const result = hooks.installHooks(genre, volume, null, { reactive, id, dryRun });
@@ -424,6 +524,7 @@ function installHookTargets(ids, genre, volume, reactive, dryRun = false) {
   // verified for each, so an open session picks this up on its next prompt.
   const live = ids.filter((id) => hooks.TARGETS[id].liveReload !== false).map((id) => hooks.TARGETS[id].name);
   if (live.length) console.log(`  ${live.join(", ")}: takes effect on your next prompt - no restart needed.`);
+  console.log(`  \x1b[90mChange the sound any time with: vibe --genre <name> --volume <n> — no reinstall.\x1b[0m`);
   if (ids.length > 1) {
     console.log(`  \x1b[90mOne player is shared: whichever agent you prompt last owns the music.\x1b[0m`);
   }
@@ -515,9 +616,24 @@ function printStatus() {
     console.log(`\x1b[33m⏸ Muted by VIBE_DISABLE=${process.env.VIBE_DISABLE}\x1b[0m — automatic playback is off (--preview still works).\n`);
   }
 
+  // What will actually play, and which of the three possible sources decided
+  // it - the usual confusion is a saved default quietly beaten by an export.
+  const saved = loadConfig();
+  const here = projectSettings(saved);
+  const source = (env, key) =>
+    process.env[env] ? off(`  from ${env}`)
+      : here[key] !== undefined ? off("  saved for this project")
+      : saved[key] !== undefined ? off("  saved")
+      : off("  default");
+
+  console.log(`\x1b[1mSound\x1b[0m`);
+  console.log(`  genre     ${on(genreNow())}${source("VIBE_GENRE", "genre")}`);
+  console.log(`  volume    ${on(`${Math.round(volumeNow() * 100)}%`)}${source("VIBE_VOLUME", "volume")}`);
+  console.log(`            ${off("change either with: vibe --genre <name> --volume <n>")}`);
+
   // Audio backend
   const backend = detect();
-  console.log(`\x1b[1mAudio\x1b[0m`);
+  console.log(`\n\x1b[1mAudio\x1b[0m`);
   console.log(backend
     ? `  player    ${on(backend.cmd)}${backend.volume ? "" : off("  (no volume support — gain is baked into the file)")}`
     : `  player    \x1b[31mnone found — VibeAudio runs silently\x1b[0m`);
@@ -539,28 +655,47 @@ function printStatus() {
       const why = detected.includes(id)
         ? `${off("not installed")} — run: vibe --install-hooks`
         : `${off("not installed")} ${off("(not found on this machine)")}`;
-      console.log(`  ${t.name.padEnd(13)}${why}`);
+      console.log(`  ${t.name.padEnd(20)}${why}`);
       continue;
     }
 
     console.log(`  ${t.name}`);
     for (const { event, command } of installed) {
+      // A baked genre means an install from before settings moved into the
+      // config file: worth showing, because it still overrides that file.
       const g = /--genre (\S+)/.exec(command);
       const vol = /--volume (\d+)/.exec(command);
-      const extra = g ? `  ${g[1]} @ ${vol ? vol[1] : "?"}%${/--reactive/.test(command) ? ", reactive" : ""}` : "";
+      const parts = [];
+      if (g) parts.push(`pinned ${g[1]} @ ${vol ? vol[1] : "?"}%`);
+      if (/--reactive/.test(command)) parts.push("reactive");
+      const extra = parts.length ? `  ${parts.join(", ")}` : "";
       console.log(`    ${on("✔")} ${extra ? event.padEnd(19) : event}${extra ? off(extra) : ""}`);
+    }
+    if (readVibeHooks(t.file(), t).some(({ command }) => /--genre /.test(command))) {
+      console.log(`    \x1b[33m↑ pinned by an older install — vibe --install-hooks makes it follow Sound above\x1b[0m`);
     }
   }
 
   // Background player
   console.log(`\n\x1b[1mBackground player\x1b[0m`);
   const pid = readDaemonPid(hooks.PID_FILE);
+  const playing = hooks.daemonPlaying();
   if (pid === null) {
     console.log(`  ${off("not running")}`);
-  } else if (!hooks.isOurDaemon(pid)) {
+  } else if (!playing) {
     console.log(`  ${off(`stale pid file (${pid} is not ours) — cleared on the next prompt`)}`);
   } else {
-    console.log(`  ${on(`running`)} pid ${pid}${off("   stop it with: vibe --stop")}`);
+    // What it was started with, which is not necessarily what is saved: a
+    // daemon keeps its settings until the next prompt replaces it, and
+    // "I changed the genre and nothing happened" is that gap.
+    const now = playing.genre
+      ? ` ${on(playing.genre)}${playing.volume === null ? "" : on(` @ ${playing.volume}%`)}${playing.reactive ? off(", reactive") : ""}`
+      : "";
+    console.log(`  ${on("playing")}${now}${off(`   pid ${pid}`)}`);
+    if (playing.genre && playing.genre !== genreNow()) {
+      console.log(`  ${off(`your saved default is ${genreNow()} — this one keeps playing until the next prompt`)}`);
+    }
+    console.log(`  ${off("stop it with: vibe --stop")}`);
   }
 
   // Which tools are actually here, and what each one can use
@@ -574,6 +709,24 @@ function printStatus() {
     }
   }
   console.log();
+}
+
+/**
+ * The effective genre and volume, resolved the same way parseArgs does it, so
+ * --status reports what would actually play rather than a second opinion.
+ */
+function settingNow(key) {
+  const config = loadConfig();
+  const here = projectSettings(config);
+  return here[key] !== undefined ? here[key] : config[key];
+}
+
+function genreNow() {
+  return (process.env.VIBE_GENRE || settingNow("genre") || "lofi").toLowerCase();
+}
+
+function volumeNow() {
+  return normalizeVolume(process.env.VIBE_VOLUME, normalizeVolume(settingNow("volume"), 0.40));
 }
 
 function dirSize(dir) {
@@ -646,6 +799,107 @@ function detectAiTools(hooked = new Set()) {
   return CANDIDATES.filter((c) => isInstalled(c.cmd));
 }
 
+/**
+ * `vibe --genre jazz` with no command after it. That used to open the launcher
+ * menu, which then asked for a genre and used its own answer - the most
+ * natural way to phrase the request did something else entirely, and the
+ * README had to warn about it. It saves the default instead.
+ */
+function saveDefaults(typed, hereOnly = false) {
+  const patch = {};
+  if (typed.genre !== undefined) patch.genre = typed.genre;
+  if (typed.volume !== undefined) patch.volume = Math.round(typed.volume * 100);
+  if (typed.chimeVolume !== undefined) patch.chimeVolume = Math.round(typed.chimeVolume * 100);
+  if (typed.grace !== undefined) patch.grace = typed.grace;
+
+  const { CONFIG_FILE } = require("./player");
+  if (hereOnly) saveProjectConfig(patch);
+  else saveConfig(patch);
+
+  const label = {
+    genre: (v) => `genre ${v}`,
+    volume: (v) => `volume ${v}%`,
+    chimeVolume: (v) => `chime volume ${v}%`,
+    grace: (v) => `grace ${v}ms`
+  };
+  const changed = Object.keys(patch).map((k) => label[k](patch[k])).join(", ");
+  const where = hereOnly ? ` for ${process.cwd()}` : "";
+  console.log(`\x1b[32m✔ Saved: ${changed}${where}\x1b[0m \x1b[90m(${CONFIG_FILE})\x1b[0m`);
+  console.log(`  Applies to the wrapper, your agent hooks and MCP — on the next prompt.`);
+  if (hereOnly) console.log(`  \x1b[90mThis directory and everything under it. Drop --here to change the default everywhere.\x1b[0m`);
+
+  // Music already in the air is the one thing this does not reach, and
+  // silence about it reads as the setting having done nothing at all.
+  const playing = require("./hooks").daemonPlaying();
+  if (playing && patch.genre && playing.genre && playing.genre !== patch.genre) {
+    console.log(`  \x1b[90m${playing.genre} is still playing — vibe --stop cuts it short.\x1b[0m`);
+  }
+
+  // An install from before the settings moved out of the hook command line
+  // still carries its own genre, and a flag beats this file. Saying nothing
+  // would leave the user with a saved default that audibly does nothing.
+  const pinned = pinnedHookSettings();
+  if (pinned.length) {
+    console.log(
+      `\n\x1b[33m  ${pinned.join(", ")}: hooks installed by an older version pin their own settings.\x1b[0m\n` +
+      `  Run \x1b[1mvibe --install-hooks\x1b[0m once to have them follow this file instead.`
+    );
+  }
+  if (typed.genre !== undefined) console.log(`\n  Audition it: vibe --preview ${typed.genre}`);
+  console.log();
+}
+
+/**
+ * Hook targets whose installed entries still carry a baked --genre/--volume.
+ */
+/**
+ * What an install from before the config file pinned, for the first of `ids`
+ * that pinned anything.
+ *
+ * A reinstall is how a user moves off that older scheme, and it must not be
+ * the moment their music changes: the settings frozen into those entries are
+ * the ones they have actually been listening to, and the config file may hold
+ * nothing but an untouched default. Adopted only for what the user did not
+ * type on this command line - naming a genre still means that genre.
+ */
+function pinnedSettingsFor(ids) {
+  const hooks = require("./hooks");
+  const genres = new Set();
+  const volumes = new Set();
+
+  for (const id of ids) {
+    const t = hooks.TARGETS[id];
+    if (!t) continue;
+    for (const { command } of readVibeHooks(t.file(), t)) {
+      const genre = /--genre (\S+)/.exec(command);
+      const volume = /--volume (\d+)/.exec(command);
+      if (genre && isKnownGenre(genre[1])) genres.add(genre[1]);
+      if (volume) volumes.add(normalizeVolume(volume[1], null));
+    }
+  }
+
+  // Only when they agree. The saved config is one value for the machine, so
+  // two agents pinned to different genres have no single answer to inherit -
+  // and taking whichever was found first would let an untouched install for
+  // some other tool silently overwrite the genre the user actually chose.
+  return {
+    genre: genres.size === 1 ? [...genres][0] : null,
+    volume: volumes.size === 1 ? [...volumes][0] : null
+  };
+}
+
+function pinnedHookSettings() {
+  const hooks = require("./hooks");
+  const names = [];
+  for (const id of Object.keys(hooks.TARGETS)) {
+    const t = hooks.TARGETS[id];
+    if (readVibeHooks(t.file(), t).some(({ command }) => /--genre |--volume /.test(command))) {
+      names.push(t.name);
+    }
+  }
+  return names;
+}
+
 function signalExitCode(signal) {
   return 128 + (os.constants.signals[signal] || 0);
 }
@@ -670,7 +924,7 @@ function previewGenre(genre, volume) {
   spawnSync(backend.cmd, backend.args(audioFile, volume), { stdio: "ignore" });
 }
 
-function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, tools, dryRun }) {
+function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, tools, dryRun, typed = {} }) {
   const hooks = require("./hooks");
 
   switch (action) {
@@ -715,7 +969,7 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, 
       return;
 
     case "install-hooks":
-      return installHookTargets(resolveTargets(tools), genre, volume, reactive, dryRun);
+      return installHookTargets(resolveTargets(tools), genre, volume, reactive, dryRun, typed);
 
     case "uninstall-hooks":
       return uninstallHookTargets();
@@ -877,6 +1131,8 @@ async function run() {
     reactive,
     dryRun,
     tools,
+    typed,
+    hereOnly,
     cmdArgs
   } = parseArgs(process.argv);
 
@@ -890,7 +1146,7 @@ async function run() {
 
   if (hookAction) {
     try {
-      return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive, tools, dryRun });
+      return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive, tools, dryRun, typed });
     } catch (e) {
       // Settings problems are the user's to fix — report them, don't stack-trace.
       console.error(`\x1b[31m[vibeaudio] ${e.message}\x1b[0m`);
@@ -951,6 +1207,15 @@ async function run() {
     return previewGenre(preview, volume);
   }
 
+  // Settings typed with no command to run: save them, don't open the launcher.
+  if (cmdArgs.length === 0 && Object.keys(typed).length > 0) {
+    return saveDefaults(typed, hereOnly);
+  }
+
+  if (hereOnly) {
+    console.error("\x1b[33m[vibeaudio] --here only applies when saving a setting; ignoring it.\x1b[0m");
+  }
+
   if (cmdArgs.length === 0) {
     if (!process.stdin.isTTY) {
       printHelp();
@@ -979,7 +1244,8 @@ async function run() {
       // Either way, say so and still launch the tool the user asked for -
       // they came here to start an agent, not to configure one.
       try {
-        installHookTargets([selection.hookTarget], selection.genre, chosenVol, selection.reactive);
+        installHookTargets([selection.hookTarget], selection.genre, chosenVol, selection.reactive, false,
+          { genre: selection.genre, volume: chosenVol });
       } catch (err) {
         console.error(`\x1b[31m[vibeaudio] ${err.message}\x1b[0m`);
       }

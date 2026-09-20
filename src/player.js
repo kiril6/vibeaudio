@@ -361,6 +361,98 @@ function setMuted(muted, minutes = DEFAULT_MUTE_MINUTES) {
   return state;
 }
 
+/**
+ * Saved defaults, and the reason there is a file for them at all.
+ *
+ * Genre and volume used to live in three unrelated places - an env var the
+ * wrapper read, a value baked into each hook's command line at install time,
+ * and an MCP client's `env` block - so "set my genre" had three different
+ * answers depending on how VibeAudio was being run, and the hooks' answer was
+ * "reinstall". A file every entry point reads at playback time collapses that
+ * to one: `vibe --genre jazz` means jazz everywhere, on the next prompt.
+ *
+ * Precedence is the conventional one - an explicit flag beats an env var beats
+ * this file beats the built-in default - so nothing that used to work stops
+ * working, and a one-off `--genre zen` stays a one-off.
+ */
+const CONFIG_FILE = path.join(os.homedir(), ".vibeaudio", "config.json");
+
+function loadConfig() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+    // A hand-edited file is the user's, not ours to reject: an unusable value
+    // falls through to the next source rather than taking playback down.
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+/**
+ * Merges `patch` into the saved config. Written to a temp file and renamed, so
+ * a hook firing mid-write reads either the old file or the new one - never the
+ * half of one that happened to be on disk.
+ */
+function saveConfig(patch) {
+  const next = { ...loadConfig(), ...patch };
+  for (const key of Object.keys(next)) {
+    if (next[key] === null || next[key] === undefined) delete next[key];
+  }
+  fs.mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });
+  const tmp = `${CONFIG_FILE}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`);
+  fs.renameSync(tmp, CONFIG_FILE);
+  return next;
+}
+
+/**
+ * Per-directory overrides, kept in the same file under `projects`.
+ *
+ * The seed already makes each repo sound like itself; this is the same idea
+ * for the choice of instrument - zen in the docs repo, synthwave in the game -
+ * and it is opt-in, because a global default is what most people want.
+ *
+ * Resolved by walking up from `cwd`, so running an agent from a subdirectory
+ * still finds the setting saved at the repo root. Walking rather than matching
+ * exactly is the difference between a feature and a puzzle: `projectSeed()`
+ * keys on the exact directory and a subdirectory quietly gets its own
+ * arrangement, which is tolerable for a seed nobody chose and would not be for
+ * a genre somebody did.
+ */
+function projectSettings(config = loadConfig(), cwd = process.cwd()) {
+  const projects = config.projects;
+  if (!projects || typeof projects !== "object") return {};
+
+  let dir = path.resolve(cwd);
+  for (;;) {
+    const entry = projects[dir];
+    if (entry && typeof entry === "object") return entry;
+    const parent = path.dirname(dir);
+    if (parent === dir) return {}; // Reached the filesystem root.
+    dir = parent;
+  }
+}
+
+/**
+ * Saves `patch` under the current directory. A key whose value is null is
+ * removed, and a project left with no settings drops out of the file rather
+ * than sitting there as an empty object.
+ */
+function saveProjectConfig(patch, cwd = process.cwd()) {
+  const dir = path.resolve(cwd);
+  const config = loadConfig();
+  const projects = { ...(config.projects || {}) };
+  const entry = { ...(projects[dir] || {}), ...patch };
+
+  for (const key of Object.keys(entry)) {
+    if (entry[key] === null || entry[key] === undefined) delete entry[key];
+  }
+  if (Object.keys(entry).length) projects[dir] = entry;
+  else delete projects[dir];
+
+  return saveConfig({ projects: Object.keys(projects).length ? projects : null });
+}
+
 function muteRemainingText(state) {
   if (!state) return null;
   if (!state.until) return "indefinitely — until you run: vibe --unmute";
@@ -664,6 +756,11 @@ module.exports = {
   muteRemainingText,
   DEFAULT_MUTE_MINUTES,
   MUTE_FILE,
+  loadConfig,
+  saveConfig,
+  projectSettings,
+  saveProjectConfig,
+  CONFIG_FILE,
   CACHE_ROOT,
   CACHE_DIR
 };

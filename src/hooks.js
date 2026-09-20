@@ -345,17 +345,47 @@ function readPid() {
  * ponytail: posix only. Windows has no cheap command-line lookup, so the pid
  * is trusted there as before; revisit if hooks see real Windows use.
  */
-function isOurDaemon(pid) {
-  if (process.platform === "win32") return true;
+function daemonArgv(pid) {
+  if (process.platform === "win32") return null;
   try {
-    const out = execFileSync("ps", ["-p", String(pid), "-o", "args="], {
+    return execFileSync("ps", ["-p", String(pid), "-o", "args="], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     });
-    return out.includes("vibeaudio") && out.includes("--daemon");
   } catch (e) {
-    return false; // No such process, or ps unavailable - either way, do not kill.
+    return null; // No such process, or ps unavailable.
   }
+}
+
+function isOurDaemon(pid) {
+  if (process.platform === "win32") return true;
+  const out = daemonArgv(pid);
+  // Failing closed: no argv means no kill.
+  return out !== null && out.includes("vibeaudio") && out.includes("--daemon");
+}
+
+/**
+ * What the background player is playing right now, or null if nothing is.
+ *
+ * Read from the daemon's own command line rather than a file it would have to
+ * keep in step - spawnDaemon() puts the settings there already, and a process
+ * that dies without cleanup cannot leave a stale answer behind. It is the
+ * settings *in flight*, which is the question a running daemon raises: a
+ * genre saved a moment ago does not reach it until the next prompt.
+ */
+function daemonPlaying() {
+  const pid = readPid();
+  if (pid === null || !isOurDaemon(pid)) return null;
+
+  const argv = daemonArgv(pid) || "";
+  const genre = /--genre (\S+)/.exec(argv);
+  const volume = /--volume (\d+)/.exec(argv);
+  return {
+    pid,
+    genre: genre ? genre[1] : null,
+    volume: volume ? Number(volume[1]) : null,
+    reactive: /--reactive/.test(argv)
+  };
 }
 
 /**
@@ -781,13 +811,24 @@ function shellQuote(value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
 
+/**
+ * Genre and volume are deliberately NOT written into the command line.
+ *
+ * They used to be, and that is what made "change the genre" mean "re-run the
+ * installer": a value frozen into seven hook entries at install time, which no
+ * later `vibe --genre jazz` and no exported variable could reach. Each hook
+ * fires as a fresh process and parses its own arguments, so leaving them out
+ * means it reads the saved config (see loadConfig() in player.js) on every
+ * prompt - and a genre change lands on the next one, with nothing reinstalled.
+ *
+ * `--reactive` stays, because it is not a setting the hook reads: it decides
+ * which hooks exist at all, and the PreToolUse entry is written or removed to
+ * match. A daemon respawned by a resume has to know it too.
+ */
 function hookCommand(flag, genre, volume, reactive = false) {
   const base = `${shellQuote(process.execPath)} ${shellQuote(CLI_ENTRY)} ${flag}`;
-  // Resuming respawns the daemon, so it needs the same settings as starting.
-  if (flag !== "--hook-start" && flag !== "--hook-resume") return base;
-
-  const start = `${base} --genre ${genre} --volume ${Math.round(volume * 100)}`;
-  return reactive ? `${start} --reactive` : start;
+  if (!reactive) return base;
+  return flag === "--hook-start" || flag === "--hook-resume" ? `${base} --reactive` : base;
 }
 
 const VIBE_HOOK_FLAG = /--hook-(start|stop|tool|wait|resume|end)\b/;
@@ -973,10 +1014,10 @@ single short sentence. Do nothing else.
 - \`mute\` or \`mute <minutes>\`: \`${cli} --mute <minutes>\`
 - \`unmute\`: \`${cli} --unmute\`
 - \`stop\`: \`${cli} --stop\`
-- \`genre <name>\` or \`volume <5-100>\`: first run \`${cli} --status\` and read
-  Claude Code's current genre, volume, and whether it says "reactive". Then run
-  \`${cli} --install-hooks --tools claude --genre <genre> --volume <volume>\`,
-  adding \`--reactive\` if it was reactive, and changing only what was asked.
+- \`genre <name>\`: \`${cli} --genre <name>\`
+- \`volume <5-100>\`: \`${cli} --volume <n>\`
+  Both save the user's default and reach the hooks on the next prompt - there
+  is nothing to reinstall, so do not run --install-hooks for these.
   Genres: lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, random.
 
 For anything else, show the user the list above instead of running a command.
@@ -1046,6 +1087,7 @@ module.exports = {
   readIntensity,
   stopDaemon,
   isOurDaemon,
+  daemonPlaying,
   installHooks,
   ephemeralInstallReason,
   uninstallHooks,

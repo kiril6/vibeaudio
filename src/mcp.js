@@ -6,7 +6,7 @@
  */
 
 const readline = require("readline");
-const { AudioPlayer, AVAILABLE_GENRES, normalizeVolume, playbackDisabled, isKnownGenre } = require("./player");
+const { AudioPlayer, AVAILABLE_GENRES, normalizeVolume, playbackDisabled, isKnownGenre, loadConfig } = require("./player");
 const pkg = require("../package.json");
 
 // A desktop client that crashes never sends vibe_stop, so playback needs its
@@ -132,7 +132,12 @@ function handleMessage(player, msg) {
     const { name, arguments: args = {} } = params || {};
 
     if (name === "vibe_play") {
-      const requested = args.genre || process.env.VIBE_GENRE || "lofi";
+      // Same precedence as the CLI: what the model asked for, then the
+      // environment, then the user's saved default, then lofi. Reading the
+      // saved file here is what makes `vibe --genre jazz` mean jazz in a
+      // desktop client too, rather than only in the terminal.
+      const saved = loadConfig();
+      const requested = args.genre || process.env.VIBE_GENRE || saved.genre || "lofi";
       // An unknown genre already fell back to lofi inside the generator, but
       // player.genre kept the name nobody implements - so the model told the
       // user it was playing something that does not exist.
@@ -140,7 +145,8 @@ function handleMessage(player, msg) {
       // Both the tool argument and the env default go through the same parser
       // as the CLI, so a mistyped VIBE_VOLUME falls back instead of reaching
       // the player as NaN.
-      const volume = normalizeVolume(args.volume, normalizeVolume(process.env.VIBE_VOLUME, 0.4));
+      const volume = normalizeVolume(args.volume,
+        normalizeVolume(process.env.VIBE_VOLUME, normalizeVolume(saved.volume, 0.4)));
 
       const started = player.start(genre, volume, { maxDurationMs: MAX_PLAYBACK_MS });
       // start() returns false for three unrelated reasons, and the model
