@@ -79,21 +79,20 @@ Keep PRs focused and small where you can; it makes review faster.
 #    key hashes src/synth/ itself, so a generator edit already invalidates it.
 npm version patch          # or minor / major
 
-# 2. Push the commit and tag
+# 2. Update the release chip on the site (docs/index.html, "chip-v") and amend
+#    it into the version commit, so the page and npm never disagree.
+
+# 3. Push the commit and tag - this publishes
 git push --follow-tags
 
-# 3. Publish
-npm publish
+# 4. Write the release notes
+gh release create vX.Y.Z --title vX.Y.Z --notes "..."
 ```
 
 Pick the bump by semver: patch = fix, minor = feature, major = breaking.
 
-`package.json` pins `publishConfig.registry` to the public registry, so this stays right even when your global npm config points at a private company feed — a bare `npm publish` would otherwise push there. Compare with `npm config get registry` if yours differs.
+**Pushing a `v*` tag publishes to npm** (`.github/workflows/publish.yml`). It checks the tag matches `package.json`, runs the tests, and publishes with provenance through npm trusted publishing — no token stored anywhere. Don't run `npm publish` by hand; a release that skips the workflow has no provenance.
 
 ## Reporting bugs
 
-[Open an issue](https://github.com/kiril6/vibeaudio/issues/new) with:
-
-- Your **OS** and **Node version** (`node --version`)
-- Which **audio player** you have (`which afplay paplay ffplay aplay`)
-- The exact command you ran, and whether the wrapped tool itself behaved correctly
+[Open a bug report](https://github.com/kiril6/vibeaudio/issues/new?template=bug_report.yml). The form asks for the output of `vibe --status`, which already covers your version, audio player and installed hooks, plus your OS, Node version and which agent you were using.

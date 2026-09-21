@@ -1,0 +1,55 @@
+name: Bug report
+description: Something plays when it shouldn't, doesn't play when it should, or errors
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you heard (or didn't), and what you expected instead.
+      placeholder: |
+        Ran a prompt in Claude Code. Music started, but kept playing after the agent finished and no chime played.
+    validations:
+      required: true
+
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of `vibe --status`
+      description: Shows your version, audio player, installed hooks and whether the background player is running. It contains no personal data beyond your home directory path — trim that if you like.
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Which agent or mode
+      options:
+        - Claude Code (terminal)
+        - Claude Code (desktop app / IDE)
+        - Codex
+        - Cursor
+        - Gemini CLI
+        - GitHub Copilot CLI
+        - Grok
+        - Qwen Code
+        - Wrapper (vibe <command>)
+        - MCP (Claude Desktop, Antigravity, …)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS and Node version
+      placeholder: macOS 15.4, Node 22.11
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Error messages, what you already tried, or whether `vibe --preview jazz` makes sound.
