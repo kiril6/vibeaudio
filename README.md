@@ -23,6 +23,7 @@ AI coding agents take 15–45 seconds to reason, read files and write code. Star
 * 🧮 **Pure synthesis, zero MP3s.** Every note, chord and pad is generated in code — no audio assets, no npm dependencies, no `node-gyp`.
 * 🎼 **A different arrangement per project.** Your working directory seeds the progression, bass line and melody, so each repo has its own sound and keeps it.
 * 📈 **Escalating layers.** Tier 1 (0–15s) gentle intro → Tier 2 (15–45s) main groove → Tier 3 (45s+) deep focus. You can hear how deep into the task the agent is.
+* 🎛️ **Music that follows the work** ([reactive mode](#reactive-mode-opt-in), opt-in). Calm while the agent reads, fuller while it edits, busiest when it runs commands or hands work to sub-agents — you can hear *what* it's doing, not just for how long.
 * 🔔 **Outcome-aware chimes.** Ascending on success, a soft descending minor chord on failure, and **silence on `Ctrl+C`** — an abort is never reported as done.
 * ✋ **A "your turn" chime.** When Claude Code stops to ask permission (or an MCP server asks for input), the music pauses and a rising two-note chime asks for you; it picks back up once you've answered.
 * 🔌 **Universal drop-in.** Hooks for **Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI and Qwen Code**; MCP for **Claude Desktop and Antigravity**; the wrapper (`vibe <command>`) for anything else.
@@ -92,6 +93,12 @@ That puts `vibe` and `vibeaudio` on your `PATH`. Re-run the same command to upda
 
 ```bash
 vibe --install-hooks
+```
+
+Want the music to follow what the agent is doing — calm while it reads, busiest while it runs commands? Add `--reactive`:
+
+```bash
+vibe --reactive --install-hooks
 ```
 
 Prefer a guided setup? Run `vibe` with nothing after it: a menu asks for your agent, genre and volume (press `p` to hear a genre first) and installs the hooks for you.
