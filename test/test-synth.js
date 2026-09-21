@@ -1725,7 +1725,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     const GOLDEN = {
       lofi:         ["c6342ec4f12c", "9468d401ca94", "e017253dfaf0"],
       synthwave:    ["2cffc02140f9", "42eed792d353", "46a7e0526723"],
-      "8bit":       ["fa3083b3a8db", "1435a0ec21d0", "ba0dd7225b96"],
+      "8bit":       ["5b08cfdfcd2d", "7c3f8d4be1ab", "de7451563424"],
       electronic:   ["873f83ea4f3b", "f542bda966bb", "a29af6b5bccd"],
       jazz:         ["fadaf4f52b75", "5cdbd8524d3d", "686fd1208d39"],
       zen:          ["0496cb273359", "2ea4a3da3d8a", "efb72a71fac0"],
@@ -2485,6 +2485,25 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
           `${genre} tier ${tier} jumps ${biggest.toFixed(4)} in one sample (limit ${limit}) — a click at a note onset`);
       }
     }
+    // 8bit's lead is a saturated pulse, so its own edges are steep by design and
+    // a whole-genre limit would only ever be a number about the waveform. Tier 1
+    // is the arpeggio and bass alone - no lead - which is precisely the voice
+    // that clicked: it runs continuously with no envelope, so a note change that
+    // jumps the oscillator's phase has nothing to hide it. It measured 0.1534
+    // with 58 steps over 0.05, every one of them landing on an arpeggio
+    // boundary; accumulating the phase took it to 0.0289 and none.
+    {
+      const wav = generateLoop("8bit", 1, 42);
+      let prev = null, biggest = 0;
+      for (let off = 44; off + 4 <= wav.length; off += 4) {
+        const v = wav.readInt16LE(off) / 32768;
+        if (prev !== null) biggest = Math.max(biggest, Math.abs(v - prev));
+        prev = v;
+      }
+      assert.ok(biggest <= 0.05,
+        `8bit tier 1 jumps ${biggest.toFixed(4)} in one sample — the arpeggio's phase is discontinuous again`);
+    }
+
     console.log("   ✓ Envelopes open and close at zero; no genre steps discontinuously at a note boundary.");
   }
 
