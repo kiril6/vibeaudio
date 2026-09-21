@@ -87,6 +87,15 @@ npm i -g vibeaudio
 
 That puts `vibe` and `vibeaudio` on your `PATH`. Re-run the same command to update, or see [Uninstall](#-uninstall) to remove it cleanly.
 
+**Staying up to date.** When a newer version is out, `vibe --status`, `vibe --help` and the menu say so in one line. They're the only places it's shown — never in your agent's hooks, and never over a command you wrapped. What changed is on the [releases page](https://github.com/kiril6/vibeaudio/releases).
+
+<details>
+<summary><b>What the update check sends, and how to turn it off</b></summary>
+
+Once a day at most, a background process asks the public npm registry for the latest version number — the same request `npm outdated` makes. It sends nothing about you: no ID, no settings, no usage. It's the only network request VibeAudio ever makes, and `vibe` never waits for it; the answer is shown the next time. It's skipped in CI, under `npx`, and whenever `VIBE_NO_UPDATE_CHECK=1` or `NO_UPDATE_NOTIFIER=1` is set.
+
+</details>
+
 ### Then pick how it runs
 
 **Using Claude Code, Codex, Cursor or Grok interactively?** Install the hooks — this is the mode that actually tracks thinking:
@@ -542,6 +551,7 @@ export VIBE_CHIME_VOLUME=70     # Crisp completion chime at 70%
 export VIBE_GRACE_MS=3000       # Wait 3s of thinking before any music
 export VIBE_SEED=7              # Same arrangement everywhere, ignoring the directory
 export VIBE_DISABLE=1           # Mute, without uninstalling anything
+export VIBE_NO_UPDATE_CHECK=1   # Never ask npm whether a newer version is out
 ```
 
 **`VIBE_DISABLE=1` is for a shell you always want quiet** — a CI job, a shared machine, a terminal profile you keep silent. It's read at playback time and covers hooks, wrapper and MCP alike.

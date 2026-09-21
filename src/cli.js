@@ -103,7 +103,17 @@ Procedural focus music while your AI coding tools think.
   VIBE_GRACE_MS=<ms>           Override the saved grace window, in ms
   VIBE_SEED=<n>                Pin the arrangement instead of deriving it from the directory
   VIBE_DISABLE=1               Mute automatic playback without uninstalling anything
+  VIBE_NO_UPDATE_CHECK=1       Never check npm for a newer version
 `);
+  printUpdateNotice();
+}
+
+// Only where a person is reading: help, status and the menu. See update.js.
+function printUpdateNotice() {
+  if (!process.stdout.isTTY) return;
+  const { ephemeralInstallReason } = require("./hooks");
+  const line = require("./update").updateNotice({ ephemeral: Boolean(ephemeralInstallReason()) });
+  if (line) console.log(`${line}\n`);
 }
 
 /**
@@ -709,6 +719,7 @@ function printStatus() {
     }
   }
   console.log();
+  printUpdateNotice();
 }
 
 /**
@@ -1226,6 +1237,8 @@ async function run() {
     // leave. Wrapping the launch too turned every real failure below into a
     // silent exit 0, which is the worst possible thing for a wrapper to do:
     // `vibe && deploy` would chain on a run that never happened.
+    printUpdateNotice();
+
     let selection;
     try {
       selection = await promptInteractive({
