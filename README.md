@@ -94,6 +94,8 @@ That puts `vibe` and `vibeaudio` on your `PATH`. Re-run the same command to upda
 vibe --install-hooks
 ```
 
+Prefer a guided setup? Run `vibe` with nothing after it: a menu asks for your agent, genre and volume (press `p` to hear a genre first) and installs the hooks for you.
+
 Now run your agent normally, with no prefix. Music starts when you submit a prompt and stops with a chime when the agent finishes. [Details below.](#-agent-hooks-no-wrapper-needed)
 
 **Running one-shot commands?** Wrap them:

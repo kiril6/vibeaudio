@@ -473,7 +473,7 @@ footer a{ color:var(--ink-dim); }
     <div class="feat-grid">
       <div class="feat"><h3><code>/vibe</code> in Claude Code</h3><p>Installing the hooks adds a slash command — <code>/vibe mute 30</code>, <code>/vibe genre jazz</code> — so you never leave the session to change the music.</p></div>
       <div class="feat"><h3>A menu, if you'd rather not</h3><p>Run <code>vibe</code> with no command: pick your agent, genre and volume from a list, and press <code>p</code> to hear a genre before choosing it.</p></div>
-      <div class="feat"><h3>Reactive mode</h3><p><code>vibe --reactive --install-hooks</code> — intensity follows the tool in use, not just elapsed time. Opt-in, and the one setting that needs a reinstall to change.</p></div>
+      <div class="feat"><h3>Reactive mode</h3><p>The music tracks the tool the agent is using, not just the clock: reading stays calm, editing builds, shell commands and sub-agents peak. <code>vibe --reactive --install-hooks</code></p></div>
       <div class="feat"><h3>Safe install</h3><p><code>--dry-run</code> previews the change; your other hooks are never touched.</p></div>
     </div>
   </div>
@@ -481,7 +481,7 @@ footer a{ color:var(--ink-dim); }
 
 <section class="wrap" id="get-started">
   <span class="eyebrow">get started</span>
-  <h2 style="font-size:30px;">Four commands.</h2>
+  <h2 style="font-size:30px;">Five commands.</h2>
   <div class="steps">
     <div class="step"><span class="n">1</span><div>
       <p style="color:var(--ink-dim);margin-bottom:8px;">Install globally.</p>
@@ -490,17 +490,21 @@ footer a{ color:var(--ink-dim); }
     <div class="step"><span class="n">2</span><div>
       <p style="color:var(--ink-dim);margin-bottom:8px;">Wire it into your agent's hooks.</p>
       <div class="code-copy"><code>vibe --install-hooks</code><button class="copy-btn" data-copy="vibe --install-hooks" title="Copy">⧉</button></div>
+      <p style="color:var(--ink-dim);margin-top:8px;">Rather be walked through it? Run <code>vibe</code> on its own — a menu asks for your agent, genre and volume, and sets up the hooks for you.</p>
     </div></div>
     <div class="step"><span class="n">3</span><div>
+      <p style="color:var(--ink-dim);margin-bottom:8px;"><strong style="color:var(--ink);">Make it react.</strong> The music follows what the agent is doing: quiet while it reads, fuller while it edits, busiest when it runs commands or spawns sub-agents. Off by default because some people prefer music that never shifts.</p>
+      <div class="code-copy"><code>vibe --reactive --install-hooks</code><button class="copy-btn" data-copy="vibe --reactive --install-hooks" title="Copy">⧉</button></div>
+    </div></div>
+    <div class="step"><span class="n">4</span><div>
       <p style="color:var(--ink-dim);margin-bottom:8px;">Audition a genre before committing.</p>
       <div class="code-copy"><code>vibe --preview jazz</code><button class="copy-btn" data-copy="vibe --preview jazz" title="Copy">⧉</button></div>
     </div></div>
-    <div class="step"><span class="n">4</span><div>
+    <div class="step"><span class="n">5</span><div>
       <p style="color:var(--ink-dim);margin-bottom:8px;">Keep the one you liked. Installed hooks pick it up on your next prompt — nothing to reinstall.</p>
       <div class="code-copy"><code>vibe --genre jazz --volume 25</code><button class="copy-btn" data-copy="vibe --genre jazz --volume 25" title="Copy">⧉</button></div>
     </div></div>
   </div>
-  <p style="margin-top:24px;color:var(--ink-dim);">Optional, and the one thing a reinstall is still for: <code>vibe --reactive --install-hooks</code> makes intensity follow the tool in use rather than elapsed time. Off by default on purpose — music that moves every time the agent switches tools is music you notice.</p>
   <p style="margin-top:16px;color:var(--ink-dim);">Every flag, every troubleshooting note, every hook dialect: <a href="https://github.com/kiril6/vibeaudio#readme">the full README</a>. The package lives on <a href="https://www.npmjs.com/package/vibeaudio">npm</a>.</p>
 </section>
 
