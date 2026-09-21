@@ -1,6 +1,6 @@
 # 🎧 VibeAudio
 
-[![test](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml/badge.svg)](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml)
+[![test](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml/badge.svg)](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml) [![npm](https://img.shields.io/npm/v/vibeaudio)](https://www.npmjs.com/package/vibeaudio) [![downloads](https://img.shields.io/npm/d18m/vibeaudio?label=downloads)](https://npm-stat.com/charts.html?package=vibeaudio) [![downloads/month](https://img.shields.io/npm/dm/vibeaudio)](https://npm-stat.com/charts.html?package=vibeaudio)
 
 > **Procedural focus music while your AI coding tools think.**
 > Every project gets its own arrangement. Zero dependencies, zero audio files.
