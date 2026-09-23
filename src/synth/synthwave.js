@@ -9,7 +9,7 @@ const {
   analogSaw,
   triangle,
   makeRng,
-  pick,
+  rotate,
   pluckEnv,
   createWavBuffer
 } = require("./generator");
@@ -52,8 +52,8 @@ const PROGRESSIONS = [
   }
 ];
 
-function generateSynthwaveLoop(durationSec = 6.8, tier = 2, seed = 0) {
-  const variant = pick(makeRng(seed), PROGRESSIONS);
+function generateSynthwaveLoop(durationSec = 6.8, tier = 2, seed = 0, bar = 0) {
+  const variant = rotate(makeRng(seed), PROGRESSIONS, bar);
   const progression = variant.steps;
   const arps = variant.arps;
   const totalSamples = Math.floor(SAMPLE_RATE * durationSec);

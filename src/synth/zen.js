@@ -8,6 +8,7 @@ const {
   noteToFreq,
   sine,
   makeRng,
+  rotate,
   pick,
   ornamentRng,
   createWavBuffer
@@ -24,9 +25,9 @@ const PAD_PAIRS = [
 // D major pentatonic - the safest set to strike a bowl on over any pad above.
 const BOWL_NOTES = ["D4", "E4", "F#4", "A4", "B4", "D5"];
 
-function generateZenLoop(durationSec = 7.2, tier = 2, seed = 0) {
+function generateZenLoop(durationSec = 7.2, tier = 2, seed = 0, bar = 0) {
   const rng = makeRng(seed);
-  const pads = pick(rng, PAD_PAIRS);
+  const pads = rotate(rng, PAD_PAIRS, bar);
 
   const totalSamples = Math.floor(SAMPLE_RATE * durationSec);
   const left = new Float64Array(totalSamples);

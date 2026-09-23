@@ -9,6 +9,7 @@ const {
   sine,
   triangle,
   makeRng,
+  rotate,
   pick,
   ornamentRng,
   createWavBuffer
@@ -36,9 +37,9 @@ const CHANGES = [
 
 const STAB_NOTES = ["D5", "E5", "G5", "A5", "B5"];
 
-function generateJazzLoop(durationSec = 6.26, tier = 2, seed = 0) {
+function generateJazzLoop(durationSec = 6.26, tier = 2, seed = 0, bar = 0) {
   const rng = makeRng(seed);
-  const changes = pick(rng, CHANGES);
+  const changes = rotate(rng, CHANGES, bar);
   const bpm = 92;
   const secPerBeat = 60.0 / bpm;
   const totalBeats = Math.floor(durationSec / secPerBeat);

@@ -7,6 +7,7 @@ const {
   SAMPLE_RATE,
   noteToFreq,
   makeRng,
+  rotate,
   pick,
   ornamentRng,
   createWavBuffer
@@ -24,9 +25,9 @@ const PROGRESSIONS = [
 const DROP_NOTES = ["C5", "D5", "E5", "G5", "A5", "B5", "C6"];
 const SHIMMER_NOTES = ["E6", "G6", "A6", "B6"];
 
-function generateLofiLoop(durationSec = 6.4, tier = 2, seed = 0) {
+function generateLofiLoop(durationSec = 6.4, tier = 2, seed = 0, bar = 0) {
   const rng = makeRng(seed);
-  const progression = pick(rng, PROGRESSIONS);
+  const progression = rotate(rng, PROGRESSIONS, bar);
   const totalSamples = Math.floor(SAMPLE_RATE * durationSec);
   const left = new Float64Array(totalSamples);
   const right = new Float64Array(totalSamples);

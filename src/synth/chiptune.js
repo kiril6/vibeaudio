@@ -9,7 +9,7 @@ const {
   softPulse,
   triangle,
   makeRng,
-  pick,
+  rotate,
   createWavBuffer
 } = require("./generator");
 
@@ -33,8 +33,8 @@ const VARIANTS = [
   }
 ];
 
-function generateChiptuneLoop(durationSec = 7.5, tier = 2, seed = 0) {
-  const variant = pick(makeRng(seed), VARIANTS);
+function generateChiptuneLoop(durationSec = 7.5, tier = 2, seed = 0, bar = 0) {
+  const variant = rotate(makeRng(seed), VARIANTS, bar);
   const bpm = 128;
   const secPerBeat = 60.0 / bpm;
   const totalBeats = Math.floor(durationSec / secPerBeat);

@@ -70,6 +70,26 @@ const TIER_2_AFTER_MS = 15000;
 const TIER_3_AFTER_MS = 45000;
 
 /**
+ * How many bars one piece is played as.
+ *
+ * A tier renders one ~7 second loop and the last tier arrives at 45 seconds,
+ * so everything past a turn's first minute used to be a single file on
+ * repeat: ~85 identical plays across a ten-minute turn, ~250 across half an
+ * hour. Music stays in the background only until the ear starts tracking it,
+ * and what it does then is send someone to --mute for good.
+ *
+ * Each bar rotates to the next of the genre's own curated variants (see
+ * `rotate` in synth/generator.js), so the phrase is ~21 seconds instead of
+ * ~7 and every bar is still hand-written harmony. Three is not a taste
+ * setting: every genre carries exactly three variants, and rotation can only
+ * guarantee distinct bars while it has one to move to.
+ *
+ * Bar 0 is the unrotated variant, so a project still opens on the sound it
+ * has always had.
+ */
+const LOOP_BARS = 3;
+
+/**
  * Playback backends, in preference order. `volume` marks whether the backend
  * can attenuate; the others play at system volume.
  */
@@ -212,25 +232,25 @@ function resolveGenre(genre) {
   return GENRE_ALIASES[normalized] || normalized;
 }
 
-function generateLoop(genre, tier, seed) {
+function generateLoop(genre, tier, seed, bar = 0) {
   switch (genre) {
     case "synthwave":
-      return generateSynthwaveLoop(6.8, tier, seed);
+      return generateSynthwaveLoop(6.8, tier, seed, bar);
     case "8bit":
-      return generateChiptuneLoop(7.5, tier, seed);
+      return generateChiptuneLoop(7.5, tier, seed, bar);
     case "electronic":
-      return generateElectronicLoop(6.4, tier, seed);
+      return generateElectronicLoop(6.4, tier, seed, bar);
     case "jazz":
-      return generateJazzLoop(6.26, tier, seed);
+      return generateJazzLoop(6.26, tier, seed, bar);
     case "zen":
-      return generateZenLoop(7.2, tier, seed);
+      return generateZenLoop(7.2, tier, seed, bar);
     case "drone":
-      return generateDroneLoop(7.0, tier, seed);
+      return generateDroneLoop(7.0, tier, seed, bar);
     case "piano":
-      return generatePianoLoop(7.6, tier, seed);
+      return generatePianoLoop(7.6, tier, seed, bar);
     case "lofi":
     default:
-      return generateLofiLoop(6.4, tier, seed);
+      return generateLofiLoop(6.4, tier, seed, bar);
   }
 }
 
@@ -519,17 +539,23 @@ function writeCacheFileAtomic(filePath, buffer) {
   }
 }
 
-function getAudioPath(genre, tier = 2, seed = projectSeed(), gain = 1) {
+function getAudioPath(genre, tier = 2, seed = projectSeed(), gain = 1, bar = 0) {
   ensureCacheDir();
   const normalizedGenre = resolveGenre(genre);
   const safeTier = Math.max(1, Math.min(3, tier));
+  const safeBar = ((bar % LOOP_BARS) + LOOP_BARS) % LOOP_BARS;
 
+  // Bars of one piece share the project's seed directory, so a project's
+  // music is still pruned as a unit. Bar 0 keeps the unsuffixed name and
+  // renders byte-identically to the pre-bars loop, so a project upgrading
+  // into this opens on exactly the bar it has always opened on.
+  const barSuffix = safeBar === 0 ? "" : `_b${safeBar}`;
   const dir = seedDir(seed);
-  const filePath = path.join(dir, `loop_${normalizedGenre}_t${safeTier}${gainSuffix(gain)}.wav`);
+  const filePath = path.join(dir, `loop_${normalizedGenre}_t${safeTier}${barSuffix}${gainSuffix(gain)}.wav`);
 
   if (!fs.existsSync(filePath)) {
     fs.mkdirSync(dir, { recursive: true });
-    writeCacheFileAtomic(filePath, applyGain(generateLoop(normalizedGenre, safeTier, seed >>> 0), gain));
+    writeCacheFileAtomic(filePath, applyGain(generateLoop(normalizedGenre, safeTier, seed >>> 0, safeBar), gain));
     pruneSeedDirs();
   }
 
@@ -592,6 +618,7 @@ class AudioPlayer {
     this.intensity = null;
     this.minTier = null;
     this.currentTier = 1;
+    this.bar = 0;
     this.nextTimer = null;
     this.watchdog = null;
   }
@@ -621,6 +648,7 @@ class AudioPlayer {
     this.genre = resolved;
     this.volume = targetVolume;
     this.seed = projectSeed();
+    this.bar = 0; // Every run opens on the project's own bar.
     this.intensity = intensity;
     this.minTier = minTier;
 
@@ -661,7 +689,9 @@ class AudioPlayer {
     // never both, or the volume would be applied twice.
     const backend = detectPlayer();
     const gain = bakedGain(backend, this.volume);
-    const audioFile = getAudioPath(this.genre, this.currentTier, this.seed, gain);
+    const audioFile = getAudioPath(this.genre, this.currentTier, this.seed, gain, this.bar);
+    // Advanced after the choice, so the bar that plays first is bar 0.
+    this.bar = (this.bar + 1) % LOOP_BARS;
     const proc = spawn(backend.cmd, backend.args(audioFile, this.volume), { stdio: "ignore" });
 
     this.procs.add(proc);
@@ -748,6 +778,7 @@ module.exports = {
   projectSeed,
   wavDurationMs,
   generateLoop,
+  LOOP_BARS,
   AVAILABLE_GENRES,
   SHUFFLE_GENRES,
   synthFingerprint,

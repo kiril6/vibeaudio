@@ -12,7 +12,7 @@ const {
   noteToFreq,
   sine,
   makeRng,
-  pick,
+  rotate,
   ornamentRng,
   createWavBuffer
 } = require("./generator");
@@ -26,10 +26,10 @@ const DRONE_VARIANTS = [
   { root: "E1", partial: 1.335, cutoff: 0.070, label: "open fourth" } // E + A
 ];
 
-function generateDroneLoop(durationSec = 7.0, tier = 2, seed = 0) {
+function generateDroneLoop(durationSec = 7.0, tier = 2, seed = 0, bar = 0) {
   // Drawn before any tier gating, so gating a layer can't shift these.
   const orn = ornamentRng(seed);
-  const variant = pick(orn, DRONE_VARIANTS);
+  const variant = rotate(orn, DRONE_VARIANTS, bar);
   const sweepDepth = 0.55 + orn() * 0.35;
   const breathOffset = orn() * Math.PI * 2;
 

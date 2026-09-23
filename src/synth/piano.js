@@ -13,6 +13,7 @@ const {
   noteToFreq,
   sine,
   makeRng,
+  rotate,
   pick,
   ornamentRng,
   createWavBuffer
@@ -52,9 +53,9 @@ const PARTIALS = [
   { mult: 5.05, amp: 0.035, decay: 4.5 }
 ];
 
-function generatePianoLoop(durationSec = 7.6, tier = 2, seed = 0) {
+function generatePianoLoop(durationSec = 7.6, tier = 2, seed = 0, bar = 0) {
   const rng = makeRng(seed);
-  const variant = pick(rng, PIANO_VARIANTS);
+  const variant = rotate(rng, PIANO_VARIANTS, bar);
 
   const totalSamples = Math.floor(SAMPLE_RATE * durationSec);
   const left = new Float64Array(totalSamples);

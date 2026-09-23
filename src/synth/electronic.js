@@ -11,7 +11,7 @@ const {
   triangle,
   sine,
   makeRng,
-  pick,
+  rotate,
   ornamentRng,
   pluckEnv,
   createWavBuffer
@@ -34,8 +34,8 @@ const VARIANTS = [
   }
 ];
 
-function generateElectronicLoop(durationSec = 6.4, tier = 2, seed = 0) {
-  const variant = pick(makeRng(seed), VARIANTS);
+function generateElectronicLoop(durationSec = 6.4, tier = 2, seed = 0, bar = 0) {
+  const variant = rotate(makeRng(seed), VARIANTS, bar);
   const orn = ornamentRng(seed);
   const bpm = 116;
   const secPerBeat = 60.0 / bpm;

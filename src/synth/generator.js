@@ -60,6 +60,28 @@ function pick(rng, options) {
 }
 
 /**
+ * The seed picks which curated variant a project gets; `bar` steps to the next
+ * one along, so one piece can be several bars long without any of them being
+ * invented.
+ *
+ * A loop is ~7 seconds and a tier stops changing at 45, so without this every
+ * turn past its first minute was one file on repeat - 85 identical plays
+ * across ten minutes, 250 across half an hour. Rotation is what makes the
+ * bars *guaranteed* different: salting the seed instead leaves it to chance,
+ * and with three variants per genre, three salted draws land on three
+ * different ones only 2 times in 9.
+ *
+ * Draws exactly once, like `pick`, so a stream shared with ornaments below is
+ * left in the same place and `bar = 0` renders what the seed alone always
+ * rendered.
+ */
+function rotate(rng, options, bar = 0) {
+  const index = Math.floor(rng() * options.length) % options.length;
+  const step = ((bar % options.length) + options.length) % options.length;
+  return options[(index + step) % options.length];
+}
+
+/**
  * Ornament placement draws from its own stream so that gating a layer by tier
  * can't shift the choices made by other layers - tier 1 and tier 3 stay the
  * same piece, one just has more of it.
@@ -196,6 +218,7 @@ module.exports = {
   hashString,
   pick,
   ornamentRng,
+  rotate,
   noteToFreq,
   sine,
   triangle,
