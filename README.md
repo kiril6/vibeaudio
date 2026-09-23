@@ -61,6 +61,15 @@ That's a deliberate choice. Focus music has one job: **be ignorable.** Music tha
 
 ---
 
+### 🎧 Send someone your repo's sound
+
+```bash
+vibe --render            # -> vibeaudio-lofi.wav, ~53s
+vibe --genre jazz --render our-api.wav
+```
+
+A whole session in one file: every bar of the phrase at tier 1, then tier 2, then tier 3, and the success chime at the end — rendered from your project's own seed, at full scale so your player's volume control is the only one in the way. Plain WAV, so nothing has to be installed to play it.
+
 ## 📋 Requirements
 
 * **Node.js ≥ 18**
@@ -527,6 +536,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--no-chime` | Disable the resolution completion chime | `false` |
 | `--no-hud` | Disable terminal window/tab title animation | `false` |
 | `--preview <genre>` | Play one loop of a genre and exit | — |
+| `--render [file]` | Write this project's music to a `.wav` and exit | `vibeaudio-<genre>.wav` |
 | `--status` | Show what's installed, running and detected, then exit | — |
 | `--stop` | Stop the background player, then exit | — |
 | `--mute [minutes]` | Silence everything for a call, then exit | `60` min (`0` = until unmuted) |

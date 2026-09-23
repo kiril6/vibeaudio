@@ -1,58 +1,58 @@
 {
   "lofi": {
     "tier1StartMs": 0,
-    "tier2StartMs": 12560,
-    "tier3StartMs": 25120,
-    "chimeStartMs": 37800,
-    "totalMs": 39400
+    "tier2StartMs": 18840,
+    "tier3StartMs": 37680,
+    "chimeStartMs": 56640,
+    "totalMs": 58240
   },
   "synthwave": {
     "tier1StartMs": 0,
-    "tier2StartMs": 13360,
-    "tier3StartMs": 26720,
-    "chimeStartMs": 40200,
-    "totalMs": 41800
+    "tier2StartMs": 20040,
+    "tier3StartMs": 40080,
+    "chimeStartMs": 60240,
+    "totalMs": 61840
   },
   "8bit": {
     "tier1StartMs": 0,
-    "tier2StartMs": 14760,
-    "tier3StartMs": 29520,
-    "chimeStartMs": 44400,
-    "totalMs": 46000
+    "tier2StartMs": 22140,
+    "tier3StartMs": 44280,
+    "chimeStartMs": 66540,
+    "totalMs": 68140
   },
   "electronic": {
     "tier1StartMs": 0,
-    "tier2StartMs": 12174,
-    "tier3StartMs": 24348,
-    "chimeStartMs": 36641,
-    "totalMs": 38241
+    "tier2StartMs": 18261,
+    "tier3StartMs": 36521,
+    "chimeStartMs": 54902,
+    "totalMs": 56502
   },
   "jazz": {
     "tier1StartMs": 0,
-    "tier2StartMs": 11499,
-    "tier3StartMs": 22998,
-    "chimeStartMs": 34617,
-    "totalMs": 36217
+    "tier2StartMs": 17249,
+    "tier3StartMs": 34497,
+    "chimeStartMs": 51866,
+    "totalMs": 53466
   },
   "zen": {
     "tier1StartMs": 0,
-    "tier2StartMs": 14160,
-    "tier3StartMs": 28320,
-    "chimeStartMs": 42600,
-    "totalMs": 44200
+    "tier2StartMs": 21240,
+    "tier3StartMs": 42480,
+    "chimeStartMs": 63840,
+    "totalMs": 65440
   },
   "piano": {
     "tier1StartMs": 0,
-    "tier2StartMs": 14960,
-    "tier3StartMs": 29920,
-    "chimeStartMs": 45000,
-    "totalMs": 46600
+    "tier2StartMs": 22440,
+    "tier3StartMs": 44880,
+    "chimeStartMs": 67440,
+    "totalMs": 69040
   },
   "drone": {
     "tier1StartMs": 0,
-    "tier2StartMs": 13760,
-    "tier3StartMs": 27520,
-    "chimeStartMs": 41400,
-    "totalMs": 43000
+    "tier2StartMs": 20640,
+    "tier3StartMs": 41280,
+    "chimeStartMs": 62040,
+    "totalMs": 63640
   }
 }

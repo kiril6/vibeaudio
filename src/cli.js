@@ -19,6 +19,7 @@ const {
   projectSettings,
   saveProjectConfig,
   wavDurationMs,
+  projectSeed,
   AVAILABLE_GENRES
 } = require("./player");
 const pkg = require("../package.json");
@@ -56,6 +57,7 @@ Procedural focus music while your AI coding tools think.
   vibe --genre 8bit sleep 5
   vibe --volume 30 npm test
   vibe --preview jazz
+  vibe --render                  \x1b[90m# save this repo's sound as a .wav to share\x1b[0m
   vibe                           \x1b[90m# menu: pick a tool and a sound (p auditions a genre)\x1b[0m
 
 \x1b[1mOPTIONS:\x1b[0m
@@ -71,6 +73,7 @@ Procedural focus music while your AI coding tools think.
       --no-chime               Disable the resolution completion chime
       --no-hud                 Disable terminal window/tab title animation
       --preview <genre>        Play one loop of a genre and exit
+      --render [file]          Write this project's music to a .wav and exit
       --status                 Show what is installed, running and detected, then exit
       --stop                   Stop the background player, then exit
       --mute [minutes]         Silence everything for a call (default: 60 min, 0 = until unmuted)
@@ -164,6 +167,7 @@ function parseArgs(argv) {
   let noChime = false;
   let noHud = false;
   let preview = null;
+  let render = null;
   let clearCacheFlag = false;
   let statusFlag = false;
   let stopFlag = false;
@@ -247,6 +251,20 @@ function parseArgs(argv) {
     if (arg === "--preview") {
       preview = i + 1 < args.length ? args[i + 1].toLowerCase() : genre;
       i += 2;
+      continue;
+    }
+
+    // Optional filename: `--render` alone names the file after the genre.
+    // Only a non-flag counts, so `vibe --render --genre zen` still parses as
+    // both, the way `--mute claude` does.
+    if (arg === "--render") {
+      i += 1;
+      if (args[i] !== undefined && !args[i].startsWith("-")) {
+        render = args[i];
+        i += 1;
+      } else {
+        render = "";
+      }
       continue;
     }
 
@@ -401,6 +419,7 @@ function parseArgs(argv) {
     noChime,
     noHud,
     preview,
+    render,
     clearCache: clearCacheFlag,
     status: statusFlag,
     stop: stopFlag,
@@ -935,6 +954,38 @@ function previewGenre(genre, volume) {
   spawnSync(backend.cmd, backend.args(audioFile, volume), { stdio: "ignore" });
 }
 
+/**
+ * Writes this project's music to a file, so the thing that is actually
+ * distinctive about VibeAudio - that a repo has its own arrangement - is
+ * something a user can hear outside their own terminal, and send to someone.
+ *
+ * Rendered at full scale rather than at the configured volume: a file is
+ * played by something with its own volume control, and a quiet render is not
+ * recoverable. WAV because it needs no encoder on any platform; it is large,
+ * and the caller can compress it with whatever they already have.
+ */
+function renderToFile(target, genre) {
+  if (!isKnownGenre(genre)) {
+    console.error(`\x1b[31m[vibeaudio] Unknown genre '${genre}'.\x1b[0m Available: ${AVAILABLE_GENRES.join(", ")}, random`);
+    process.exit(1);
+  }
+
+  const { renderPiece } = require("./render");
+  const resolved = resolveGenre(genre);
+  const seed = projectSeed();
+  const file = path.resolve(target || `vibeaudio-${resolved}.wav`);
+
+  process.stdout.write(`\x1b[36m♫ Rendering \x1b[1m${resolved}\x1b[0m\x1b[36m for ${path.basename(process.cwd())}…\x1b[0m`);
+  const piece = renderPiece({ genre: resolved, seed });
+  fs.writeFileSync(file, piece.wav);
+
+  const seconds = (piece.durationMs / 1000).toFixed(0);
+  const mb = (piece.wav.length / 1024 / 1024).toFixed(1);
+  console.log(`\r\x1b[32m✔ Wrote ${file}\x1b[0m\x1b[K`);
+  console.log(`  \x1b[90m${seconds}s, ${mb} MB — all three tiers and the success chime, seed ${seed >>> 0}.\x1b[0m`);
+  console.log(`  \x1b[90mAnother project's sound: run it there, or vibe --seed <n> --render.\x1b[0m\n`);
+}
+
 function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, tools, dryRun, typed = {} }) {
   const hooks = require("./hooks");
 
@@ -1132,6 +1183,7 @@ async function run() {
     noChime,
     noHud,
     preview,
+    render,
     clearCache: shouldClear,
     status: showStatus,
     stop: shouldStop,
@@ -1216,6 +1268,10 @@ async function run() {
 
   if (preview) {
     return previewGenre(preview, volume);
+  }
+
+  if (render !== null) {
+    return renderToFile(render, genre);
   }
 
   // Settings typed with no command to run: save them, don't open the launcher.
