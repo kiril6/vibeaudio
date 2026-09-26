@@ -1086,6 +1086,20 @@ function hooksAlreadyCover(cmdArgs, settingsFile = null) {
   }
 }
 
+/**
+ * Windows needs a shell for .cmd/.bat wrappers and for bare commands that may
+ * resolve to one (npm, npx, etc). Real executables and explicit paths should
+ * be spawned directly: cmd.exe otherwise breaks paths containing spaces.
+ */
+function windowsCommandNeedsShell(command) {
+  const ext = path.extname(command).toLowerCase();
+
+  if (ext === ".cmd" || ext === ".bat") return true;
+  if (ext) return false;
+
+  return !/[\\/]/.test(command);
+}
+
 function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRACE_PERIOD_MS, noChime, noHud = false) {
   const player = new AudioPlayer();
   const hookDriven = hooksAlreadyCover(cmdArgs);
@@ -1127,7 +1141,7 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRA
 
   const child = spawn(command, commandArgs, {
     stdio: "inherit",
-    shell: process.platform === "win32"
+    shell: process.platform === "win32" && windowsCommandNeedsShell(command)
   });
 
   // Runs exactly once: both the signal path and the close path lead here.
@@ -1336,4 +1350,10 @@ async function run() {
   executeCommand(cmdArgs, genre, volume, chimeVolume, grace, noChime, noHud);
 }
 
-module.exports = { run, parseArgs, hooksAlreadyCover, previewAudioFile };
+module.exports = {
+  run,
+  parseArgs,
+  hooksAlreadyCover,
+  previewAudioFile,
+  windowsCommandNeedsShell
+};

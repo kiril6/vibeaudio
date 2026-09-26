@@ -12,7 +12,7 @@ const { generateElectronicLoop } = require("../src/synth/electronic");
 const { generateZenLoop } = require("../src/synth/zen");
 const { generateJazzLoop } = require("../src/synth/jazz");
 const { generateChime } = require("../src/synth/chime");
-const { parseArgs } = require("../src/cli");
+const { parseArgs, windowsCommandNeedsShell } = require("../src/cli");
 
 /**
  * Hook targets with no launcher entry, and why. A target here is one you
@@ -475,6 +475,25 @@ fs.writeFileSync(coverFile, "{ not json");
 assert.strictEqual(hooksAlreadyCover(["claude"], coverFile), false, "unreadable settings must not crash the wrapper");
 fs.unlinkSync(coverFile);
 console.log("   ✓ Wrapper defers to installed hooks and keeps working without them.");
+
+// Windows command dispatch must not send real executables through cmd.exe.
+// cmd.exe splits an unquoted path like C:\Program Files\nodejs\node.exe at
+// the space, while .cmd/.bat wrappers still require a shell.
+assert.strictEqual(
+  windowsCommandNeedsShell("C:\\Program Files\\nodejs\\node.exe"),
+  false,
+  "Windows .exe paths must bypass the shell"
+);
+assert.strictEqual(
+  windowsCommandNeedsShell("C:\\Program Files\\nodejs\\npm.cmd"),
+  true,
+  "Windows .cmd wrappers still require the shell"
+);
+assert.strictEqual(
+  windowsCommandNeedsShell("npm"),
+  true,
+  "bare commands must preserve Windows shell resolution"
+);
 
 // 24. Exit Codes Propagate (end-to-end)
 // Regression: a signal-killed child reported code null, which was mapped to 0 -
