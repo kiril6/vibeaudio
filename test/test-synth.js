@@ -261,7 +261,22 @@ console.log("   ✓ MCP Server protocol (initialize, tools/list, vibe_play, vibe
 // 16. Genre Aliases, Validation & Random Resolution
 console.log("16. Testing Genre Resolution & Validation...");
 const { resolveGenre, isKnownGenre, AVAILABLE_GENRES, CACHE_DIR } = require("../src/player");
-assert.strictEqual(resolveGenre("chiptune"), "8bit", "aliases must map to canonical genre names");
+const genreAliases = {
+  lofi: ["lo-fi", "lofi-hiphop", "chill", "chillhop", "study"],
+  "8bit": ["chiptune", "chip", "nes", "gameboy", "retro"],
+  synthwave: ["retrowave", "outrun", "80s"],
+  electronic: ["downtempo", "techno", "edm"],
+  jazz: ["bossa", "swing", "lounge"],
+  zen: ["ambient", "calm", "meditation"],
+  drone: ["noise", "focus", "hum", "whitenoise", "white-noise"],
+  piano: ["sparse", "satie", "keys", "minimal"]
+};
+for (const [canonical, aliases] of Object.entries(genreAliases)) {
+  for (const alias of aliases) {
+    assert.strictEqual(resolveGenre(alias), canonical, `${alias} must resolve to ${canonical}`);
+    assert.strictEqual(isKnownGenre(alias), true, `${alias} must be accepted as a known genre`);
+  }
+}
 assert.strictEqual(resolveGenre("BOSSA"), "jazz", "genre matching is case-insensitive");
 assert.ok(AVAILABLE_GENRES.includes(resolveGenre("random")), "random must resolve to a real genre");
 assert.strictEqual(isKnownGenre("nonsense"), false, "unknown genres must be rejected");
