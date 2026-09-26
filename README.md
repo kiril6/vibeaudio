@@ -97,6 +97,14 @@ npm i -g vibeaudio
 
 That puts `vibe` and `vibeaudio` on your `PATH`. Re-run the same command to update, or see [Uninstall](#-uninstall) to remove it cleanly.
 
+**Want what's on `main`?** Fixes land here before they reach the registry, and installing from GitHub gets them straight away — no clone, no build:
+
+```bash
+npm i -g github:kiril6/vibeaudio
+```
+
+Same command to update it again. Switch back to the released version any time with `npm i -g vibeaudio`.
+
 **Staying up to date.** When a newer version is out, `vibe --status`, `vibe --help` and the menu say so in one line. They're the only places it's shown — never in your agent's hooks, and never over a command you wrapped. What changed is on the [releases page](https://github.com/kiril6/vibeaudio/releases).
 
 <details>
