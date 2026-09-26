@@ -191,14 +191,37 @@ function clearCache() {
 }
 
 const GENRE_ALIASES = {
+  "lo-fi": "lofi",
+  "lofi-hiphop": "lofi",
+  chill: "lofi",
+  chillhop: "lofi",
+  study: "lofi",
   chiptune: "8bit",
+  chip: "8bit",
+  nes: "8bit",
+  gameboy: "8bit",
+  retro: "8bit",
+  retrowave: "synthwave",
+  outrun: "synthwave",
+  "80s": "synthwave",
   downtempo: "electronic",
+  techno: "electronic",
+  edm: "electronic",
   bossa: "jazz",
+  swing: "jazz",
+  lounge: "jazz",
   ambient: "zen",
+  calm: "zen",
+  meditation: "zen",
   noise: "drone",
   focus: "drone",
+  hum: "drone",
+  whitenoise: "drone",
+  "white-noise": "drone",
   sparse: "piano",
-  satie: "piano"
+  satie: "piano",
+  keys: "piano",
+  minimal: "piano"
 };
 
 function isKnownGenre(genre) {
