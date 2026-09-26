@@ -474,7 +474,20 @@ VibeAudio includes **8 procedural music styles** synthesized entirely in code:
 | `drone` | 🌫️ **Deep Drone** | A held tone and filtered noise — **no melody at all** |
 | `random` | 🎲 **Shuffle Mode** | Picks a surprise genre for the run — **never `drone`** |
 
-Aliases also work: `chiptune` → `8bit`, `downtempo` → `electronic`, `bossa` → `jazz`, `ambient` → `zen`, `sparse`/`satie` → `piano`, `noise`/`focus` → `drone`.
+**Aliases also work**, so you can ask for a genre the way you'd say it — `vibe --preview chill` is `lofi`:
+
+| Canonical | Also accepted |
+| :--- | :--- |
+| `lofi` | `lo-fi`, `lofi-hiphop`, `chill`, `chillhop`, `study` |
+| `synthwave` | `retrowave`, `outrun`, `80s` |
+| `8bit` | `chiptune`, `chip`, `nes`, `gameboy`, `retro` |
+| `electronic` | `downtempo`, `techno`, `edm` |
+| `jazz` | `bossa`, `swing`, `lounge` |
+| `zen` | `ambient`, `calm`, `meditation` |
+| `piano` | `sparse`, `satie`, `keys`, `minimal` |
+| `drone` | `noise`, `focus`, `hum`, `whitenoise`, `white-noise` |
+
+Matching is case-insensitive, so `BOSSA` works too.
 
 > **If any melody distracts you, use `drone`.** Every other genre plays something — notes, a progression, a bass line — and some people can't read while that happens. `drone` holds one low tone under a slow-breathing noise bed and never moves: closer to a fan or rainfall than to music. Tiers add weight rather than movement.
 >
