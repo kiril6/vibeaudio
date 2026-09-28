@@ -87,9 +87,15 @@ git push --follow-tags
 
 # 4. Write the release notes
 gh release create vX.Y.Z --title vX.Y.Z --notes "..."
+
+# 5. Confirm it actually landed. npm reports "your package is being
+#    processed" and takes a few minutes, so this is not instant.
+npm view vibeaudio version
 ```
 
 Pick the bump by semver: patch = fix, minor = feature, major = breaking.
+
+**Step 5 is not optional.** A green workflow is not proof: v0.7.1 and v0.8.0 both tagged, both went green on the parts that ran, and neither reached the registry - the first sat unpublished for a week because nobody checked. The registry is the only thing that decides whether a release happened.
 
 **Pushing a `v*` tag publishes to npm** (`.github/workflows/publish.yml`). It checks the tag matches `package.json`, runs the tests, and publishes with provenance through npm trusted publishing — no token stored anywhere. Don't run `npm publish` by hand; a release that skips the workflow has no provenance.
 
