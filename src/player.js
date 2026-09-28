@@ -294,9 +294,21 @@ function seedDir(seed) {
   return path.join(CACHE_DIR, `s${seed >>> 0}`);
 }
 
-/** Keep a small working set of projects cached; regenerating costs ~100ms. */
+/**
+ * Keep a small working set of projects cached; regenerating costs ~100ms.
+ *
+ * A directory touched within PRUNE_MIN_AGE_MS is left alone whoever owns it.
+ * Another process may be part-way through a render there - it creates the
+ * directory, then writes its .tmp into it - and deleting it underneath that
+ * write throws ENOENT on the playback path, which is the one thing audio is
+ * never allowed to do. Time is the only signal we have across processes;
+ * skipping only our own directory would not have helped the other one.
+ */
+const PRUNE_MIN_AGE_MS = 10_000;
+
 function pruneSeedDirs(keep = 3) {
   try {
+    const now = Date.now();
     const dirs = fs
       .readdirSync(CACHE_DIR, { withFileTypes: true })
       .filter((e) => e.isDirectory() && /^s\d+$/.test(e.name))
@@ -307,6 +319,7 @@ function pruneSeedDirs(keep = 3) {
       .sort((a, b) => b.mtime - a.mtime);
 
     for (const stale of dirs.slice(keep)) {
+      if (now - stale.mtime < PRUNE_MIN_AGE_MS) continue;
       fs.rmSync(stale.full, { recursive: true, force: true });
     }
   } catch (e) {
@@ -549,6 +562,23 @@ function writeCacheFileAtomic(filePath, buffer) {
   } catch (e) {
     fs.rmSync(tmp, { force: true });
 
+    // The seed directory can be pruned by another process between our mkdir
+    // and this write. The mtime floor in pruneSeedDirs makes that rare rather
+    // than impossible, so recreate the directory and try once more - a second
+    // ENOENT would mean a prune landed inside a window of microseconds.
+    if (e.code === "ENOENT") {
+      try {
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(tmp, buffer);
+        fs.renameSync(tmp, filePath);
+        return;
+      } catch (retryErr) {
+        fs.rmSync(tmp, { force: true });
+        if (fs.existsSync(filePath)) return;
+        throw retryErr;
+      }
+    }
+
     // POSIX rename replaces the destination silently. Windows does not: it
     // fails with EPERM/EACCES when another process holds the destination
     // open - which is precisely the concurrent case this function exists to
@@ -789,6 +819,8 @@ class AudioPlayer {
 module.exports = {
   AudioPlayer,
   getAudioPath,
+  pruneSeedDirs,
+  writeCacheFileAtomic,
   getChimePath,
   clearCache,
   detectPlayer,
