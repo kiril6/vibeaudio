@@ -79,23 +79,24 @@ Keep PRs focused and small where you can; it makes review faster.
 #    key hashes src/synth/ itself, so a generator edit already invalidates it.
 npm version patch          # or minor / major
 
-# 2. Update the release chip on the site (docs/index.html, "chip-v") and amend
-#    it into the version commit, so the page and npm never disagree.
-
-# 3. Push the commit and tag - this publishes
+# 2. Push the commit and tag - this publishes, and cannot be undone
 git push --follow-tags
 
-# 4. Write the release notes
+# 3. Write the release notes
 gh release create vX.Y.Z --title vX.Y.Z --notes "..."
 
-# 5. Confirm it actually landed. npm reports "your package is being
+# 4. Confirm it actually landed. npm reports "your package is being
 #    processed" and takes a few minutes, so this is not instant.
 npm view vibeaudio version
 ```
 
 Pick the bump by semver: patch = fix, minor = feature, major = breaking.
 
-**Step 5 is not optional.** A green workflow is not proof: v0.7.1 and v0.8.0 both tagged, both went green on the parts that ran, and neither reached the registry - the first sat unpublished for a week because nobody checked. The registry is the only thing that decides whether a release happened.
+**Step 2 is the irreversible one.** The moment that tag reaches GitHub the workflow publishes, and a published version can never be taken back or reused — unpublishing is restricted and the number stays burned either way. A bad release is fixed by publishing the next patch, never by replacing the one you shipped. Nothing before step 2 has left your machine; check the diff there, not after.
+
+The site needs no release step: the version chip in `docs/index.html` reads `registry.npmjs.org` on page load, so it follows npm on its own and there is nothing to bump by hand.
+
+**Step 4 is not optional.** A green workflow is not proof: v0.7.1 and v0.8.0 both tagged, both went green on the parts that ran, and neither reached the registry - the first sat unpublished for a week because nobody checked. The registry is the only thing that decides whether a release happened.
 
 **Pushing a `v*` tag publishes to npm** (`.github/workflows/publish.yml`). It checks the tag matches `package.json`, runs the tests, and publishes with provenance through npm trusted publishing — no token stored anywhere. Don't run `npm publish` by hand; a release that skips the workflow has no provenance.
 
