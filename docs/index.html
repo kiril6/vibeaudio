@@ -342,6 +342,7 @@ footer a{ color:var(--ink-dim); }
     <div>
       <div class="shield-badges">
         <a class="chip" style="--chip:var(--pink)" href="https://github.com/kiril6/vibeaudio/tags"><span class="chip-k">release</span><span class="chip-v">v0.8.1</span></a>
+        <a class="chip" id="npm-chip" hidden style="--chip:var(--c-8bit)" href="https://www.npmjs.com/package/vibeaudio"><span class="chip-k">npm</span><span class="chip-v" id="npm-version"></span></a>
         <a class="chip" id="dl-chip" hidden style="--chip:var(--cyan)" href="https://npm-stat.com/charts.html?package=vibeaudio"><span class="chip-k">downloads</span><span class="chip-v" id="dl-count"></span></a>
         <span class="chip" style="--chip:var(--c-8bit)"><span class="chip-k">license</span><span class="chip-v">MIT</span></span>
         <span class="chip" style="--chip:var(--cyan)"><span class="chip-k">node</span><span class="chip-v">&ge;18</span></span>
@@ -758,6 +759,16 @@ fetch("https://api.npmjs.org/downloads/range/2000-01-01:" + new Date().toISOStri
     if (!total) return;
     document.getElementById("dl-count").textContent = total.toLocaleString("en-US");
     document.getElementById("dl-chip").hidden = false;
+  })
+  .catch(() => {});
+
+// Live npm version for the chip; it stays hidden if npm can't be reached.
+fetch("https://registry.npmjs.org/vibeaudio/latest")
+  .then((r) => (r.ok ? r.json() : Promise.reject()))
+  .then(({ version }) => {
+    if (!version) return;
+    document.getElementById("npm-version").textContent = "v" + version;
+    document.getElementById("npm-chip").hidden = false;
   })
   .catch(() => {});
 </script>
