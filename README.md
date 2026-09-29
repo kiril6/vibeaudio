@@ -557,7 +557,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--no-chime` | Disable the resolution completion chime | `false` |
 | `--no-hud` | Disable terminal window/tab title animation | `false` |
 | `--preview <genre>` | Play one loop of a genre and exit | — |
-| `--render [file]` | Write this project's music to a `.wav` and exit | `vibeaudio-<genre>.wav` |
+| `--render [file]` | Write this project's music to a `.wav` and exit (full scale, ignores `--volume`) | `vibeaudio-<genre>.wav` |
 | `--status` | Show what's installed, running and detected, then exit | — |
 | `--stop` | Stop the background player, then exit | — |
 | `--mute [minutes]` | Silence everything for a call, then exit | `60` min (`0` = until unmuted) |

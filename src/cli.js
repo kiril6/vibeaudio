@@ -74,7 +74,7 @@ Procedural focus music while your AI coding tools think.
       --no-chime               Disable the resolution completion chime
       --no-hud                 Disable terminal window/tab title animation
       --preview <genre>        Play one loop of a genre and exit
-      --render [file]          Write this project's music to a .wav and exit
+      --render [file]          Write this project's music to a .wav and exit (full scale, ignores --volume)
       --status                 Show what is installed, running and detected, then exit
       --stop                   Stop the background player, then exit
       --mute [minutes]         Silence everything for a call (default: 60 min, 0 = until unmuted)
