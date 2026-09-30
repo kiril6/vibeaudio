@@ -349,6 +349,7 @@ footer a{ color:var(--ink-dim); }
       <a href="#genres">Genres</a>
       <a href="#chimes">Chimes</a>
       <a href="#get-started">Get Started</a>
+      <a id="nav-release" href="https://github.com/kiril6/vibeaudio/releases">What's new</a>
     </div>
     <a class="star-btn" href="https://github.com/kiril6/vibeaudio" aria-label="Star VibeAudio on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg><span>Star</span></a>
     <a class="topnav-gh" href="https://github.com/kiril6/vibeaudio" aria-label="GitHub">
@@ -823,6 +824,7 @@ fetch("https://registry.npmjs.org/vibeaudio/latest")
     var rel = document.getElementById("release-link");
     rel.href = "https://github.com/kiril6/vibeaudio/releases/tag/v" + version;
     rel.textContent = "What's new in v" + version;
+    document.getElementById("nav-release").href = rel.href;
   })
   .catch(() => {});
 </script>
