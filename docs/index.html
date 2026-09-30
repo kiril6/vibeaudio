@@ -209,6 +209,7 @@ html{ scroll-behavior:smooth; }
 .terminal-line .prompt{ color:var(--amber); text-shadow:0 0 8px rgba(255,180,84,.6); }
 .wave-title{ display:flex; align-items:center; gap:2px; height:22px; margin:14px 0; }
 .wave-title i{ width:3px; background:var(--cyan); box-shadow:0 0 6px var(--cyan); border-radius:2px; opacity:.5; transition:height .15s, opacity .3s; }
+.terminal-activity{ font-size:12.5px; color:var(--ink-dim); margin-bottom:6px; min-height:1.4em; }
 .terminal-status{ font-size:12px; color:var(--ink-faint); }
 .terminal-genre{ color:var(--ink-faint); font-size:12px; margin-top:10px; letter-spacing:.03em; }
 .terminal-status.done{ color:var(--c-8bit); text-shadow:0 0 8px rgba(57,255,141,.6); }
@@ -385,7 +386,8 @@ footer a{ color:var(--ink-dim); }
     <div class="terminal" aria-hidden="true">
       <div class="terminal-bar"><span></span><span></span><span></span></div>
       <div class="terminal-body">
-        <div class="terminal-line"><span class="prompt">❯</span> claude "refactor the auth module"</div>
+        <div class="terminal-line"><span class="prompt">❯</span> <span id="hero-cmdline">claude "refactor the auth module"</span></div>
+        <div class="terminal-activity" id="hero-activity">◌ waiting for a prompt</div>
         <div class="wave-title" id="hero-wave"></div>
         <div class="terminal-genre" id="hero-genre">♫ genre · lofi</div>
         <div class="terminal-status" id="hero-status">tier 1 — gentle intro</div>
@@ -759,8 +761,39 @@ footer a{ color:var(--ink-dim); }
     }, 2600);
   }
 
+  // The mock plays out a simulated turn against the real audio clock: the
+  // agent reads, edits and runs tests as the tiers build, then the chime
+  // lands. Nothing here is a recording - it is read off the audio's own time.
+  var PROMPT = 'claude "refactor the auth module"';
+  var heroCmdline = document.getElementById("hero-cmdline");
+  var heroActivity = document.getElementById("hero-activity");
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var typeTimer = null;
+  var heroEnded = false; // a clip that finished keeps its final frame; a stop or another play clears it
+
+  function heroReset(){
+    clearInterval(typeTimer);
+    heroCmdline.textContent = PROMPT;
+    heroActivity.textContent = "◌ waiting for a prompt";
+    heroStatus.textContent = "tier 1 — gentle intro";
+    heroStatus.classList.remove("done");
+    bars.forEach(function(b){ b.style.height = "4px"; });
+  }
+
+  function heroTypePrompt(){
+    clearInterval(typeTimer);
+    if (reduceMotion){ heroCmdline.textContent = PROMPT; return; }
+    var n = 0;
+    heroCmdline.textContent = "";
+    typeTimer = setInterval(function(){
+      n += 2;
+      heroCmdline.textContent = PROMPT.slice(0, n);
+      if (n >= PROMPT.length) clearInterval(typeTimer);
+    }, 40);
+  }
+
   function heroFrame(){
-    if (activeBtn !== heroBtn) return;
+    if (activeBtn !== heroBtn){ if (!heroEnded) heroReset(); return; }
     var m = manifest.lofi;
     bars.forEach(function(b){
       var live = analyser;
@@ -780,6 +813,11 @@ footer a{ color:var(--ink-dim); }
         : ms < m.chimeStartMs ? "tier 3 — deep focus"
         : "✓ done";
       heroStatus.classList.toggle("done", ms >= m.chimeStartMs);
+      heroActivity.textContent = ms < 1400 ? "◌ thinking…"
+        : ms < m.tier2StartMs ? "● reading src/auth/ — 12 files"
+        : ms < m.tier3StartMs ? "● editing session.ts, token.ts, middleware.ts"
+        : ms < m.chimeStartMs ? "● running the test suite"
+        : "✓ turn complete — the music stops, a chime plays";
     }
     heroRaf = requestAnimationFrame(heroFrame);
   }
@@ -789,14 +827,16 @@ footer a{ color:var(--ink-dim); }
     play("audio/lofi-session.m4a", heroBtn, null, null);
     heroBtn.setAttribute("aria-pressed", String(!wasActive));
     heroBtn.textContent = wasActive ? "▶ Hear it" : "■ Playing…";
-    if (!wasActive) heroFrame();
-    else { bars.forEach(function(b){ b.style.height="4px"; }); heroStatus.textContent = "tier 1 — gentle intro"; heroStatus.classList.remove("done"); }
+    heroEnded = false;
+    if (!wasActive){ heroTypePrompt(); heroFrame(); }
+    else heroReset();
   });
 
   audio.addEventListener("ended", function(){
     if (heroBtn.getAttribute("aria-pressed") === "true"){
       heroBtn.setAttribute("aria-pressed","false");
       heroBtn.textContent = "▶ Hear it";
+      heroEnded = true;
       bars.forEach(function(b){ b.style.height="4px"; });
     }
   });
