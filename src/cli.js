@@ -76,6 +76,7 @@ Procedural focus music while your AI coding tools think.
       --preview <genre>        Play one loop of a genre and exit
       --render [file]          Write this project's music to a .wav and exit (full scale, ignores --volume)
       --status                 Show what is installed, running and detected, then exit
+      --notify | --no-notify   Also show a desktop banner naming the project when a turn finishes or needs you (off by default)
       --doctor                 Check the setup; each problem comes with its fix (exit 1 if any)
       --stop                   Stop the background player, then exit
       --mute [minutes]         Silence everything for a call (default: 60 min, 0 = until unmuted)
@@ -173,6 +174,7 @@ function parseArgs(argv) {
   let clearCacheFlag = false;
   let statusFlag = false;
   let doctorFlag = false;
+  let notifyFlag = null;
   let stopFlag = false;
   let muteFlag = null;
   let muteMinutes = null;
@@ -279,6 +281,12 @@ function parseArgs(argv) {
 
     if (arg === "--status") {
       statusFlag = true;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--notify" || arg === "--no-notify") {
+      notifyFlag = arg === "--notify";
       i += 1;
       continue;
     }
@@ -432,6 +440,7 @@ function parseArgs(argv) {
     clearCache: clearCacheFlag,
     status: statusFlag,
     doctor: doctorFlag,
+    notify: notifyFlag,
     stop: stopFlag,
     mute: muteFlag,
     muteMinutes,
@@ -669,6 +678,7 @@ function printStatus() {
   console.log(`  genre     ${on(genreNow())}${source("VIBE_GENRE", "genre")}`);
   console.log(`  volume    ${on(`${Math.round(volumeNow() * 100)}%`)}${source("VIBE_VOLUME", "volume")}`);
   console.log(`            ${off("change either with: vibe --genre <name> --volume <n>")}`);
+  console.log(`  notify    ${hooks.notifyEnabled() ? on("on") : off("off")}${off("  desktop banner naming the project — vibe --notify / --no-notify")}`);
 
   // Audio backend
   const backend = detect();
@@ -1344,6 +1354,7 @@ async function run() {
     clearCache: shouldClear,
     status: showStatus,
     doctor: showDoctor,
+    notify: notifyChange,
     stop: shouldStop,
     mute: muteChange,
     muteMinutes,
@@ -1401,6 +1412,14 @@ async function run() {
     console.log(`  Hooks and settings are untouched. Ending it early: vibe --unmute`);
     if (minutes > 0) console.log(`  \x1b[90mLonger call? vibe --mute 120 — or vibe --mute 0 to stay off until you say otherwise.\x1b[0m`);
     console.log();
+    return;
+  }
+
+  if (notifyChange !== null) {
+    saveConfig({ notify: notifyChange });
+    console.log(notifyChange
+      ? "\x1b[32m✔ Notifications on.\x1b[0m A banner names the project when a turn finishes, fails or needs you."
+      : "\x1b[90mNotifications off.\x1b[0m");
     return;
   }
 

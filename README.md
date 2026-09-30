@@ -289,6 +289,8 @@ Every session of an agent is tracked separately, by the session id in its hook p
 * **The music plays while any session is working.** A second prompt doesn't restart it, and it stops only when the last working session finishes.
 * **Every session gets its own chime.** A quick question that finishes while another agent is still busy chimes "done" and the music carries on underneath.
 
+* **Which one?** With three terminals going, a chime says something finished and leaves you alt-tabbing to find out what. `vibe --notify` adds a desktop banner — `api: finished`, `web: needs you (Bash)` — named after the project the session runs in. Off by default, since a banner is more intrusive than a sound; macOS (`osascript`) and Linux (`notify-send`, needs a notification daemon), nothing on Windows yet. A mute silences the banner too.
+
 <details>
 <summary><b>The rest of how sessions share one stream</b></summary>
 
@@ -564,6 +566,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--render [file]` | Write this project's music to a `.wav` and exit (full scale, ignores `--volume`) | `vibeaudio-<genre>.wav` |
 | `--status` | Show what's installed, running and detected, then exit | — |
 | `--doctor` | Check the setup; every problem comes with the command that fixes it. Exits 1 on a failure, so it scripts | — |
+| `--notify` / `--no-notify` | Also show a desktop banner naming the project when a turn finishes, fails or needs you. Saved to `config.json` | off |
 | `--stop` | Stop the background player, then exit | — |
 | `--mute [minutes]` | Silence everything for a call, then exit | `60` min (`0` = until unmuted) |
 | `--unmute` | Resume normal playback, then exit | — |
@@ -588,6 +591,7 @@ export VIBE_CHIME_VOLUME=70     # Crisp completion chime at 70%
 export VIBE_GRACE_MS=3000       # Wait 3s of thinking before any music
 export VIBE_SEED=7              # Same arrangement everywhere, ignoring the directory
 export VIBE_DISABLE=1           # Mute, without uninstalling anything
+export VIBE_NOTIFY=1            # Desktop banner naming the project, for this shell
 export VIBE_NO_UPDATE_CHECK=1   # Never ask npm whether a newer version is out
 ```
 

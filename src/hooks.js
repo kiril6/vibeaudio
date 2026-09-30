@@ -15,7 +15,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn, execFileSync } = require("child_process");
-const { AudioPlayer } = require("./player");
+const { AudioPlayer, loadConfig, playbackDisabled } = require("./player");
 
 const STATE_DIR = path.join(os.homedir(), ".vibeaudio");
 const PID_FILE = path.join(STATE_DIR, "daemon.pid");
@@ -679,6 +679,56 @@ function readPayload(done, timeoutMs = 500) {
   setTimeout(finish, timeoutMs).unref();
 }
 
+/**
+ * Opt-in desktop notification, for the moment a chime cannot answer "which
+ * one?": with several terminals going, a sound says something finished and
+ * leaves you alt-tabbing to find out what. Off by default - a banner is more
+ * intrusive than a sound. Env beats the saved setting, like every other one.
+ */
+function notifyEnabled(env = process.env, config = loadConfig()) {
+  const raw = String(env.VIBE_NOTIFY ?? config.notify ?? "").trim().toLowerCase();
+  return ["1", "true", "on", "yes"].includes(raw);
+}
+
+/** The project a hook fired in: the payload's cwd (Claude, Codex, Gemini), else ours. */
+function sessionLabel(payload, cwd = process.cwd()) {
+  const dir = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : cwd;
+  return path.basename(dir.replace(/[\\/]+$/, "")) || "a session";
+}
+
+/**
+ * The command that shows a notification, or null where there is no built-in
+ * way to (Windows, for now). Title and body travel as argv, never spliced into
+ * a script string: a project directory is user-controlled text.
+ */
+function notifyCommand(platform, title, body) {
+  if (platform === "darwin") {
+    return {
+      cmd: "osascript",
+      args: ["-e", "on run argv", "-e", "display notification (item 1 of argv) with title (item 2 of argv)", "-e", "end run", body, title]
+    };
+  }
+  if (platform === "linux") return { cmd: "notify-send", args: ["--", title, body] };
+  return null;
+}
+
+// Detached and unref'd: the agent waits on this hook, and a missing
+// osascript/notify-send (a Linux box with no notification daemon) must be
+// invisible rather than an error in someone's agent.
+function notify(raw, message) {
+  if (!notifyEnabled() || playbackDisabled()) return false; // a mute means quiet, banners included
+  const command = notifyCommand(process.platform, "VibeAudio", `${sessionLabel(parsePayload(raw))}: ${message}`);
+  if (!command) return false;
+  try {
+    const child = spawn(command.cmd, command.args, { detached: true, stdio: "ignore" });
+    child.on("error", () => {});
+    child.unref();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChime = false, raw = "" } = {}) {
   const id = sessionId(parsePayload(raw).session_id);
   // A turn that ends while paused for the user - a denied tool that nothing
@@ -691,7 +741,9 @@ function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChi
   const others = working(listSessions()).length > 0;
   const wasPlaying = others ? false : stopDaemon({ keepSessions: true });
   if (!others) fs.rmSync(INTENSITY_FILE, { force: true });
-  if (!(tracked || wasPlaying) || noChime) return false;
+  if (!(tracked || wasPlaying)) return false;
+  notify(raw, outcome === "failure" ? "failed" : "finished");
+  if (noChime) return false;
 
   // Chime plays in this short-lived hook process.
   new AudioPlayer().stop({ playChime: true, outcome, volume, chimeVolume });
@@ -742,6 +794,8 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
 
   writeSession(id, { ...session, waiting: waitKey(raw) });
   if (working(listSessions()).length === 0) stopDaemon({ keepSessions: true });
+  const tool = payloadToolName(raw);
+  notify(raw, tool ? `needs you (${tool})` : "needs you");
   if (!noChime) new AudioPlayer().stop({ playChime: true, outcome: "attention", volume, chimeVolume, detach: true });
   return true;
 }
@@ -1082,6 +1136,9 @@ module.exports = {
   hookEnd,
   newTurn,
   outcomeFromPayload,
+  notifyEnabled,
+  notifyCommand,
+  sessionLabel,
   readPayload,
   toolTier,
   readIntensity,
