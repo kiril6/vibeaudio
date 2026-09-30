@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>VibeAudio</title>
+<title>VibeAudio — focus music for AI coding agents</title>
 <meta name="description" content="Procedural focus music while your AI coding agent thinks. Zero MP3s, zero dependencies — every note synthesized in code, a different arrangement per project.">
 <meta property="og:title" content="VibeAudio — focus music while your AI codes">
 <meta property="og:description" content="Procedural focus music while your AI coding agent thinks. Zero MP3s, zero dependencies — every note synthesized in code, a different arrangement per project.">
@@ -18,6 +18,21 @@
 <meta name="twitter:image" content="https://kiril6.github.io/vibeaudio/og.png">
 <meta name="twitter:title" content="VibeAudio — focus music while your AI codes">
 <meta name="twitter:description" content="Procedural focus music while your AI coding agent thinks.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "VibeAudio",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "macOS, Linux, Windows",
+  "description": "Procedural focus music while your AI coding agent thinks. Every note synthesized in code, no audio assets, a different arrangement per project.",
+  "url": "https://kiril6.github.io/vibeaudio/",
+  "downloadUrl": "https://www.npmjs.com/package/vibeaudio",
+  "codeRepository": "https://github.com/kiril6/vibeaudio",
+  "license": "https://opensource.org/licenses/MIT",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎧</text></svg>">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -195,6 +210,7 @@ html{ scroll-behavior:smooth; }
 .wave-title{ display:flex; align-items:center; gap:2px; height:22px; margin:14px 0; }
 .wave-title i{ width:3px; background:var(--cyan); box-shadow:0 0 6px var(--cyan); border-radius:2px; opacity:.5; transition:height .15s, opacity .3s; }
 .terminal-status{ font-size:12px; color:var(--ink-faint); }
+.terminal-genre{ color:var(--ink-faint); font-size:12px; margin-top:10px; letter-spacing:.03em; }
 .terminal-status.done{ color:var(--c-8bit); text-shadow:0 0 8px rgba(57,255,141,.6); }
 
 /* ---------- Cards (problem/benefit) ---------- */
@@ -232,6 +248,9 @@ html{ scroll-behavior:smooth; }
 .genre-progress-marks span{ position:absolute; top:0; bottom:0; width:1px; background:rgba(0,0,0,.35); }
 .genre-tier-label{ font-size:11.5px; color:var(--ink-faint); margin-top:8px; letter-spacing:.02em; min-height:1.4em; }
 .genre-tier-label.active{ color:var(--accent); }
+.genre-group{ grid-column:1/-1; margin-top:14px; padding-top:18px; border-top:1px solid var(--line); }
+.genre-group h3{ font-size:15px; }
+.genre-group p{ font-size:12.5px; color:var(--ink-dim); margin-top:6px; max-width:62ch; }
 .genre-note{ font-size:11.5px; color:var(--ink-faint); margin-top:10px; font-style:italic; }
 
 /* ---------- Chimes ---------- */
@@ -367,6 +386,7 @@ footer a{ color:var(--ink-dim); }
       <div class="terminal-body">
         <div class="terminal-line"><span class="prompt">❯</span> claude "refactor the auth module"</div>
         <div class="wave-title" id="hero-wave"></div>
+        <div class="terminal-genre" id="hero-genre">♫ genre · lofi</div>
         <div class="terminal-status" id="hero-status">tier 1 — gentle intro</div>
       </div>
     </div>
@@ -488,7 +508,7 @@ footer a{ color:var(--ink-dim); }
 
 <section class="wrap" id="get-started">
   <span class="eyebrow">get started</span>
-  <h2 style="font-size:30px;">Five commands.</h2>
+  <h2 style="font-size:30px;">Six commands.</h2>
   <div class="steps">
     <div class="step"><span class="n">1</span><div>
       <p style="color:var(--ink-dim);margin-bottom:8px;">Install globally.</p>
@@ -512,6 +532,10 @@ footer a{ color:var(--ink-dim); }
       <p style="color:var(--ink-dim);margin-bottom:8px;">Keep the one you liked. Installed hooks pick it up on your next prompt — nothing to reinstall.</p>
       <div class="code-copy"><code>vibe --genre jazz --volume 25</code><button class="copy-btn" data-copy="vibe --genre jazz --volume 25" title="Copy">⧉</button></div>
     </div></div>
+    <div class="step"><span class="n">6</span><div>
+      <p style="color:var(--ink-dim);margin-bottom:8px;">Nothing playing? Check the setup — every problem comes with the command that fixes it.</p>
+      <div class="code-copy"><code>vibe --doctor</code><button class="copy-btn" data-copy="vibe --doctor" title="Copy">⧉</button></div>
+    </div></div>
   </div>
   <p style="margin-top:16px;color:var(--ink-dim);">Every flag, every troubleshooting note, every hook dialect: <a href="https://github.com/kiril6/vibeaudio#readme">the full README</a>. The package lives on <a href="https://www.npmjs.com/package/vibeaudio">npm</a>.</p>
 </section>
@@ -521,7 +545,7 @@ footer a{ color:var(--ink-dim); }
 <footer class="wrap">
   <div class="footer-row">
     <span>Every sound on this page was generated by VibeAudio's own synth — <code>scripts/render-demo.js</code>.</span>
-    <span><a href="https://github.com/kiril6/vibeaudio">GitHub</a> · MIT © 2026</span>
+    <span><a href="https://github.com/kiril6/vibeaudio">GitHub</a> · <a id="release-link" href="https://github.com/kiril6/vibeaudio/releases">Release notes</a> · MIT © 2026</span>
   </div>
 </footer>
 
@@ -539,9 +563,9 @@ footer a{ color:var(--ink-dim); }
     { id:"jazz", name:"Midnight Jazz", emoji:"🎷", vibe:"ii-V-I piano chords & walking upright bass" },
     { id:"zen", name:"Zen Ambient", emoji:"🎋", vibe:"Meditative singing bowls & floating pads" },
     { id:"piano", name:"Sparse Piano", emoji:"🎹", vibe:"Single struck notes & long silences", note:"Gentler than drone — still plays something." },
-    { id:"drone", name:"Deep Drone", emoji:"🌫️", vibe:"Held tone & filtered noise", note:"No melody at all — never picked by Random." },
-    { id:"rain", name:"Rain", emoji:"🌧️", vibe:"Band-passed rainfall & distant droplets", note:"No melody at all — never picked by Random." },
-    { id:"ocean", name:"Ocean", emoji:"🌊", vibe:"Low surf on a slow rising swell", note:"No melody at all — never picked by Random." }
+    { id:"drone", name:"Deep Drone", emoji:"🌫️", vibe:"Held tone & filtered noise" },
+    { id:"rain", name:"Rain", emoji:"🌧️", vibe:"Band-passed rainfall & distant droplets" },
+    { id:"ocean", name:"Ocean", emoji:"🌊", vibe:"Low surf on a slow rising swell" }
   ];
 
   var CHIMES = [
@@ -648,7 +672,16 @@ footer a{ color:var(--ink-dim); }
 
   // ---- Genre grid ----
   var grid = document.getElementById("genre-grid");
+  var NO_MELODY = { drone:1, rain:1, ocean:1 };
+  var groupShown = false;
   GENRES.forEach(function(g){
+    if (NO_MELODY[g.id] && !groupShown){
+      groupShown = true;
+      var head = document.createElement("div");
+      head.className = "genre-group";
+      head.innerHTML = '<h3>No melody at all</h3><p>For when any tune pulls your attention. A floor of sound under your work — never picked by Random.</p>';
+      grid.appendChild(head);
+    }
     var card = document.createElement("div");
     card.className = "genre-card";
     card.style.setProperty("--accent", "var(--c-"+g.id+")");
@@ -712,6 +745,19 @@ footer a{ color:var(--ink-dim); }
   for (var i=0;i<24;i++){ var b=document.createElement("i"); b.style.height="4px"; heroWave.appendChild(b); bars.push(b); }
   var heroRaf = null;
 
+  // While nothing is playing, the terminal mock names each real genre in turn.
+  // The demo is always lofi, so it stops on lofi once you press play - and does
+  // not move at all for anyone who has asked for reduced motion.
+  var heroGenre = document.getElementById("hero-genre");
+  var heroIdx = 0;
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    setInterval(function(){
+      if (activeBtn === heroBtn) { heroGenre.textContent = "♫ genre · lofi"; return; }
+      heroIdx = (heroIdx + 1) % GENRES.length;
+      heroGenre.textContent = "♫ genre · " + GENRES[heroIdx].id;
+    }, 2600);
+  }
+
   function heroFrame(){
     if (activeBtn !== heroBtn) return;
     var m = manifest.lofi;
@@ -774,6 +820,9 @@ fetch("https://registry.npmjs.org/vibeaudio/latest")
     if (!version) return;
     document.getElementById("npm-version").textContent = "v" + version;
     document.getElementById("npm-chip").hidden = false;
+    var rel = document.getElementById("release-link");
+    rel.href = "https://github.com/kiril6/vibeaudio/releases/tag/v" + version;
+    rel.textContent = "What's new in v" + version;
   })
   .catch(() => {});
 </script>
