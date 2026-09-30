@@ -458,7 +458,7 @@ VIBE_VOLUME = "25"
 Restart the app afterwards — this one is read from the environment the server was launched with, so unlike the saved default it can't change under a running client.
 
 #### Exposed MCP Tools:
-* `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `random`; `volume`: `5-100`).
+* `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `rain`, `ocean`, `random`; `volume`: `5-100`).
 * `vibe_stop`: Stop music and play the completion chime (`outcome`: `success` or `failure`).
 * `vibe_status`: Return current playback state and active tier.
 
@@ -480,7 +480,9 @@ VibeAudio includes **8 procedural music styles** synthesized entirely in code:
 | `zen` | 🎋 **Zen Ambient** | Meditative Tibetan singing bowls & celestial drone (zero rhythm) |
 | `piano` | 🎹 **Sparse Piano** | Single struck notes and long silences — Satie-ish |
 | `drone` | 🌫️ **Deep Drone** | A held tone and filtered noise — **no melody at all** |
-| `random` | 🎲 **Shuffle Mode** | Picks a surprise genre for the run — **never `drone`** |
+| `rain` | 🌧️ **Rain** | Band-passed rainfall with sparse droplets — **no melody at all** |
+| `ocean` | 🌊 **Ocean** | Low surf on a slow swell that rises and drains — **no melody at all** |
+| `random` | 🎲 **Shuffle Mode** | Picks a surprise genre for the run — **never `drone`, `rain` or `ocean`** |
 
 **Aliases also work**, so you can ask for a genre the way you'd say it — `vibe --preview chill` is `lofi`:
 
@@ -494,14 +496,16 @@ VibeAudio includes **8 procedural music styles** synthesized entirely in code:
 | `zen` | `ambient`, `calm`, `meditation` |
 | `piano` | `sparse`, `satie`, `keys`, `minimal` |
 | `drone` | `noise`, `focus`, `hum`, `whitenoise`, `white-noise` |
+| `rain` | `storm`, `drizzle` |
+| `ocean` | `waves`, `sea`, `surf` |
 
 Matching is case-insensitive, so `BOSSA` works too.
 
-> **If any melody distracts you, use `drone`.** Every other genre plays something — notes, a progression, a bass line — and some people can't read while that happens. `drone` holds one low tone under a slow-breathing noise bed and never moves: closer to a fan or rainfall than to music. Tiers add weight rather than movement.
+> **If any melody distracts you, use `drone`.** Every other genre plays something — notes, a progression, a bass line — and some people can't read while that happens. `drone` holds one low tone under a slow-breathing noise bed and never moves: closer to a fan or rainfall than to music. Tiers add weight rather than movement. If you want the fan-and-rainfall idea literally, `rain` and `ocean` are synthesized the same way (seeded noise, no recorded files): rain adds more droplets as the turn runs longer, ocean adds a second swell and then foam.
 >
 > **`piano` is the gentler version of that idea.** It still plays notes — two in eight seconds at tier 1 — but they're single struck tones with silence between them and nothing running underneath. Higher tiers fill the gaps rather than adding a groove. Try it before `drone` if you want *something* there.
 >
-> For the same reason **`random` never picks `drone`**. Shuffle is for a surprise *mood*, and drone isn't one — landing on a fan noise when you asked for variety reads as broken audio, not as range. Ask for it by name (or `noise` / `focus`) when you want it.
+> For the same reason **`random` never picks `drone`, `rain` or `ocean`**. Shuffle is for a surprise *mood*, and drone isn't one — landing on a fan noise when you asked for variety reads as broken audio, not as range. Ask for it by name (or `noise` / `focus`) when you want it.
 
 ### Usage Examples:
 ```bash
@@ -520,7 +524,7 @@ vibe --genre jazz --volume 25
 Saved to `~/.vibeaudio/config.json` and read by all three ways of running VibeAudio — wrapper, agent hooks, MCP. It applies on your next prompt.
 
 ```bash
-vibe --genre jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, random
+vibe --genre jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, random
 vibe --volume 25           # or --whisper / --quiet / --loud
 vibe --chime-volume 70
 vibe --status              # what's saved, and what's overriding it
@@ -545,7 +549,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 
 | Flag | Description | Default |
 | :--- | :--- | :--- |
-| `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `random`. With no command after it, saves your default | `lofi` |
+| `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `rain`, `ocean`, `random`. With no command after it, saves your default | `lofi` |
 | `-v, --volume <5-100>` | Set playback volume. With no command after it, saves your default | `40` |
 | `-cv, --chime-volume <5-100>` | Set independent completion chime volume | `volume × 1.1`, kept within 35–65 |
 | `--grace <ms>` | Silence window before music starts | `1500` |
@@ -578,7 +582,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 **Defaults live in `~/.vibeaudio/config.json` now** — `vibe --genre jazz` is the short way to set one. These override it for a single shell, which is what you want for one terminal that should sound different, or for a machine you don't want writing config at all:
 
 ```bash
-export VIBE_GENRE=jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, random
+export VIBE_GENRE=jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, random
 export VIBE_VOLUME=25           # Background music at 25%
 export VIBE_CHIME_VOLUME=70     # Crisp completion chime at 70%
 export VIBE_GRACE_MS=3000       # Wait 3s of thinking before any music

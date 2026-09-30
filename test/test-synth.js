@@ -269,7 +269,9 @@ const genreAliases = {
   jazz: ["bossa", "swing", "lounge"],
   zen: ["ambient", "calm", "meditation"],
   drone: ["noise", "focus", "hum", "whitenoise", "white-noise"],
-  piano: ["sparse", "satie", "keys", "minimal"]
+  piano: ["sparse", "satie", "keys", "minimal"],
+  rain: ["storm", "drizzle"],
+  ocean: ["waves", "sea", "surf"]
 };
 for (const [canonical, aliases] of Object.entries(genreAliases)) {
   for (const alias of aliases) {
@@ -977,12 +979,13 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
   {
     const { resolveGenre: resolve, SHUFFLE_GENRES, AVAILABLE_GENRES: ALL } = require("../src/player");
 
-    assert.ok(!SHUFFLE_GENRES.includes("drone"), "drone must be out of the shuffle pool");
-    assert.strictEqual(SHUFFLE_GENRES.length, ALL.length - 1, "shuffle must drop exactly one genre");
+    const NON_MELODIC = ["drone", "rain", "ocean"];
+    for (const g of NON_MELODIC) assert.ok(!SHUFFLE_GENRES.includes(g), `${g} must be out of the shuffle pool`);
+    assert.strictEqual(SHUFFLE_GENRES.length, ALL.length - NON_MELODIC.length, "shuffle must drop exactly the non-melodic genres");
 
     const seen = new Set();
     for (let i = 0; i < 4000; i++) seen.add(resolve("random"));
-    assert.ok(!seen.has("drone"), "random must never resolve to drone");
+    for (const g of NON_MELODIC) assert.ok(!seen.has(g), `random must never resolve to ${g}`);
     // 4000 draws from 6 options: a genre missing here means the pool is wrong,
     // not that the dice were unkind (P(miss) is about 6 * 0.833^4000).
     assert.strictEqual(seen.size, SHUFFLE_GENRES.length, "shuffle must still reach every other genre");
@@ -990,7 +993,10 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     for (const name of ["drone", "noise", "focus"]) {
       assert.strictEqual(resolve(name), "drone", `${name} must still reach drone on purpose`);
     }
-    console.log("   ✓ random stays musical; drone remains reachable by name and alias.");
+    for (const name of ["rain", "storm", "ocean", "surf"]) {
+      assert.ok(["rain", "ocean"].includes(resolve(name)), `${name} must still be reachable on purpose`);
+    }
+    console.log("   ✓ random stays musical; drone, rain and ocean remain reachable by name and alias.");
   }
 
   // --- 34b. Grok spells the tool name differently ---
@@ -1804,7 +1810,9 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       jazz:         ["fadaf4f52b75", "5cdbd8524d3d", "686fd1208d39"],
       zen:          ["0496cb273359", "2ea4a3da3d8a", "efb72a71fac0"],
       piano:        ["e12477cbde4c", "3e2e18d19203", "27e0f694c35f"],
-      drone:        ["80d547b0bf48", "dfba6786efb4", "62c4918e156b"]
+      drone:        ["80d547b0bf48", "dfba6786efb4", "62c4918e156b"],
+      rain:         ["7b8c1fa69650", "273c139a3f7f", "bb17c8957987"],
+      ocean:        ["c59e8b6ca39b", "6ff406d3611f", "1d548d21a985"]
     };
 
     const RENDERERS = {
@@ -1815,7 +1823,9 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       jazz: (t) => generateJazzLoop(6.26, t, 1),
       zen: (t) => generateZenLoop(7.2, t, 1),
       piano: (t) => require("../src/synth/piano").generatePianoLoop(7.6, t, 1),
-      drone: (t) => require("../src/synth/drone").generateDroneLoop(7.0, t, 1)
+      drone: (t) => require("../src/synth/drone").generateDroneLoop(7.0, t, 1),
+      rain: (t) => require("../src/synth/rain").generateRainLoop(7.0, t, 1),
+      ocean: (t) => require("../src/synth/ocean").generateOceanLoop(8.0, t, 1)
     };
 
     // Every genre the player can produce must be pinned, or a new one slips
@@ -2816,7 +2826,34 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ --doctor flags a broken config and a dead hook path, names the fix, and exits 1.");
   }
 
-  console.log("\n\x1b[32mAll 54 tests passed successfully!\x1b[0m");
+  // [55] rain and ocean: noise-based, level-matched, tiered, seamless.
+  {
+    console.log("\n\x1b[1m[55] Rain and ocean stay level-matched, escalate and loop\x1b[0m");
+    const { generateRainLoop } = require("../src/synth/rain");
+    const { generateOceanLoop } = require("../src/synth/ocean");
+    const jazzRef = measure(require("../src/synth/jazz").generateJazzLoop(6.26, 2, 42));
+
+    for (const [name, gen, dur] of [["rain", generateRainLoop, 7.0], ["ocean", generateOceanLoop, 8.0]]) {
+      // Every curated variant, not just the seed's: they filter differently and
+      // one of them being 3x too hot is exactly how these go wrong.
+      for (let bar = 0; bar < 3; bar++) {
+        const tiers = [1, 2, 3].map((t) => gen(dur, t, 42, bar));
+        assert.ok(gen(dur, 2, 42, bar).equals(tiers[1]), `${name} must be deterministic`);
+        assert.ok(!tiers[0].equals(tiers[1]) && !tiers[1].equals(tiers[2]), `${name} must honour its tier argument`);
+        const ms = tiers.map(measure);
+        ms.forEach((m, i) => {
+          assert.ok(m.peak < 0.95, `${name} bar ${bar} tier ${i + 1} must not clip (peak ${m.peak.toFixed(3)})`);
+          assert.ok(m.rms > 0.05 && m.rms < jazzRef.rms * 1.6, `${name} bar ${bar} tier ${i + 1} rms ${m.rms.toFixed(4)} is off the house level`);
+        });
+        assert.ok(ms[0].rms < ms[1].rms && ms[1].rms < ms[2].rms, `${name} bar ${bar} tiers must escalate in weight`);
+        assert.ok(Math.abs(tiers[1].readInt16LE(44)) < 33 && Math.abs(tiers[1].readInt16LE(tiers[1].length - 2)) < 33, `${name} must loop from silence to silence`);
+      }
+      assert.ok(!gen(dur, 2, 7).equals(gen(dur, 2, 42)), `${name}: the seed must change the arrangement`);
+    }
+    console.log("   ✓ Rain and ocean: deterministic, three tiers, all bars near the other genres' level, seamless.");
+  }
+
+  console.log("\n\x1b[32mAll 55 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);

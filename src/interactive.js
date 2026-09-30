@@ -49,6 +49,8 @@ const GENRES = [
   { name: "🎋 Zen Ambient", desc: "Meditative singing bowls & floating celestial pads", id: "zen" },
   { name: "🎹 Sparse Piano", desc: "Single struck notes & long silences — Satie-ish", id: "piano" },
   { name: "🌫️ Deep Drone", desc: "Held tone & filtered noise — no melody at all", id: "drone" },
+  { name: "🌧️ Rain", desc: "Soft rainfall & distant droplets — no melody at all", id: "rain" },
+  { name: "🌊 Ocean", desc: "Slow surf rising and draining — no melody at all", id: "ocean" },
   { name: "🎲 Shuffle / Random", desc: "Picks a surprise vibe each time", id: "random" }
 ];
 

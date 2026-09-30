@@ -1018,7 +1018,7 @@ single short sentence. Do nothing else.
 - \`volume <5-100>\`: \`${cli} --volume <n>\`
   Both save the user's default and reach the hooks on the next prompt - there
   is nothing to reinstall, so do not run --install-hooks for these.
-  Genres: lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, random.
+  Genres: lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, random.
 
 For anything else, show the user the list above instead of running a command.
 `;

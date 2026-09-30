@@ -62,7 +62,7 @@ Procedural focus music while your AI coding tools think.
   vibe                           \x1b[90m# menu: pick a tool and a sound (p auditions a genre)\x1b[0m
 
 \x1b[1mOPTIONS:\x1b[0m
-  -g, --genre <name>           Select genre: lofi (default), synthwave, 8bit, electronic, jazz, zen, piano, drone, random
+  -g, --genre <name>           Select genre: lofi (default), synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, random
   -v, --volume <5-100>         Set playback volume (default: 40)
   -cv, --chime-volume <5-100>   Set independent completion chime volume
       --grace <ms>             Silence window before music starts, in ms (default: ${DEFAULT_GRACE_PERIOD_MS})

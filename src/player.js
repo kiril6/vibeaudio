@@ -14,6 +14,8 @@ const { generateChiptuneLoop } = require("./synth/chiptune");
 const { generateElectronicLoop } = require("./synth/electronic");
 const { generateZenLoop } = require("./synth/zen");
 const { generateDroneLoop } = require("./synth/drone");
+const { generateRainLoop } = require("./synth/rain");
+const { generateOceanLoop } = require("./synth/ocean");
 const { generatePianoLoop } = require("./synth/piano");
 const { generateJazzLoop } = require("./synth/jazz");
 const { generateSuccessChime, generateFailureChime, generateAttentionChime } = require("./synth/chime");
@@ -52,15 +54,16 @@ function synthFingerprint(dir = path.join(__dirname, "synth")) {
 }
 
 const CACHE_DIR = path.join(CACHE_ROOT, `v${pkg.version}-${synthFingerprint()}`);
-const AVAILABLE_GENRES = ["lofi", "synthwave", "8bit", "electronic", "jazz", "zen", "piano", "drone"];
+const AVAILABLE_GENRES = ["lofi", "synthwave", "8bit", "electronic", "jazz", "zen", "piano", "drone", "rain", "ocean"];
 
 /**
- * What `random` may land on. Drone is deliberately excluded: it is the "no
- * melody at all" option people choose on purpose, not a mood in the same
- * series as the others. Rolling it by chance reads as broken audio rather
- * than as variety, so it stays opt-in by name (or via the noise/focus alias).
+ * What `random` may land on. The non-melodic genres are deliberately excluded:
+ * they are the "no melody at all" options people choose on purpose, not moods
+ * in the same series as the others. Rolling one by chance reads as broken
+ * audio rather than as variety, so each stays opt-in by name (or by alias).
  */
-const SHUFFLE_GENRES = AVAILABLE_GENRES.filter((g) => g !== "drone");
+const NON_MELODIC_GENRES = ["drone", "rain", "ocean"];
+const SHUFFLE_GENRES = AVAILABLE_GENRES.filter((g) => !NON_MELODIC_GENRES.includes(g));
 
 // Next loop starts slightly before the current one ends, so the per-loop
 // boundary fades crossfade instead of leaving a process-spawn gap.
@@ -218,6 +221,11 @@ const GENRE_ALIASES = {
   hum: "drone",
   whitenoise: "drone",
   "white-noise": "drone",
+  storm: "rain",
+  drizzle: "rain",
+  waves: "ocean",
+  sea: "ocean",
+  surf: "ocean",
   sparse: "piano",
   satie: "piano",
   keys: "piano",
@@ -271,6 +279,10 @@ function generateLoop(genre, tier, seed, bar = 0) {
       return generateDroneLoop(7.0, tier, seed, bar);
     case "piano":
       return generatePianoLoop(7.6, tier, seed, bar);
+    case "rain":
+      return generateRainLoop(7.0, tier, seed, bar);
+    case "ocean":
+      return generateOceanLoop(8.0, tier, seed, bar);
     case "lofi":
     default:
       return generateLofiLoop(6.4, tier, seed, bar);
