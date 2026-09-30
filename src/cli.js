@@ -76,6 +76,7 @@ Procedural focus music while your AI coding tools think.
       --preview <genre>        Play one loop of a genre and exit
       --render [file]          Write this project's music to a .wav and exit (full scale, ignores --volume)
       --status                 Show what is installed, running and detected, then exit
+      --doctor                 Check the setup; each problem comes with its fix (exit 1 if any)
       --stop                   Stop the background player, then exit
       --mute [minutes]         Silence everything for a call (default: 60 min, 0 = until unmuted)
       --unmute                 Resume normal playback, then exit
@@ -171,6 +172,7 @@ function parseArgs(argv) {
   let render = null;
   let clearCacheFlag = false;
   let statusFlag = false;
+  let doctorFlag = false;
   let stopFlag = false;
   let muteFlag = null;
   let muteMinutes = null;
@@ -277,6 +279,12 @@ function parseArgs(argv) {
 
     if (arg === "--status") {
       statusFlag = true;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--doctor") {
+      doctorFlag = true;
       i += 1;
       continue;
     }
@@ -423,6 +431,7 @@ function parseArgs(argv) {
     render,
     clearCache: clearCacheFlag,
     status: statusFlag,
+    doctor: doctorFlag,
     stop: stopFlag,
     mute: muteFlag,
     muteMinutes,
@@ -740,6 +749,130 @@ function printStatus() {
   }
   console.log();
   printUpdateNotice();
+}
+
+/**
+ * --status reads the setup back; this judges it. Each check is pass ("ok"),
+ * worth knowing ("warn" - deliberate or self-healing states) or broken
+ * ("fail"), and anything but "ok" carries the exact command that fixes it.
+ * Only "fail" makes the exit code non-zero: a mute someone set on purpose is
+ * not a reason for `vibe --doctor && ...` to stop a script.
+ */
+function doctorChecks() {
+  const hooks = require("./hooks");
+  const { detectPlayer: detect, muteState, muteRemainingText, playbackDisabled, CACHE_ROOT, CONFIG_FILE } = require("./player");
+  const checks = [];
+  const add = (level, label, detail = "", fix = "") => checks.push({ level, label, detail, fix });
+
+  const backend = detect();
+  if (backend) {
+    add("ok", "Audio player", `${backend.cmd}${backend.volume ? "" : " (no volume flag — gain is baked into the file)"}`);
+  } else {
+    add("fail", "Audio player", "none found — VibeAudio runs silently",
+      process.platform === "linux" ? "install one of: pulseaudio-utils (paplay), ffmpeg (ffplay), alsa-utils (aplay)"
+        : process.platform === "win32" ? "PowerShell's SoundPlayer should be present — check that powershell is on PATH"
+        : "afplay ships with macOS — check that /usr/bin is on PATH");
+  }
+
+  // loadConfig() swallows a parse error on purpose so playback never stops,
+  // which is exactly why a typo here is silent and needs a check of its own.
+  let configProblem = null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) configProblem = "not a JSON object";
+  } catch (e) {
+    if (e.code !== "ENOENT") configProblem = e.message;
+  }
+  if (configProblem) {
+    add("fail", "Saved settings", `${CONFIG_FILE}: ${configProblem} — ignored, defaults are in use`,
+      `fix or delete ${CONFIG_FILE}, then: vibe --genre <name> --volume <n>`);
+  } else {
+    add("ok", "Saved settings", "config.json parses (or none saved)");
+  }
+
+  const detected = hooks.detectTargets();
+  for (const id of Object.keys(hooks.TARGETS)) {
+    const t = hooks.TARGETS[id];
+    const installed = readVibeHooks(t.file(), t);
+    const label = `${t.name} hooks`;
+    if (!installed.length) {
+      if (detected.includes(id)) add("warn", label, "agent found, hooks not installed", "vibe --install-hooks");
+      continue;
+    }
+
+    // Hooks hold absolute paths to node and to this CLI; an evicted npx cache
+    // or an uninstalled node leaves the agent firing a command that fails.
+    const missing = new Set();
+    for (const { command } of installed) {
+      const tokens = [...command.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);
+      for (const p of tokens.slice(0, 2)) if (!fs.existsSync(p)) missing.add(p);
+    }
+    if (missing.size) {
+      add("fail", label, `points at a file that no longer exists: ${[...missing].join(", ")}`, "vibe --install-hooks");
+    } else if (installed.some(({ command }) => /--genre /.test(command))) {
+      add("warn", label, "pinned to a genre/volume by an older install, which overrides your saved settings", "vibe --install-hooks");
+    } else {
+      add("ok", label, `${installed.length} entries`);
+    }
+
+    // Codex runs a hook only after the user approves it, and records that in
+    // config.toml under "<file>:<event>:<group>:<index>".
+    if (id === "codex") {
+      let toml = "";
+      try { toml = fs.readFileSync(path.join(os.homedir(), ".codex", "config.toml"), "utf8"); } catch (e) { /* none yet */ }
+      const pending = [];
+      try {
+        const file = t.file();
+        for (const [event, entries] of Object.entries(JSON.parse(fs.readFileSync(file, "utf8")).hooks || {})) {
+          (entries || []).forEach((entry, g) => {
+            t.commands(entry).forEach((command, i) => {
+              const key = `${file}:${event.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase()}:${g}:${i}`;
+              if (hooks.VIBE_HOOK_FLAG.test(command || "") && !toml.includes(`"${key}"`)) pending.push(event);
+            });
+          });
+        }
+      } catch (e) { /* unreadable: the hooks check above already said so */ }
+      if (pending.length) {
+        add("warn", "Codex hook trust", `${pending.length} hooks not yet approved (${[...new Set(pending)].join(", ")}) — Codex will not run them`,
+          "start codex and approve each VibeAudio hook once");
+      }
+    }
+  }
+
+  const mute = muteState();
+  if (mute !== null) add("warn", "Mute", `muted ${muteRemainingText(mute)}`, "vibe --unmute");
+  if (playbackDisabled()) add("warn", "VIBE_DISABLE", `set to "${process.env.VIBE_DISABLE}" — automatic playback is off`, "unset VIBE_DISABLE");
+  if (mute === null && !playbackDisabled()) add("ok", "Mute", "not muted");
+
+  const pid = readDaemonPid(hooks.PID_FILE);
+  if (pid === null) add("ok", "Background player", "not running");
+  else if (!hooks.daemonPlaying()) add("warn", "Background player", `stale pid file (${pid} is not ours) — harmless, cleared on the next prompt`, "vibe --stop");
+  else add("ok", "Background player", `playing, pid ${pid}`);
+
+  try {
+    fs.mkdirSync(CACHE_ROOT, { recursive: true });
+    fs.accessSync(CACHE_ROOT, fs.constants.W_OK);
+    add("ok", "Audio cache", `writable (${CACHE_ROOT})`);
+  } catch (e) {
+    add("fail", "Audio cache", `${CACHE_ROOT} is not writable: ${e.code || e.message}`, `check permissions on ${path.dirname(CACHE_ROOT)}`);
+  }
+
+  return checks;
+}
+
+function printDoctor() {
+  const mark = { ok: "\x1b[32m✔\x1b[0m", warn: "\x1b[33m!\x1b[0m", fail: "\x1b[31m✘\x1b[0m" };
+  const checks = doctorChecks();
+  console.log(`\n\x1b[1m\x1b[36mVibeAudio\x1b[0m v${pkg.version} doctor\n`);
+  for (const c of checks) {
+    console.log(`  ${mark[c.level]} ${c.label.padEnd(26)}\x1b[90m${c.detail}\x1b[0m`);
+    if (c.fix) console.log(`      fix: ${c.fix}`);
+  }
+  const failed = checks.filter((c) => c.level === "fail").length;
+  const warned = checks.filter((c) => c.level === "warn").length;
+  console.log(failed ? `\n\x1b[31m${failed} problem${failed > 1 ? "s" : ""}\x1b[0m${warned ? `, ${warned} to look at` : ""}.\n`
+    : `\n\x1b[32mNo problems\x1b[0m${warned ? `, ${warned} to look at` : ""}.\n`);
+  if (failed) process.exitCode = 1;
 }
 
 /**
@@ -1210,6 +1343,7 @@ async function run() {
     render,
     clearCache: shouldClear,
     status: showStatus,
+    doctor: showDoctor,
     stop: shouldStop,
     mute: muteChange,
     muteMinutes,
@@ -1283,6 +1417,10 @@ async function run() {
 
   if (showStatus) {
     return printStatus();
+  }
+
+  if (showDoctor) {
+    return printDoctor();
   }
 
   if (shouldClear) {

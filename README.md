@@ -139,7 +139,7 @@ vibe npm test
 vibe claude -p "explain this repo"
 ```
 
-**Lost?** `vibe --help` lists every flag, and `vibe --status` reads your live setup back to you — what's installed, what's playing, and which agents it found.
+**Lost?** `vibe --help` lists every flag, and `vibe --status` reads your live setup back to you — what's installed, what's playing, and which agents it found. If something seems broken, `vibe --doctor` checks it and prints the fix for each problem.
 
 > **Which one you want:** the wrapper plays music for as long as the wrapped process lives. That's exactly right for a command that exits when its work is done — and wrong for an interactive REPL like `claude`, where the process stays alive while you read and type, so the music never stops. Hooks know when the agent is actually thinking; the wrapper can only time the process.
 
@@ -559,6 +559,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--preview <genre>` | Play one loop of a genre and exit | — |
 | `--render [file]` | Write this project's music to a `.wav` and exit (full scale, ignores `--volume`) | `vibeaudio-<genre>.wav` |
 | `--status` | Show what's installed, running and detected, then exit | — |
+| `--doctor` | Check the setup; every problem comes with the command that fixes it. Exits 1 on a failure, so it scripts | — |
 | `--stop` | Stop the background player, then exit | — |
 | `--mute [minutes]` | Silence everything for a call, then exit | `60` min (`0` = until unmuted) |
 | `--unmute` | Resume normal playback, then exit | — |
