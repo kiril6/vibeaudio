@@ -46,6 +46,8 @@
   --c-zen:#39ffc9;
   --c-piano:#7cb8ff;
   --c-drone:#c084fc;
+  --c-rain:#5ab0ff;
+  --c-ocean:#2dd4bf;
 
   --display:"Audiowide", "Arial Narrow", sans-serif;
   --mono:"JetBrains Mono", ui-monospace, "SF Mono", monospace;
@@ -353,7 +355,7 @@ footer a{ color:var(--ink-dim); }
       <p class="sub">Every note synthesized on the spot — no MP3s, no audio assets. Your project gets its own arrangement, tiers escalate as the agent digs in, and a chime tells you when it's your turn again.</p>
       <div class="hero-actions">
         <button class="btn btn-primary" id="hero-play" aria-pressed="false">▶ Hear it</button>
-        <a class="btn" href="#genres">Browse all 8 genres</a>
+        <a class="btn" href="#genres">Browse all 10 genres</a>
       </div>
       <div class="code-copy">
         <code id="hero-cmd">npm i -g vibeaudio &amp;&amp; vibe --install-hooks</code>
@@ -396,7 +398,7 @@ footer a{ color:var(--ink-dim); }
 
 <section class="wrap" id="genres">
   <span class="eyebrow">listen</span>
-  <h2 style="font-size:30px;">Eight genres, all synthesized.</h2>
+  <h2 style="font-size:30px;">Ten genres, all synthesized.</h2>
   <p style="color:var(--ink-dim);max-width:56ch;margin-top:10px;">Click a genre to hear a full simulated turn — gentle intro, main groove, deep focus, then the success chime. Only one plays at a time.</p>
   <div class="genre-grid" id="genre-grid"></div>
   <div class="cta-band">
@@ -458,7 +460,9 @@ footer a{ color:var(--ink-dim); }
       <div class="feat"><h3>Escalating tiers</h3><p>Layers build as the agent digs deeper into a turn.</p></div>
       <div class="feat"><h3>Several sessions</h3><p>Music plays while any terminal is working and builds as more join; each gets its own chime.</p></div>
       <div class="feat"><h3>Title-bar HUD</h3><p>A live waveform in the terminal title — never corrupts a full-screen TUI.</p></div>
+      <div class="feat"><h3>Which session?</h3><p><code>vibe --notify</code> adds a banner naming the project that finished or needs you. Off by default.</p></div>
       <div class="feat"><h3>Mute for calls</h3><p><code>vibe --mute</code> — expires in an hour so you never forget it's on.</p></div>
+      <div class="feat"><h3>Self-check</h3><p><code>vibe --doctor</code> — every problem comes with the command that fixes it.</p></div>
       <div class="feat"><h3>Zero deps</h3><p>Pure Node.js synthesis. No native bindings, no audio assets.</p></div>
     </div>
   </div>
@@ -535,7 +539,9 @@ footer a{ color:var(--ink-dim); }
     { id:"jazz", name:"Midnight Jazz", emoji:"🎷", vibe:"ii-V-I piano chords & walking upright bass" },
     { id:"zen", name:"Zen Ambient", emoji:"🎋", vibe:"Meditative singing bowls & floating pads" },
     { id:"piano", name:"Sparse Piano", emoji:"🎹", vibe:"Single struck notes & long silences", note:"Gentler than drone — still plays something." },
-    { id:"drone", name:"Deep Drone", emoji:"🌫️", vibe:"Held tone & filtered noise", note:"No melody at all — never picked by Random." }
+    { id:"drone", name:"Deep Drone", emoji:"🌫️", vibe:"Held tone & filtered noise", note:"No melody at all — never picked by Random." },
+    { id:"rain", name:"Rain", emoji:"🌧️", vibe:"Band-passed rainfall & distant droplets", note:"No melody at all — never picked by Random." },
+    { id:"ocean", name:"Ocean", emoji:"🌊", vibe:"Low surf on a slow rising swell", note:"No melody at all — never picked by Random." }
   ];
 
   var CHIMES = [

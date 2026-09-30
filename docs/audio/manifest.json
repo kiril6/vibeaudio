@@ -54,5 +54,19 @@
     "tier3StartMs": 41280,
     "chimeStartMs": 62040,
     "totalMs": 63640
+  },
+  "rain": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 20640,
+    "tier3StartMs": 41280,
+    "chimeStartMs": 62040,
+    "totalMs": 63640
+  },
+  "ocean": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 23640,
+    "tier3StartMs": 47280,
+    "chimeStartMs": 71040,
+    "totalMs": 72640
   }
 }
