@@ -11,6 +11,8 @@
 > **🔊 [Listen to every genre →](https://kiril6.github.io/vibeaudio/)** — hear all 10 genres, the tier escalation, and the three chimes, rendered from the real synth.
 
 > **In a hurry?** `npm i -g vibeaudio`, then `vibe --install-hooks`. Your next prompt has music.
+>
+> **Claude Code only?** Skip npm: `claude plugin marketplace add kiril6/vibeaudio`, then `claude plugin install vibeaudio@vibeaudio` ([details](#as-a-claude-code-plugin)).
 
 ---
 
@@ -309,6 +311,22 @@ Sessions with no id in their payload share a single slot, so they behave as one.
 > **The Claude Code desktop app is covered too**, not just the terminal — both read the same `~/.claude/settings.json`. (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-claude-desktop-antigravity-via-mcp).)
 
 > **One player is shared.** Prompt two agents at once and the last prompt owns the music. One person, one set of speakers — deliberate, not a limitation being worked around.
+
+### As a Claude Code plugin
+
+If Claude Code is the only agent you use, the plugin installs the same hooks with no npm step:
+
+```bash
+claude plugin marketplace add kiril6/vibeaudio
+claude plugin install vibeaudio@vibeaudio
+```
+
+It needs Node 18+ on your `PATH` (the hooks run `node`), and it also adds `/vibeaudio:vibe`, the plugin's spelling of [`/vibe`](#vibe-inside-claude-code). Update with `claude plugin update vibeaudio@vibeaudio`; remove with `claude plugin uninstall vibeaudio@vibeaudio` (music already playing stops on its own within 15 minutes, or run `/vibeaudio:vibe stop` first).
+
+- **Settings are the same file.** `vibe --genre jazz` and the rest work as always, but the `vibe` command comes from `npm i -g vibeaudio`; the plugin alone puts nothing on your `PATH`. Use `/vibeaudio:vibe genre jazz` instead.
+- **Both at once is safe.** If `--install-hooks` has also been run, the plugin's hooks step aside and the installed ones play, so there's no double chime. Remove the installed hooks first if you want the plugin to own it.
+- **Claude Code only.** Codex, Cursor, Gemini and the others still use `vibe --install-hooks`.
+- **Not reactive.** `--reactive` is an `--install-hooks` option; the plugin doesn't carry it.
 
 ### `/vibe` inside Claude Code
 

@@ -184,6 +184,7 @@ function parseArgs(argv) {
   let mcp = false;
   let reactive = false;
   let followVolume = false;
+  let plugin = false;
   let here_flag = false;
   let dryRun = false;
   let tools = null;
@@ -361,6 +362,14 @@ function parseArgs(argv) {
       continue;
     }
 
+    // Internal, set by the plugin's hooks.json: yield to hooks that
+    // --install-hooks already wrote, so both being present is not a double chime.
+    if (arg === "--plugin") {
+      plugin = true;
+      i += 1;
+      continue;
+    }
+
     if (arg === "--dry-run") {
       dryRun = true;
       i += 1;
@@ -471,6 +480,7 @@ function parseArgs(argv) {
     mcp,
     reactive,
     followVolume,
+    plugin,
     dryRun,
     tools,
     typed,
@@ -1273,8 +1283,13 @@ function renderToFile(target, genre) {
   console.log(`  \x1b[90mAnother project's sound: run it there, or vibe --seed <n> --render.\x1b[0m\n`);
 }
 
-function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, followVolume, tools, dryRun, typed = {} }) {
+function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, followVolume, plugin, tools, dryRun, typed = {} }) {
   const hooks = require("./hooks");
+
+  // The plugin's hooks and --install-hooks' hooks are the same events: with both
+  // present every prompt would restart the music and every turn chime twice.
+  // The installed ones win because they carry the user's --reactive choice.
+  if (plugin && action.startsWith("hook-") && hooks.userHooksInstalled()) return;
 
   switch (action) {
     case "daemon":
@@ -1498,6 +1513,7 @@ async function run() {
     mcp,
     reactive,
     followVolume,
+    plugin,
     dryRun,
     tools,
     typed,
@@ -1515,7 +1531,7 @@ async function run() {
 
   if (hookAction) {
     try {
-      return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive, followVolume, tools, dryRun, typed });
+      return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive, followVolume, plugin, tools, dryRun, typed });
     } catch (e) {
       // Settings problems are the user's to fix — report them, don't stack-trace.
       console.error(`\x1b[31m[vibeaudio] ${e.message}\x1b[0m`);

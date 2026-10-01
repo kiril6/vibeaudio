@@ -1,0 +1,15 @@
+{
+  "name": "vibeaudio",
+  "description": "VibeAudio: procedural focus music for AI coding agents",
+  "owner": { "name": "Kiril Delovski", "email": "delovski.office@gmail.com" },
+  "plugins": [
+    {
+      "name": "vibeaudio",
+      "source": "./",
+      "description": "Procedural focus music while Claude Code works, with a chime when it finishes or needs you.",
+      "homepage": "https://kiril6.github.io/vibeaudio/",
+      "license": "MIT",
+      "keywords": ["music", "focus", "audio", "hooks", "notification"]
+    }
+  ]
+}

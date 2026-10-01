@@ -10,6 +10,7 @@
   "scripts": {
     "test": "node test/test-synth.js",
     "start": "node bin/vibeaudio.js",
+    "version": "node -e \"const f='.claude-plugin/plugin.json',j=require('./'+f);j.version=require('./package.json').version;require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\\n')\" && git add .claude-plugin/plugin.json",
     "postinstall": "node scripts/postinstall.js"
   },
   "publishConfig": {

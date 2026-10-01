@@ -3084,7 +3084,55 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ The helper plays until its pipe closes, then fades out and exits - so a dead daemon cannot orphan music.");
   }
 
-  console.log("\n\x1b[32mAll 59 tests passed successfully!\x1b[0m");
+  // [60] The Claude Code plugin: manifests agree with the package, the hooks file
+  // covers the events --install-hooks writes, and it yields to installed hooks.
+  console.log("\n\x1b[1m[60] The Claude Code plugin\x1b[0m");
+  {
+    const { spawnSync } = require("child_process");
+    const root = path.join(__dirname, "..");
+    const readJson = (f) => JSON.parse(fs.readFileSync(path.join(root, f), "utf8"));
+    const pkgJson = readJson("package.json");
+    const manifest = readJson(".claude-plugin/plugin.json");
+    const market = readJson(".claude-plugin/marketplace.json");
+    const hooks = require("../src/hooks");
+
+    assert.strictEqual(manifest.version, pkgJson.version, "plugin.json version must track package.json, or `claude plugin update` ships nothing");
+    assert.strictEqual(market.plugins[0].name, manifest.name, "entry name and manifest name must match");
+    assert.strictEqual(market.plugins[0].source, "./", "the plugin is the repository root");
+
+    const ev = hooks.TARGETS.claude.events;
+    const expected = [ev.start, ev.stop, ev.failure, ev.end, ...ev.wait, ...ev.resume].sort();
+    const declared = readJson("hooks/hooks.json").hooks;
+    assert.deepStrictEqual(Object.keys(declared).sort(), expected, "plugin hooks must cover the events --install-hooks writes");
+    for (const entries of Object.values(declared)) {
+      const command = entries[0].hooks[0].command;
+      assert.ok(hooks.VIBE_HOOK_FLAG.test(command), `not a vibe hook: ${command}`);
+      assert.ok(/ --plugin$/.test(command), "every plugin hook must yield to installed ones");
+      assert.ok(command.includes('"${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js"'), "the path must be quoted for spaces");
+    }
+    assert.strictEqual(parseArgs(["node", "vibe", "--hook-start", "--plugin"]).plugin, true);
+
+    // Installed hooks win: --plugin must do nothing, not start a second stream.
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-plugin-"));
+    try {
+      const settings = path.join(home, ".claude", "settings.json");
+      assert.strictEqual(hooks.userHooksInstalled(settings), false, "no settings file: not installed");
+      hooks.installHooks("lofi", 0.4, settings);
+      assert.strictEqual(hooks.userHooksInstalled(settings), true);
+      const run = spawnSync(process.execPath, [path.join(root, "bin", "vibeaudio.js"), "--hook-start", "--plugin"], {
+        env: { ...process.env, HOME: home, USERPROFILE: home, VIBE_DISABLE: "1" },
+        input: JSON.stringify({ session_id: "plug" }),
+        timeout: 10000
+      });
+      assert.strictEqual(run.status, 0);
+      assert.ok(!fs.existsSync(path.join(home, ".vibeaudio", "sessions")), "the plugin hook must not start a turn when installed hooks exist");
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+    console.log("   ✓ Manifests track the package, hooks mirror --install-hooks, and the plugin steps aside for installed hooks.");
+  }
+
+  console.log("\n\x1b[32mAll 60 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);

@@ -1,0 +1,11 @@
+{
+  "name": "vibeaudio",
+  "displayName": "VibeAudio",
+  "version": "0.12.0",
+  "description": "Procedural focus music while Claude Code works, with a chime when it finishes or needs you. Zero dependencies, synthesized in pure JS.",
+  "author": { "name": "Kiril Delovski", "email": "delovski.office@gmail.com" },
+  "homepage": "https://kiril6.github.io/vibeaudio/",
+  "repository": "https://github.com/kiril6/vibeaudio",
+  "license": "MIT",
+  "keywords": ["music", "focus", "audio", "hooks", "notification", "lofi"]
+}

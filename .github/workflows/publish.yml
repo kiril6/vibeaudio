@@ -36,6 +36,13 @@ jobs:
             echo "::error::tag $GITHUB_REF_NAME but package.json says $version"
             exit 1
           fi
+          # The Claude Code plugin is versioned separately; a stale one means
+          # `claude plugin update` ships nothing. `npm version` keeps it in step.
+          plugin="$(node -p 'require("./.claude-plugin/plugin.json").version')"
+          if [ "$plugin" != "$version" ]; then
+            echo "::error::plugin.json says $plugin but package.json says $version"
+            exit 1
+          fi
 
       - run: npm test
       - run: npm publish

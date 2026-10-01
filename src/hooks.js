@@ -1002,6 +1002,11 @@ function readVibeEntryCount(file, id) {
   }
 }
 
+/** True when --install-hooks has already written our entries for Claude Code. */
+function userHooksInstalled(file = null) {
+  return readVibeEntryCount(file || TARGETS.claude.file(), "claude") > 0;
+}
+
 function loadSettings(file, t = null) {
   if (!fs.existsSync(file)) return { settings: t ? t.seed() : {}, raw: null };
   const raw = fs.readFileSync(file, "utf8");
@@ -1231,6 +1236,7 @@ module.exports = {
   uninstallHooks,
   settingsPath,
   isVibeHook,
+  userHooksInstalled,
   hookEntries,
   installSlashCommand,
   uninstallSlashCommand,
