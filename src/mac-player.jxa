@@ -1,6 +1,7 @@
 // VibeAudio macOS player: one long-lived process driving AVAudioPlayer, run by
 // `osascript -l JavaScript`. Lines on stdin:
 //   play <volume 0-1> <fade-in seconds> <path to wav>
+//   volume <volume 0-1> <ramp seconds>      (everything sounding now)
 // End of input - a closed pipe, or the daemon dying - fades out and exits, so
 // the audio can never outlive whoever started it.
 ObjC.import("Foundation");
@@ -26,6 +27,11 @@ function play(volume, fadeIn, path) {
 }
 
 function handle(line) {
+  const v = /^volume (\S+) (\S+)$/.exec(line);
+  if (v) {
+    for (const p of players) if (p.playing) p.setVolumeFadeDuration(parseFloat(v[1]), parseFloat(v[2]));
+    return;
+  }
   const m = /^play (\S+) (\S+) (.+)$/.exec(line);
   if (m) play(parseFloat(m[1]), parseFloat(m[2]), m[3]);
 }

@@ -350,7 +350,7 @@ vibe --reactive --install-hooks     # on
 vibe --install-hooks                # off again
 ```
 
-Music already playing keeps the old genre until the next prompt swaps the daemon — `vibe --stop` cuts it short.
+Music already playing keeps the old genre until the next prompt swaps the daemon — `vibe --stop` cuts it short. A new **volume** is the exception: the music playing now eases to it within a second.
 
 Removing them is one command:
 
@@ -681,7 +681,7 @@ This needs a PulseAudio-compatible sound server on **your local machine**: a Lin
 If the second connection fails with the socket "already in use", an earlier session left it behind: `rm /tmp/vibe-pulse.sock` on the server, or set `StreamLocalBindUnlink yes` in the server's `sshd_config`. If `paplay` says access denied, your local PulseAudio requires its cookie — copy `~/.config/pulse/cookie` to the same path on the server.
 
 **Volume flag does nothing**
-Shouldn't happen any more — where the player can't attenuate (`aplay`, PowerShell), the gain is baked into the audio instead. A `--volume` change lands at the next loop boundary, and on hooks at your next prompt; `vibe --status` shows the volume in effect and what set it.
+Shouldn't happen any more — where the player can't attenuate (`aplay`, PowerShell), the gain is baked into the audio instead. A `--volume` change reaches music already playing within a second on macOS hooks (it eases there), at the next loop boundary elsewhere, and in the wrapper or MCP on their next run; `vibe --status` shows the volume in effect and what set it.
 
 ---
 

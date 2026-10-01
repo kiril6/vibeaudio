@@ -183,6 +183,7 @@ function parseArgs(argv) {
   let hookAction = null;
   let mcp = false;
   let reactive = false;
+  let followVolume = false;
   let here_flag = false;
   let dryRun = false;
   let tools = null;
@@ -352,6 +353,14 @@ function parseArgs(argv) {
       continue;
     }
 
+    // Internal, set by the hooks: a daemon with no volume of its own follows
+    // the saved one while it plays.
+    if (arg === "--follow-volume") {
+      followVolume = true;
+      i += 1;
+      continue;
+    }
+
     if (arg === "--dry-run") {
       dryRun = true;
       i += 1;
@@ -461,6 +470,7 @@ function parseArgs(argv) {
     hookAction,
     mcp,
     reactive,
+    followVolume,
     dryRun,
     tools,
     typed,
@@ -751,8 +761,9 @@ function printStatus() {
     // What it was started with, which is not necessarily what is saved: a
     // daemon keeps its settings until the next prompt replaces it, and
     // "I changed the genre and nothing happened" is that gap.
+    const level = playing.follows ? Math.round(volumeNow() * 100) : playing.volume; // A following daemon plays what is saved.
     const now = playing.genre
-      ? ` ${on(playing.genre)}${playing.volume === null ? "" : on(` @ ${playing.volume}%`)}${playing.reactive ? off(", reactive") : ""}`
+      ? ` ${on(playing.genre)}${level === null ? "" : on(` @ ${level}%`)}${playing.reactive ? off(", reactive") : ""}`
       : "";
     console.log(`  ${on("playing")}${now}${off(`   pid ${pid}`)}`);
     if (playing.genre && playing.genre !== genreNow()) {
@@ -1128,6 +1139,9 @@ function saveDefaults(typed, hereOnly = false) {
   if (playing && patch.genre && playing.genre && playing.genre !== patch.genre) {
     console.log(`  \x1b[90m${playing.genre} is still playing — vibe --stop cuts it short.\x1b[0m`);
   }
+  if (playing && playing.follows && patch.volume !== undefined) {
+    console.log(`  \x1b[90mThe music playing now follows the new volume within a second.\x1b[0m`);
+  }
 
   // An install from before the settings moved out of the hook command line
   // still carries its own genre, and a flag beats this file. Saying nothing
@@ -1259,18 +1273,18 @@ function renderToFile(target, genre) {
   console.log(`  \x1b[90mAnother project's sound: run it there, or vibe --seed <n> --render.\x1b[0m\n`);
 }
 
-function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, tools, dryRun, typed = {} }) {
+function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, followVolume, tools, dryRun, typed = {} }) {
   const hooks = require("./hooks");
 
   switch (action) {
     case "daemon":
-      return hooks.runDaemon(genre, volume, { reactive });
+      return hooks.runDaemon(genre, volume, { reactive, volumeSource: followVolume ? volumeNow : null });
 
     case "hook-start":
       // The payload names the session (so SessionEnd can tell this session's
       // music from another's) and the transcript (so an interrupt, which
       // fires no hook, can still stop it).
-      hooks.readPayload((raw) => hooks.hookStart(genre, volume, { reactive, turn: hooks.newTurn(raw) }));
+      hooks.readPayload((raw) => hooks.hookStart(genre, volume, { reactive, follow: typed.volume === undefined, turn: hooks.newTurn(raw) }));
       return;
 
     case "hook-stop":
@@ -1297,7 +1311,7 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, 
       return;
 
     case "hook-resume":
-      hooks.readPayload((raw) => hooks.hookResume(raw, genre, volume, { reactive }));
+      hooks.readPayload((raw) => hooks.hookResume(raw, genre, volume, { reactive, follow: typed.volume === undefined }));
       return;
 
     case "hook-end":
@@ -1483,6 +1497,7 @@ async function run() {
     hookAction,
     mcp,
     reactive,
+    followVolume,
     dryRun,
     tools,
     typed,
@@ -1500,7 +1515,7 @@ async function run() {
 
   if (hookAction) {
     try {
-      return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive, tools, dryRun, typed });
+      return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive, followVolume, tools, dryRun, typed });
     } catch (e) {
       // Settings problems are the user's to fix — report them, don't stack-trace.
       console.error(`\x1b[31m[vibeaudio] ${e.message}\x1b[0m`);

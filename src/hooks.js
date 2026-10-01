@@ -410,7 +410,8 @@ function daemonPlaying() {
     pid,
     genre: genre ? genre[1] : null,
     volume: volume ? Number(volume[1]) : null,
-    reactive: /--reactive/.test(argv)
+    reactive: /--reactive/.test(argv),
+    follows: /--follow-volume/.test(argv)
   };
 }
 
@@ -610,7 +611,7 @@ const INTERRUPT_POLL_MS = 500;
  * Internal mode: plays while any session is working. The player's own loop
  * timer keeps the event loop alive.
  */
-function runDaemon(genre, volume, { reactive = false } = {}) {
+function runDaemon(genre, volume, { reactive = false, volumeSource = null } = {}) {
   const watchers = new Map(); // session id -> its transcript poll
 
   // Drops sessions whose transcript shows an interrupt (Esc fires no hook, so
@@ -661,6 +662,8 @@ function runDaemon(genre, volume, { reactive = false } = {}) {
   setTimeout(shutdown, MAX_DAEMON_MS);
 
   setInterval(() => {
+    // A volume saved while this plays reaches it now, not at the next prompt.
+    if (volumeSource) player.setVolume(volumeSource());
     if (sweep()) return;
     player.stop({ playChime: false });
     endIdle();
@@ -672,9 +675,10 @@ function daemonRunning() {
   return pid !== null && isOurDaemon(pid);
 }
 
-function spawnDaemon(genre, volume, reactive) {
+function spawnDaemon(genre, volume, reactive, follow = false) {
   const args = [CLI_ENTRY, "--daemon", "--genre", genre, "--volume", String(Math.round(volume * 100))];
   if (reactive) args.push("--reactive");
+  if (follow) args.push("--follow-volume");
 
   const child = spawn(process.execPath, args, { detached: true, stdio: "ignore" });
   child.unref();
@@ -689,7 +693,7 @@ function spawnDaemon(genre, volume, reactive) {
  * always did, so a genre change lands on the next prompt. With one working the
  * music carries on: restarting it would cut every other session's stream.
  */
-function hookStart(genre, volume, { reactive = false, turn = null } = {}) {
+function hookStart(genre, volume, { reactive = false, turn = null, follow = false } = {}) {
   if (turn && turn.blocked) return null; // Rejected before it began: nothing to play for.
   const id = sessionId(turn && turn.session);
   // Before the spawn: the daemon reads it on startup.
@@ -698,7 +702,7 @@ function hookStart(genre, volume, { reactive = false, turn = null } = {}) {
 
   stopDaemon({ keepSessions: true });
   fs.rmSync(INTENSITY_FILE, { force: true }); // Don't inherit the last prompt's activity
-  return spawnDaemon(genre, volume, reactive);
+  return spawnDaemon(genre, volume, reactive, follow);
 }
 
 /**
@@ -889,7 +893,7 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
  * one needing approval, can resume early - after the chime already did its
  * job. Match on tool_input as well if that ever shows up in practice.
  */
-function hookResume(raw, genre, volume, { reactive = false } = {}) {
+function hookResume(raw, genre, volume, { reactive = false, follow = false } = {}) {
   const id = sessionId(payloadSession(parsePayload(raw)));
   const session = readSession(id);
   if (!session || session.waiting == null) return false; // Not waiting - the common case, on every tool call.
@@ -899,7 +903,7 @@ function hookResume(raw, genre, volume, { reactive = false } = {}) {
 
   const blockedMs = (session.blockedMs || 0) + (session.waitStart ? Date.now() - session.waitStart : 0);
   writeSession(id, { ...session, waiting: null, waitStart: null, blockedMs });
-  if (!daemonRunning()) spawnDaemon(genre, volume, reactive);
+  if (!daemonRunning()) spawnDaemon(genre, volume, reactive, follow);
   return true;
 }
 

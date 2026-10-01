@@ -3070,6 +3070,10 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     helper.stdin.write(`play 0 0 ${file}\n`); // Volume 0: the test makes no sound.
     await new Promise((r) => setTimeout(r, 1500));
     assert.strictEqual(helper.exitCode, null, "the helper keeps running while its input is open");
+    helper.stdin.write("volume 0 0.1\n"); // A live change is a command, not a restart.
+    await new Promise((r) => setTimeout(r, 300));
+    assert.strictEqual(helper.exitCode, null, "a volume change must not end the helper");
+    assert.strictEqual(parseArgs(["node", "vibe", "--follow-volume"]).followVolume, true, "the hooks' internal flag parses");
     const closed = Date.now();
     helper.stdin.end();
     const { code, at } = await Promise.race([exited, new Promise((r) => setTimeout(() => r({ code: "hung" }), 3000))]);

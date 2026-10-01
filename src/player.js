@@ -116,6 +116,7 @@ let warnedNoPlayer = false;
 // run, and it is used for the rest of the process once one has failed.
 const MAC_HELPER = path.join(__dirname, "mac-player.jxa");
 const FADE_IN_S = 0.5;
+const VOLUME_RAMP_S = 0.3;
 let helperFailed = false;
 
 function helperUsable(backend) {
@@ -806,6 +807,22 @@ class AudioPlayer {
 
     const durationMs = wavDurationMs(audioFile) || 6500;
     this.nextTimer = setTimeout(() => this.playLoop(), Math.max(250, durationMs - LOOP_OVERLAP_MS));
+  }
+
+  /**
+   * Changes the volume of music already playing. The helper eases the loops
+   * that are sounding to it; any other backend takes it at the next loop, which
+   * is as live as a player that reads its volume once at spawn can be.
+   */
+  setVolume(volume) {
+    const target = Math.max(0.05, Math.min(1.0, Number(volume))); // Already a fraction, unlike normalizeVolume's percent.
+    if (!this.isPlaying || !Number.isFinite(target) || target === this.volume) return;
+    this.volume = target;
+    try {
+      if (this.helper) this.helper.stdin.write(`volume ${this.volume} ${VOLUME_RAMP_S}\n`);
+    } catch (e) {
+      // The helper's own exit handler deals with a dead pipe.
+    }
   }
 
   spawnLoop(audioFile, backend) {
