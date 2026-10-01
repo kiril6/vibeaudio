@@ -510,11 +510,16 @@ const working = (sessions) => sessions.filter((s) => s.waiting == null);
 // Claude Code's entry for Esc / the stop button: a user message whose text is
 // "[Request interrupted by user]" or "... for tool use]".
 const INTERRUPT_MARK = "[Request interrupted by user";
+const BLOCKED_MARK = "UserPromptSubmit operation blocked by hook";
 
 function isInterruptEntry(line) {
-  if (!line.includes(INTERRUPT_MARK)) return false; // Cheap filter before parsing.
+  if (!line.includes(INTERRUPT_MARK) && !line.includes(BLOCKED_MARK)) return false; // Cheap filter before parsing.
   try {
     const entry = JSON.parse(line);
+    // A prompt another hook blocked: hooks run side by side, so ours had already
+    // started the music, and no Stop will ever follow. The turn is over before
+    // it began, which is the same silent end as an interrupt.
+    if (entry.type === "system" && typeof entry.content === "string") return entry.content.startsWith(BLOCKED_MARK);
     if (entry.type !== "user" || !entry.message) return false;
     // Structural, not substring: a transcript that merely quotes the phrase -
     // in a tool result, a file, a prompt about this very feature - is not one.

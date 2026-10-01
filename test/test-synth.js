@@ -2115,6 +2115,19 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         await sleep(1500);
         assert.ok(!/loop_/.test(fs.readFileSync(log, "utf8")), "an interrupted approved tool must not bring the music back");
 
+        // A prompt another hook blocked: hooks run side by side, so ours had
+        // already started the music, and no Stop will come. Claude Code leaves a
+        // system entry in the transcript (observed against the real binary).
+        cli(["--stop"]);
+        fs.writeFileSync(transcript, "");
+        const blockedPid = await startTurn();
+        const sys = (content) => JSON.stringify({ type: "system", subtype: "informational", content }) + "\n";
+        fs.appendFileSync(transcript, sys("some other notice"));
+        await sleep(1200);
+        assert.ok(alive(blockedPid), "an unrelated system entry must not stop the music");
+        fs.appendFileSync(transcript, sys("UserPromptSubmit operation blocked by hook:\n[x]: blocked\n\nOriginal prompt: hi"));
+        await settle("a blocked prompt must stop the music", () => !alive(blockedPid));
+
         // SessionEnd: only the session that started the music may stop it.
         start("s1");
         await settle("s1's music must start", () => playing());
