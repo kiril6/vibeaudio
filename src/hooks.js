@@ -450,7 +450,44 @@ function fileSize(file) {
 function newTurn(raw) {
   const payload = parsePayload(raw);
   const transcript = typeof payload.transcript_path === "string" ? payload.transcript_path : "";
-  return { session: String(payloadSession(payload) || ""), transcript, offset: transcript ? fileSize(transcript) : 0 };
+  const offset = transcript ? fileSize(transcript) : 0;
+  return { session: String(payloadSession(payload) || ""), transcript, offset, blocked: blockedJustBefore(transcript, offset) };
+}
+
+const BLOCK_LOOKBACK_MS = 3000;
+
+/**
+ * Whether another hook has already rejected this very prompt. Hooks run side
+ * by side and a native blocker is faster to start than we are, so its transcript
+ * entry can land *before* the offset taken above - where the daemon, which reads
+ * only what follows, would never see it. Looked at the tail instead, and only
+ * for an entry stamped within the last moments, so an earlier blocked prompt
+ * does not silence this one.
+ */
+function blockedJustBefore(transcript, offset) {
+  if (!transcript || !offset) return false;
+  try {
+    const len = Math.min(offset, 16384);
+    const fd = fs.openSync(transcript, "r");
+    const buf = Buffer.alloc(len);
+    try {
+      fs.readSync(fd, buf, 0, len, offset - len);
+    } finally {
+      fs.closeSync(fd);
+    }
+    const lines = buf.toString("utf8").split("\n");
+    if (len < offset) lines.shift(); // Began mid-line.
+    return lines.some((line) => {
+      if (!isInterruptEntry(line)) return false;
+      try {
+        return Date.now() - Date.parse(JSON.parse(line).timestamp) <= BLOCK_LOOKBACK_MS;
+      } catch (e) {
+        return false;
+      }
+    });
+  } catch (e) {
+    return false;
+  }
 }
 
 // The id ends up in a file name.
@@ -653,6 +690,7 @@ function spawnDaemon(genre, volume, reactive) {
  * music carries on: restarting it would cut every other session's stream.
  */
 function hookStart(genre, volume, { reactive = false, turn = null } = {}) {
+  if (turn && turn.blocked) return null; // Rejected before it began: nothing to play for.
   const id = sessionId(turn && turn.session);
   // Before the spawn: the daemon reads it on startup.
   writeSession(id, { transcript: (turn && turn.transcript) || "", offset: (turn && turn.offset) || 0, waiting: null, started: Date.now(), blockedMs: 0 });

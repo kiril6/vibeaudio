@@ -2128,6 +2128,24 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         fs.appendFileSync(transcript, sys("UserPromptSubmit operation blocked by hook:\n[x]: blocked\n\nOriginal prompt: hi"));
         await settle("a blocked prompt must stop the music", () => !alive(blockedPid));
 
+        // The same rejection landing *before* our hook measured the transcript:
+        // a native blocker beats a node start. Nothing follows the offset, so
+        // the music must never begin - but a stale entry must not count.
+        cli(["--stop"]);
+        const stamp = (ago) => new Date(Date.now() - ago).toISOString();
+        const blockedAt = (ago) => JSON.stringify({ type: "system", subtype: "informational", timestamp: stamp(ago),
+          content: "UserPromptSubmit operation blocked by hook:\nx\n\nOriginal prompt: which node" }) + "\n";
+        fs.writeFileSync(transcript, userText("earlier") + blockedAt(60000));
+        await startTurn();
+        assert.ok(playing(), "a block from a minute ago is another prompt's, not this one's");
+        cli(["--stop"]);
+        fs.writeFileSync(transcript, userText("earlier") + blockedAt(400));
+        fs.writeFileSync(log, "");
+        cli(["--hook-start", "--genre", "zen", "--volume", "5"], turnPayload());
+        await sleep(1200);
+        assert.ok(!playing(), "a prompt already blocked must not start the music");
+        assert.ok(!/loop_/.test(fs.readFileSync(log, "utf8")), "and nothing may reach the backend");
+
         // SessionEnd: only the session that started the music may stop it.
         start("s1");
         await settle("s1's music must start", () => playing());
