@@ -814,6 +814,24 @@ function doctorChecks() {
     add("ok", "Saved settings", "config.json parses (or none saved)");
   }
 
+  // afplay plays on the default output device, which moves when a monitor or
+  // headphones connect - and an external display often has no system volume at
+  // all, or speakers far quieter than the laptop's. Say where sound is going.
+  const out = require("./output").macOutput();
+  if (out) {
+    const where = out.device ? `${out.device.name}${out.device.transport ? ` (${out.device.transport})` : ""}` : "the default output";
+    if (out.muted) {
+      add("warn", "Sound output", `${where} is muted in macOS — nothing will be heard`, "unmute it in the menu bar, or: osascript -e 'set volume output muted false'");
+    } else if (out.volume === null) {
+      add("warn", "Sound output", `${where} has no system volume control, so VibeAudio's own volume is the only one — and its speakers may be quiet`,
+        "raise it with: vibe --volume 60 (and check the monitor's own speaker volume)");
+    } else if (out.volume < 10) {
+      add("warn", "Sound output", `${where}, system volume ${out.volume}%`, "raise the macOS volume");
+    } else {
+      add("ok", "Sound output", `${where}, system volume ${out.volume}%`);
+    }
+  }
+
   const detected = hooks.detectTargets();
   for (const id of Object.keys(hooks.TARGETS)) {
     const t = hooks.TARGETS[id];

@@ -643,6 +643,9 @@ The expiry is deliberate too. A call is a bounded thing; a mute you forget about
 **No sound at all**
 Check that a player exists for your platform (see [Requirements](#-requirements)). VibeAudio prints a notice to stderr when it can't find one. On Linux: `sudo apt install pulseaudio-utils` (or `ffmpeg` / `alsa-utils`).
 
+**Silent after connecting a monitor or headphones (macOS)**
+`afplay` plays on macOS's *default output device*, which moves when a display or headphones connect. A monitor often has no system volume control at all and speakers much quieter than the laptop's, so a quiet setting — a sparse genre like `piano` at 25% — can fall below what you can hear. `vibe --doctor` shows where sound is going and warns if that output is muted or has no volume control. Then try `vibe --genre lofi --volume 60` for one prompt, and check the monitor's own speaker volume.
+
 **Music starts immediately instead of after the grace window**
 It usually is waiting — your AI tool's own startup (auth, session load) just takes longer than 1.5s, so music and the tool's first output appear together. Raise the window: `vibe --grace 3000 claude`.
 
