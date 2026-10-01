@@ -8,7 +8,7 @@
 
 **[Install](#-install)** · **[Agent hooks](#-agent-hooks-no-wrapper-needed)** · **[Genres](#-music-genres)** · **[Flags](#-options--flags)** · **[Troubleshooting](#-troubleshooting)** · **[Uninstall](#-uninstall)**
 
-> **🔊 [Listen to every genre →](https://kiril6.github.io/vibeaudio/)** — hear all 8 genres, the tier escalation, and the three chimes, rendered from the real synth.
+> **🔊 [Listen to every genre →](https://kiril6.github.io/vibeaudio/)** — hear all 10 genres, the tier escalation, and the three chimes, rendered from the real synth.
 
 > **In a hurry?** `npm i -g vibeaudio`, then `vibe --install-hooks`. Your next prompt has music.
 
@@ -25,6 +25,7 @@ AI coding agents take 15–45 seconds to reason, read files and write code. Star
 * 📈 **Escalating layers.** Tier 1 (0–15s) gentle intro → Tier 2 (15–45s) main groove → Tier 3 (45s+) deep focus. You can hear how deep into the task the agent is.
 * 🔁 **A phrase, not a loop.** Each piece is three bars that rotate through your project's own progressions, so a long turn moves through a ~21-second phrase instead of replaying one 7-second bar for half an hour.
 * 🎛️ **Music that follows the work** ([reactive mode](#reactive-mode-opt-in), opt-in). Calm while the agent reads, fuller while it edits, busiest when it runs commands or hands work to sub-agents — you can hear *what* it's doing, not just for how long.
+* 🌅 **It fades, it doesn't cut.** On macOS the music eases in and out instead of starting and stopping mid-note, and `vibe --volume` reaches music that is already playing within a second.
 * 🔔 **Outcome-aware chimes.** Ascending on success, a soft descending minor chord on failure, and **silence on `Ctrl+C`** — an abort is never reported as done.
 * ✋ **A "your turn" chime.** When Claude Code stops to ask permission (or an MCP server asks for input), the music pauses and a rising two-note chime asks for you; it picks back up once you've answered.
 * 🔌 **Universal drop-in.** Hooks for **Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI, Qwen Code and Windsurf**; MCP for **Claude Desktop and Antigravity**; the wrapper (`vibe <command>`) for anything else.
@@ -276,7 +277,7 @@ Where an agent reports more than start and stop, VibeAudio listens for that too 
 | | |
 | :--- | :--- |
 | **Five agents tell you when they're waiting on you** | When a permission dialog opens the music stops rather than sounding busy while the agent is stuck on you, and it resumes once the thing you answered has run. Claude Code covers the terminal, desktop app and IDEs alike, plus MCP servers asking for input. Copilot CLI's own `PermissionRequest` fires before *every* permission check — dialog or not — so VibeAudio listens for its permission-prompt notification instead. Cursor and Grok have no such event that's been verified, so they keep playing through a prompt. |
-| **Claude Code turns that never reach `Stop` still end the music** | An API error or rate limit ends the turn with `StopFailure` instead, which plays the failure chime. Interrupting (Esc, or the stop button in the desktop app) fires no hook at all, so the background player watches the session transcript for Claude Code's interrupt entry and stops silently within half a second — whether the agent was writing or running a tool. Closing the session mid-turn stops it too — but only if that session started the music, so closing an idle terminal never silences another one. |
+| **Claude Code turns that never reach `Stop` still end the music** | An API error or rate limit ends the turn with `StopFailure` instead, which plays the failure chime. Interrupting (Esc, or the stop button in the desktop app) fires no hook at all, so the background player watches the session transcript for Claude Code's interrupt entry and stops silently within half a second — whether the agent was writing or running a tool. A prompt that another hook blocks (a token-saving proxy, say) never reaches `Stop` either, so the same watcher ends the music on Claude Code's "prompt blocked" entry — or never starts it, when the blocker was quicker than we were. Closing the session mid-turn stops it too — but only if that session started the music, so closing an idle terminal never silences another one. |
 | **Codex asks you to trust the hook once** | Codex keeps a per-hook trust hash in `~/.codex/config.toml` and won't run a hook it hasn't been told to trust, so the install isn't live until you approve each one the first time it fires. |
 | **Only Cursor can play the failure chime** | Its stop event reports whether the turn completed, aborted or errored. The others send no verdict, so a turn there always ends on the success chime — VibeAudio won't invent a failure the agent never claimed. |
 | **Grok and Copilot CLI get a file of their own** | Each reads every `*.json` in its `hooks/` directory, so VibeAudio writes `vibeaudio.json` rather than merging into anyone else's — which makes uninstalling it a delete, and leaves no backup file behind. Copilot's honours `COPILOT_HOME`. |
