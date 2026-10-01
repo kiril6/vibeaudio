@@ -85,7 +85,7 @@ Procedural focus music while your AI coding tools think.
       --clear-cache            Delete cached audio, then exit
       --mcp                    Run as Model Context Protocol (MCP) server for Desktop apps
       --install-hooks          Wire music into your agent's hooks (no wrapper needed)
-      --tools <list>           With --install-hooks: claude,codex,cursor,grok,gemini,copilot,qwen (auto-detect)
+      --tools <list>           With --install-hooks: claude,codex,cursor,grok,gemini,copilot,qwen,windsurf (auto-detect)
       --reactive               With --install-hooks: intensity follows the tool in use
       --dry-run                With --install-hooks: show what would change, write nothing
       --uninstall-hooks        Remove the hooks again, from every agent
@@ -1085,6 +1085,7 @@ function detectAiTools(hooked = new Set()) {
     { cmd: "gemini", name: "Gemini CLI", integration: viaHooks("gemini") },
     { cmd: "copilot", name: "GitHub Copilot CLI", integration: viaHooks("copilot") },
     { cmd: "qwen", name: "Qwen Code", integration: viaHooks("qwen") },
+    { cmd: "windsurf", name: "Windsurf", integration: viaHooks("windsurf") },
     { cmd: "aider", name: "Aider", integration: "wrapper — vibe aider" },
     { cmd: "ollama", name: "Ollama", integration: "wrapper — vibe ollama run <model>" }
   ];

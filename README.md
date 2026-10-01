@@ -4,7 +4,7 @@
 
 > **Procedural focus music while your AI coding tools think.**
 > Every project gets its own arrangement. Zero dependencies, zero audio files.
-> Works with Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI, Qwen Code, Aider — and any terminal command.
+> Works with Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI, Qwen Code, Windsurf, Aider — and any terminal command.
 
 **[Install](#-install)** · **[Agent hooks](#-agent-hooks-no-wrapper-needed)** · **[Genres](#-music-genres)** · **[Flags](#-options--flags)** · **[Troubleshooting](#-troubleshooting)** · **[Uninstall](#-uninstall)**
 
@@ -27,7 +27,7 @@ AI coding agents take 15–45 seconds to reason, read files and write code. Star
 * 🎛️ **Music that follows the work** ([reactive mode](#reactive-mode-opt-in), opt-in). Calm while the agent reads, fuller while it edits, busiest when it runs commands or hands work to sub-agents — you can hear *what* it's doing, not just for how long.
 * 🔔 **Outcome-aware chimes.** Ascending on success, a soft descending minor chord on failure, and **silence on `Ctrl+C`** — an abort is never reported as done.
 * ✋ **A "your turn" chime.** When Claude Code stops to ask permission (or an MCP server asks for input), the music pauses and a rising two-note chime asks for you; it picks back up once you've answered.
-* 🔌 **Universal drop-in.** Hooks for **Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI and Qwen Code**; MCP for **Claude Desktop and Antigravity**; the wrapper (`vibe <command>`) for anything else.
+* 🔌 **Universal drop-in.** Hooks for **Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI, Qwen Code and Windsurf**; MCP for **Claude Desktop and Antigravity**; the wrapper (`vibe <command>`) for anything else.
 
 <details>
 <summary><b>And the quieter four</b> — silence on fast commands, several sessions at once, exit codes, the HUD</summary>
@@ -223,7 +223,7 @@ Adding an entry to the launcher is one line in [`src/interactive.js`](src/intera
 
 ## 🪝 Agent Hooks (no wrapper needed)
 
-> **`--install-hooks` supports Claude Code, Codex, Cursor, Grok, Gemini CLI, GitHub Copilot CLI and Qwen Code.** Everything else uses the [wrapper or MCP](#-everything-else-claude-desktop-antigravity-via-mcp) instead.
+> **`--install-hooks` supports Claude Code, Codex, Cursor, Grok, Gemini CLI, GitHub Copilot CLI, Qwen Code and Windsurf.** Everything else uses the [wrapper or MCP](#-everything-else-claude-desktop-antigravity-via-mcp) instead.
 
 Wrapping (`vibe claude`) infers "the AI is thinking" from how long the process runs. Hooks know for certain — so music starts the moment you submit a prompt and stops the moment the agent finishes, with no grace-window guessing and no aliases.
 
@@ -236,12 +236,12 @@ vibe --genre jazz --volume 25 --install-hooks    # install, and save these as yo
 vibe --install-hooks --dry-run                   # show what would change, write nothing
 ```
 
-**It auto-detects.** With no `--tools`, VibeAudio wires up each supported agent it finds on your machine — one counts as present when its config directory exists or its CLI is on your `PATH`. `--tools claude,codex,cursor,grok,gemini,copilot,qwen` overrides that. Add `--dry-run` to see, per event, what would be added or changed in each file before anything is written.
+**It auto-detects.** With no `--tools`, VibeAudio wires up each supported agent it finds on your machine — one counts as present when its config directory exists or its CLI is on your `PATH`. `--tools claude,codex,cursor,grok,gemini,copilot,qwen,windsurf` overrides that. Add `--dry-run` to see, per event, what would be added or changed in each file before anything is written.
 
 That's it — run your agent normally, with no `vibe` prefix.
 
 <details>
-<summary><b>Which file and which events, per agent</b> — seven dialects, all written for you</summary>
+<summary><b>Which file and which events, per agent</b> — eight dialects, all written for you</summary>
 
 Each tool spells its events its own way, and VibeAudio writes whichever dialect the file expects:
 
@@ -254,6 +254,7 @@ Each tool spells its events its own way, and VibeAudio writes whichever dialect 
 | **Gemini CLI** | `~/.gemini/settings.json` | `BeforeAgent` | `AfterAgent` | `BeforeTool` |
 | **Copilot CLI** | `~/.copilot/hooks/vibeaudio.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
 | **Qwen Code** | `~/.qwen/settings.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
+| **Windsurf** | `~/.codeium/windsurf/hooks.json` | `pre_user_prompt` | `post_cascade_response` | `pre_run_command` |
 
 Where an agent reports more than start and stop, VibeAudio listens for that too — and only where the event was confirmed against the tool itself:
 
@@ -264,7 +265,7 @@ Where an agent reports more than start and stop, VibeAudio listens for that too 
 | **Gemini CLI** | `Notification` (tool permission) | `AfterTool` | — | `SessionEnd` |
 | **Copilot CLI** | `Notification` (permission prompt) | `PostToolUse`, `PostToolUseFailure` | — | `SessionEnd` |
 | **Qwen Code** | `PermissionRequest` | `PostToolUse`, `PostToolUseFailure` | `StopFailure` | `SessionEnd` |
-| **Cursor, Grok** | — | — | — | — |
+| **Cursor, Grok, Windsurf** | — | — | — | — |
 
 </details>
 
@@ -302,7 +303,7 @@ Sessions with no id in their payload share a single slot, so they behave as one.
 
 </details>
 
-> **No restart needed, even mid-session — for Claude Code, Codex, Cursor and Grok.** Each re-reads its hook file every time a hook fires, so changes land on your **next prompt**. A daemon already playing keeps its old settings until that prompt replaces it — at most the tail of one turn. Whether an open Gemini CLI, Copilot CLI or Qwen Code session does the same hasn't been checked, so start a new session there to be sure.
+> **No restart needed, even mid-session — for Claude Code, Codex, Cursor and Grok.** Each re-reads its hook file every time a hook fires, so changes land on your **next prompt**. A daemon already playing keeps its old settings until that prompt replaces it — at most the tail of one turn. Whether an open Gemini CLI, Copilot CLI, Qwen Code or Windsurf session does the same hasn't been checked, so start a new session there to be sure.
 
 > **The Claude Code desktop app is covered too**, not just the terminal — both read the same `~/.claude/settings.json`. (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-claude-desktop-antigravity-via-mcp).)
 
@@ -409,9 +410,9 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 
 ## 🖥️ Everything Else (Claude Desktop, Antigravity… via MCP)
 
-**Claude Code, [Codex](https://github.com/openai/codex), [Cursor](https://cursor.com/docs/hooks), [Grok](https://docs.x.ai/build/features/hooks), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Copilot CLI](https://docs.github.com/en/copilot/reference/hooks-configuration) and [Qwen Code](https://github.com/QwenLM/qwen-code) have hook systems, and `--install-hooks` writes to all seven** — use [hooks](#-agent-hooks-no-wrapper-needed) there, they're strictly better. This section is for everything else. MCP is the way in: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
+**Claude Code, [Codex](https://github.com/openai/codex), [Cursor](https://cursor.com/docs/hooks), [Grok](https://docs.x.ai/build/features/hooks), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Copilot CLI](https://docs.github.com/en/copilot/reference/hooks-configuration), [Qwen Code](https://github.com/QwenLM/qwen-code) and [Windsurf](https://docs.devin.ai/desktop/cascade/hooks) have hook systems, and `--install-hooks` writes to all eight** — use [hooks](#-agent-hooks-no-wrapper-needed) there, they're strictly better. This section is for everything else. MCP is the way in: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
 
-> **This is weaker than hooks, by nature.** Hooks fire on an event; MCP tools are *model-invoked*, so the assistant has to decide to call `vibe_play` and remember `vibe_stop`. Expect the occasional silent turn — say "play some focus music while you work on this" if you want it reliably. **On any of the seven agents above, use [hooks](#-agent-hooks-no-wrapper-needed) instead.**
+> **This is weaker than hooks, by nature.** Hooks fire on an event; MCP tools are *model-invoked*, so the assistant has to decide to call `vibe_play` and remember `vibe_stop`. Expect the occasional silent turn — say "play some focus music while you work on this" if you want it reliably. **On any of the eight agents above, use [hooks](#-agent-hooks-no-wrapper-needed) instead.**
 
 Use an **absolute path**, not the bare `vibe` command: GUI apps launched from Finder don't inherit your shell's `PATH`, and version managers like `fnm` or `nvm` put `vibe` on a per-shell path that won't resolve. Print yours with:
 
@@ -591,7 +592,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--clear-cache` | Delete all cached audio, then exit | — |
 | `--mcp` | Run as an MCP stdio server for desktop apps | — |
 | `--install-hooks` | Wire music into your agent's hooks (no wrapper needed) | — |
-| `--tools <list>` | With `--install-hooks`: `claude,codex,cursor,grok,gemini,copilot,qwen` | auto-detect |
+| `--tools <list>` | With `--install-hooks`: `claude,codex,cursor,grok,gemini,copilot,qwen,windsurf` | auto-detect |
 | `--reactive` | With `--install-hooks`: intensity follows the tool in use | off |
 | `--dry-run` | With `--install-hooks`: show what would change in each file, write nothing | off |
 | `--uninstall-hooks` | Remove the hooks again, from every agent | — |
@@ -738,7 +739,7 @@ rm -rf ~/.vibeaudio             # 3. optional: cached audio, saved settings, dae
 
 Step 1 also **stops a background player that's still going**. That matters: once the hooks are gone nothing will ever send the `Stop` event, and after step 2 there's no `vibe` left to stop it with — music would simply play on until its 15-minute cap. If you ever need to do it by hand: `pkill -f "vibeaudio.js --daemon"`.
 
-> **Order matters.** `npm rm -g` deletes the binary but not your hook config. Removing the package first strands hook entries that point at a path that no longer exists, and your agent will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.cursor/hooks.json`, `~/.gemini/settings.json` and `~/.qwen/settings.json` by hand, and delete `~/.grok/hooks/vibeaudio.json`, `~/.copilot/hooks/vibeaudio.json` and `~/.claude/commands/vibe.md`.
+> **Order matters.** `npm rm -g` deletes the binary but not your hook config. Removing the package first strands hook entries that point at a path that no longer exists, and your agent will run a failing hook on every prompt. If you already did it in the wrong order, reinstall, run `vibe --uninstall-hooks`, then remove again — or delete the `vibeaudio` entries from `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.cursor/hooks.json`, `~/.gemini/settings.json`, `~/.qwen/settings.json` and `~/.codeium/windsurf/hooks.json` by hand, and delete `~/.grok/hooks/vibeaudio.json`, `~/.copilot/hooks/vibeaudio.json` and `~/.claude/commands/vibe.md`.
 
 Step 3 reclaims disk — the audio cache, pruned to the 3 most recent projects — and drops your saved genre and volume. Both come back on their own, so skip it if you're reinstalling.
 
@@ -746,7 +747,7 @@ Step 3 reclaims disk — the audio cache, pruned to the 3 most recent projects �
 
 | Leftover | Why, and how to remove it |
 | :--- | :--- |
-| `*.vibeaudio.bak` next to each shared hook config | Your config as it was before the first install — one each for Claude Code, Codex, Cursor, Gemini CLI and Qwen Code. A safety net we won't delete for you; `rm` them once you're happy the real files are correct, and `vibe --uninstall-hooks` prints the path of every one it finds. (Grok and Copilot CLI leave nothing: their files are ours alone, so uninstall deletes them outright.) |
+| `*.vibeaudio.bak` next to each shared hook config | Your config as it was before the first install — one each for Claude Code, Codex, Cursor, Gemini CLI, Qwen Code and Windsurf. A safety net we won't delete for you; `rm` them once you're happy the real files are correct, and `vibe --uninstall-hooks` prints the path of every one it finds. (Grok and Copilot CLI leave nothing: their files are ours alone, so uninstall deletes them outright.) |
 | `vibeaudio` entries in other apps' MCP configs | VibeAudio never edits those files, so it can't clean them either. Drop the entry from [whichever config you added it to](#-everything-else-claude-desktop-antigravity-via-mcp). |
 
 Apart from those two, the three commands above remove everything VibeAudio writes.

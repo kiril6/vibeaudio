@@ -2256,6 +2256,16 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.strictEqual(q.hooks.Stop[0].hooks[0].timeout, 5000, "Qwen timeouts are milliseconds");
       assert.strictEqual(hooks.uninstallHooks(qwen, { id: "qwen" }).removed, 7);
 
+      // Windsurf: flat {command} entries, and the conversation is `trajectory_id`.
+      const ws = path.join(dir, "windsurf.json");
+      hooks.installHooks("zen", 0.3, ws, { id: "windsurf" });
+      const w = JSON.parse(fs.readFileSync(ws, "utf8"));
+      assert.deepStrictEqual(Object.keys(w), ["hooks"]);
+      assert.ok(/--hook-start/.test(w.hooks.pre_user_prompt[0].command), "windsurf start event");
+      assert.ok(/--hook-stop/.test(w.hooks.post_cascade_response[0].command), "windsurf stop event");
+      assert.strictEqual(w.hooks.pre_run_command, undefined, "tool hook only in reactive mode");
+      assert.strictEqual(hooks.uninstallHooks(ws, { id: "windsurf" }).removed, 2);
+
       // Dry run: the result is computed, nothing is written - not the file,
       // not its directory, not a backup.
       const existing = path.join(dir, "existing.json");

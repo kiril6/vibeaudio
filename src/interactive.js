@@ -35,6 +35,7 @@ const AI_TOOLS = [
   { name: "Cursor CLI", cmd: ["cursor-agent"], check: "cursor-agent", hookTarget: "cursor" },
   { name: "GitHub Copilot CLI", cmd: ["copilot"], check: "copilot", hookTarget: "copilot" },
   { name: "Qwen Code", cmd: ["qwen"], check: "qwen", hookTarget: "qwen" },
+  { name: "Windsurf", cmd: ["windsurf"], check: "windsurf", hookTarget: "windsurf" },
   { name: "Aider", cmd: ["aider"], check: "aider" },
   { name: "Ollama (Llama 3)", cmd: ["ollama", "run", "llama3"], check: "ollama" },
   { name: "Custom command...", cmd: null }

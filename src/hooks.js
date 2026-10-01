@@ -100,7 +100,14 @@ function payloadToolName(raw) {
   const payload = parsePayload(raw);
   // Claude Code, Codex and Cursor send tool_name; Grok sends toolName.
   // Reading only one of them would silently pin that agent to tier 2.
-  return String(payload.tool_name || payload.toolName || "");
+  // Windsurf names no tool: the event is the signal, and only the shell one is wired.
+  const byEvent = payload.agent_action_name === "pre_run_command" ? "Shell" : "";
+  return String(payload.tool_name || payload.toolName || byEvent);
+}
+
+// Windsurf calls the conversation `trajectory_id`.
+function payloadSession(payload) {
+  return payload.session_id || payload.trajectory_id;
 }
 
 /**
@@ -292,6 +299,24 @@ const TARGETS = {
     // Unlike the four above, not verified to re-read hooks mid-session.
     liveReload: false,
     note: "Not checked whether an open Qwen Code session reloads hooks — start a new one to be sure."
+  },
+  windsurf: {
+    name: "Windsurf",
+    cmd: "windsurf",
+    // Checked against Windsurf's hooks documentation only: it was not installed
+    // here, so nothing was run. User-level file, a flat {command} entry with no
+    // timeout field, and the conversation named `trajectory_id` rather than
+    // session_id. post_cascade_response is the end-of-reply event; Windsurf has
+    // no permission-dialog, failure or session-end event, so none is wired, and
+    // its pre-tool events are per kind - pre_run_command is the one reactive
+    // mode listens to.
+    file: () => path.join(os.homedir(), ".codeium", "windsurf", "hooks.json"),
+    events: { start: "pre_user_prompt", stop: "post_cascade_response", tool: "pre_run_command" },
+    entry: (command) => ({ command }),
+    commands: (entry) => (entry.command ? [entry.command] : []),
+    seed: () => ({}),
+    liveReload: false,
+    note: "Windsurf's hooks do not load in Restricted Mode, and whether an open session reloads them is not documented — start a new one to be sure."
   }
 };
 
@@ -425,7 +450,7 @@ function fileSize(file) {
 function newTurn(raw) {
   const payload = parsePayload(raw);
   const transcript = typeof payload.transcript_path === "string" ? payload.transcript_path : "";
-  return { session: String(payload.session_id || ""), transcript, offset: transcript ? fileSize(transcript) : 0 };
+  return { session: String(payloadSession(payload) || ""), transcript, offset: transcript ? fileSize(transcript) : 0 };
 }
 
 // The id ends up in a file name.
@@ -731,7 +756,7 @@ function notify(raw, message) {
 }
 
 function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChime = false, genre, raw = "" } = {}) {
-  const id = sessionId(parsePayload(raw).session_id);
+  const id = sessionId(payloadSession(parsePayload(raw)));
   // A turn that ends while paused for the user - a denied tool that nothing
   // resumed after - still finished, so its session counts either way.
   const session = readSession(id);
@@ -796,7 +821,7 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
   const type = payload.notification_type ?? payload.notificationType;
   if (type !== undefined && !WAIT_NOTIFICATIONS.has(String(type))) return false;
 
-  const id = sessionId(payload.session_id);
+  const id = sessionId(payloadSession(payload));
   const session = readSession(id);
   if (!session || session.waiting != null) return false;
 
@@ -822,7 +847,7 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
  * job. Match on tool_input as well if that ever shows up in practice.
  */
 function hookResume(raw, genre, volume, { reactive = false } = {}) {
-  const id = sessionId(parsePayload(raw).session_id);
+  const id = sessionId(payloadSession(parsePayload(raw)));
   const session = readSession(id);
   if (!session || session.waiting == null) return false; // Not waiting - the common case, on every tool call.
   // An empty key is a wait that named nothing (a Notification): the next tool
@@ -845,7 +870,7 @@ function hookResume(raw, genre, volume, { reactive = false } = {}) {
  * applies.
  */
 function hookEnd(raw) {
-  const id = sessionId(parsePayload(raw).session_id);
+  const id = sessionId(payloadSession(parsePayload(raw)));
   if (!readSession(id)) return false;
 
   fs.rmSync(sessionFile(id), { force: true });
