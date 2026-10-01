@@ -110,6 +110,18 @@ const PLAYER_CANDIDATES = [
 let cachedPlayer;
 let warnedNoPlayer = false;
 
+// macOS: one long-lived AVAudioPlayer process instead of an afplay per loop,
+// which is what lets music fade in and out rather than start and end mid-note.
+// afplay stays the fallback: a helper that cannot start is not worth a silent
+// run, and it is used for the rest of the process once one has failed.
+const MAC_HELPER = path.join(__dirname, "mac-player.jxa");
+const FADE_IN_S = 0.5;
+let helperFailed = false;
+
+function helperUsable(backend) {
+  return process.platform === "darwin" && backend.cmd === "afplay" && !helperFailed && !process.env.VIBE_NO_FADE;
+}
+
 function detectPlayer() {
   if (cachedPlayer !== undefined) return cachedPlayer;
 
@@ -708,6 +720,7 @@ class AudioPlayer {
   constructor() {
     this.isPlaying = false;
     this.procs = new Set();
+    this.helper = null;
     this.startTime = 0;
     this.genre = "lofi";
     this.volume = 0.42;
@@ -789,6 +802,13 @@ class AudioPlayer {
     const audioFile = getAudioPath(this.genre, this.currentTier, this.seed, gain, this.bar);
     // Advanced after the choice, so the bar that plays first is bar 0.
     this.bar = (this.bar + 1) % LOOP_BARS;
+    if (!(helperUsable(backend) && this.playViaHelper(audioFile, backend))) this.spawnLoop(audioFile, backend);
+
+    const durationMs = wavDurationMs(audioFile) || 6500;
+    this.nextTimer = setTimeout(() => this.playLoop(), Math.max(250, durationMs - LOOP_OVERLAP_MS));
+  }
+
+  spawnLoop(audioFile, backend) {
     const proc = spawn(backend.cmd, backend.args(audioFile, this.volume), { stdio: "ignore" });
 
     this.procs.add(proc);
@@ -798,12 +818,55 @@ class AudioPlayer {
       this.isPlaying = false;
       warnNoPlayer();
     });
+  }
 
-    const durationMs = wavDurationMs(audioFile) || 6500;
-    this.nextTimer = setTimeout(() => this.playLoop(), Math.max(250, durationMs - LOOP_OVERLAP_MS));
+  /**
+   * Hands one loop to the macOS helper, starting it on first use. Returns false
+   * when the helper could not be started, so the caller plays it with afplay.
+   * A helper that dies while we are playing is dropped and the loop that was
+   * meant for it replayed, so a failure costs one restart, not the music.
+   */
+  playViaHelper(audioFile, backend) {
+    try {
+      if (!this.helper) {
+        const helper = spawn("osascript", ["-l", "JavaScript", MAC_HELPER], { stdio: ["pipe", "ignore", "ignore"] });
+        helper.stdin.on("error", () => {}); // EPIPE once it is gone.
+        const dropped = () => {
+          if (this.helper !== helper) return;
+          this.helper = null;
+          helperFailed = true;
+          if (this.isPlaying) this.spawnLoop(audioFile, backend);
+        };
+        helper.on("error", dropped);
+        helper.on("exit", dropped);
+        this.helper = helper;
+        this.helperFirst = true;
+      }
+      const fade = this.helperFirst ? FADE_IN_S : 0; // Later loops carry their own boundary fades.
+      this.helperFirst = false;
+      this.helper.stdin.write(`play ${this.volume} ${fade} ${audioFile}\n`);
+      return true;
+    } catch (e) {
+      helperFailed = true;
+      this.helper = null;
+      return false;
+    }
   }
 
   killProcs() {
+    // Closing the helper's input is the stop: it fades out and exits on its own,
+    // so the music ends on a decay, and a daemon that dies without cleanup closes
+    // the pipe just the same.
+    if (this.helper) {
+      const helper = this.helper;
+      this.helper = null;
+      try {
+        helper.stdin.end();
+        helper.unref();
+      } catch (e) {
+        // Already gone.
+      }
+    }
     for (const proc of this.procs) {
       try {
         proc.kill("SIGTERM");

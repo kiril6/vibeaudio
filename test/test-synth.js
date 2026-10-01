@@ -14,6 +14,11 @@ const { generateJazzLoop } = require("../src/synth/jazz");
 const { generateChime } = require("../src/synth/chime");
 const { parseArgs, windowsCommandNeedsShell } = require("../src/cli");
 
+// The suite fakes `afplay` on PATH to see what plays; on macOS the real player
+// is the AVAudioPlayer helper, which would walk straight past the fake. Test
+// [59] is the one that exercises the helper itself.
+process.env.VIBE_NO_FADE = "1";
+
 /**
  * Hook targets with no launcher entry, and why. A target here is one you
  * cannot start from a menu, not one nobody got round to adding - test [38]
@@ -3023,7 +3028,28 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ Parses the volume settings and default device, and treats a missing answer as no finding.");
   }
 
-  console.log("\n\x1b[32mAll 58 tests passed successfully!\x1b[0m");
+  // [59] The macOS helper fades out on end of input instead of being killed.
+  if (process.platform === "darwin") {
+    console.log("\n\x1b[1m[59] The macOS player fades on end of input\x1b[0m");
+    const { spawn } = require("child_process");
+    const { getAudioPath } = require("../src/player");
+    const file = getAudioPath("lofi", 1, 59, 1, 0);
+    const helper = spawn("osascript", ["-l", "JavaScript", path.join(__dirname, "..", "src", "mac-player.jxa")], { stdio: ["pipe", "ignore", "ignore"] });
+    const exited = new Promise((resolve) => helper.on("exit", (code) => resolve({ code, at: Date.now() })));
+    helper.stdin.write(`play 0 0 ${file}\n`); // Volume 0: the test makes no sound.
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.strictEqual(helper.exitCode, null, "the helper keeps running while its input is open");
+    const closed = Date.now();
+    helper.stdin.end();
+    const { code, at } = await Promise.race([exited, new Promise((r) => setTimeout(() => r({ code: "hung" }), 3000))]);
+    helper.kill("SIGKILL");
+    assert.strictEqual(code, 0, "closing its input must end it");
+    assert.ok(at - closed < 1500, `fade-out then exit, took ${at - closed}ms`);
+    fs.rmSync(path.dirname(file), { recursive: true, force: true });
+    console.log("   ✓ The helper plays until its pipe closes, then fades out and exits - so a dead daemon cannot orphan music.");
+  }
+
+  console.log("\n\x1b[32mAll 59 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);

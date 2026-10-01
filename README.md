@@ -613,6 +613,7 @@ export VIBE_DISABLE=1           # Mute, without uninstalling anything
 export VIBE_NOTIFY=1            # Desktop banner naming the project, for this shell
 export VIBE_NO_HISTORY=1        # Do not log finished turns (what --report reads)
 export VIBE_NO_UPDATE_CHECK=1   # Never ask npm whether a newer version is out
+export VIBE_NO_FADE=1           # macOS: play with plain afplay, no fade in/out
 ```
 
 **`VIBE_DISABLE=1` is for a shell you always want quiet** — a CI job, a shared machine, a terminal profile you keep silent. It's read at playback time and covers hooks, wrapper and MCP alike.

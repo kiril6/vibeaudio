@@ -1,0 +1,46 @@
+// VibeAudio macOS player: one long-lived process driving AVAudioPlayer, run by
+// `osascript -l JavaScript`. Lines on stdin:
+//   play <volume 0-1> <fade-in seconds> <path to wav>
+// End of input - a closed pipe, or the daemon dying - fades out and exits, so
+// the audio can never outlive whoever started it.
+ObjC.import("Foundation");
+ObjC.import("AVFoundation");
+
+const FADE_OUT_S = 0.3;
+const players = [];
+
+function sleep(seconds) {
+  $.NSThread.sleepForTimeInterval(seconds);
+}
+
+function play(volume, fadeIn, path) {
+  const url = $.NSURL.fileURLWithPath(path);
+  const p = $.AVAudioPlayer.alloc.initWithContentsOfURLError(url, null);
+  if (!p || !p.prepareToPlay) return;
+  p.volume = fadeIn > 0 ? 0 : volume;
+  p.play;
+  if (fadeIn > 0) p.setVolumeFadeDuration(volume, fadeIn);
+  players.push(p);
+  // Finished loops are done with: keep only what is still sounding.
+  for (let i = players.length - 2; i >= 0; i--) if (!players[i].playing) players.splice(i, 1);
+}
+
+function handle(line) {
+  const m = /^play (\S+) (\S+) (.+)$/.exec(line);
+  if (m) play(parseFloat(m[1]), parseFloat(m[2]), m[3]);
+}
+
+const stdin = $.NSFileHandle.fileHandleWithStandardInput;
+let pending = "";
+for (;;) {
+  const data = stdin.availableData; // Blocks; playback runs on its own thread.
+  if (Number(data.length) === 0) break; // JXA hands NSData.length back as a string.
+  pending += $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding).js;
+  const lines = pending.split("\n");
+  pending = lines.pop();
+  lines.forEach(handle);
+}
+
+for (const p of players) if (p.playing) p.setVolumeFadeDuration(0, FADE_OUT_S);
+sleep(FADE_OUT_S + 0.05);
+for (const p of players) p.stop;
