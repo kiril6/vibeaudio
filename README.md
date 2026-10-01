@@ -357,6 +357,23 @@ Removing them is one command:
 vibe --uninstall-hooks
 ```
 
+### Know where your time goes: `vibe --report`
+
+Hooks log each finished turn — which project, how long, how it ended, and how much of it the agent spent blocked on a dialog of yours — to `~/.vibeaudio/history.jsonl`. `vibe --report` (or `--report 30`) totals it:
+
+```
+  Turns             30  3 failed
+  You waited        3h 55m  on agents, 7m 51s per turn
+  Agents waited     5m 35s  on you — permission dialogs and questions
+  Typical turn      2m 57s  median
+```
+
+plus where the time went by project and, for windows up to two weeks, by day. "You waited" is the agent's own working time; the time it spent blocked on you is shown separately, because they are different problems. The log stays on your machine, never leaves it, is capped at about 1 MB, and `VIBE_NO_HISTORY=1` turns it off. Only hook-driven turns are logged — a command wrapped as `vibe <command>` is not, since its lifetime isn't the same thing as an agent's working time.
+
+### The chime is in the music's key
+
+The success chime is the tonic chord of whatever key your genre sits in — C major for lofi, 8bit, jazz and piano, D minor for synthwave and electronic, D major for zen, A minor for drone — so it lands as the resolution of the piece rather than a bell over it. `rain`, `ocean` and `random` have no single key to match and keep the original C major chime.
+
 ### Reactive mode (opt-in)
 
 ```bash
@@ -567,6 +584,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--status` | Show what's installed, running and detected, then exit | — |
 | `--doctor` | Check the setup; every problem comes with the command that fixes it. Exits 1 on a failure, so it scripts | — |
 | `--notify` / `--no-notify` | Also show a desktop banner naming the project when a turn finishes, fails or needs you. Saved to `config.json` | off |
+| `--report [days]` | How long you waited on agents, and on which projects, from the local turn log | `7` days |
 | `--stop` | Stop the background player, then exit | — |
 | `--mute [minutes]` | Silence everything for a call, then exit | `60` min (`0` = until unmuted) |
 | `--unmute` | Resume normal playback, then exit | — |
@@ -592,6 +610,7 @@ export VIBE_GRACE_MS=3000       # Wait 3s of thinking before any music
 export VIBE_SEED=7              # Same arrangement everywhere, ignoring the directory
 export VIBE_DISABLE=1           # Mute, without uninstalling anything
 export VIBE_NOTIFY=1            # Desktop banner naming the project, for this shell
+export VIBE_NO_HISTORY=1        # Do not log finished turns (what --report reads)
 export VIBE_NO_UPDATE_CHECK=1   # Never ask npm whether a newer version is out
 ```
 

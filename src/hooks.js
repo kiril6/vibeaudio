@@ -16,6 +16,7 @@ const os = require("os");
 const path = require("path");
 const { spawn, execFileSync } = require("child_process");
 const { AudioPlayer, loadConfig, playbackDisabled } = require("./player");
+const { recordTurn } = require("./history");
 
 const STATE_DIR = path.join(os.homedir(), ".vibeaudio");
 const PID_FILE = path.join(STATE_DIR, "daemon.pid");
@@ -624,7 +625,7 @@ function spawnDaemon(genre, volume, reactive) {
 function hookStart(genre, volume, { reactive = false, turn = null } = {}) {
   const id = sessionId(turn && turn.session);
   // Before the spawn: the daemon reads it on startup.
-  writeSession(id, { transcript: (turn && turn.transcript) || "", offset: (turn && turn.offset) || 0, waiting: null });
+  writeSession(id, { transcript: (turn && turn.transcript) || "", offset: (turn && turn.offset) || 0, waiting: null, started: Date.now(), blockedMs: 0 });
   if (working(listSessions()).some((s) => s.id !== id) && daemonRunning()) return readPid();
 
   stopDaemon({ keepSessions: true });
@@ -729,12 +730,19 @@ function notify(raw, message) {
   }
 }
 
-function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChime = false, raw = "" } = {}) {
+function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChime = false, genre, raw = "" } = {}) {
   const id = sessionId(parsePayload(raw).session_id);
   // A turn that ends while paused for the user - a denied tool that nothing
   // resumed after - still finished, so its session counts either way.
-  const tracked = readSession(id) !== null;
+  const session = readSession(id);
+  const tracked = session !== null;
   fs.rmSync(sessionFile(id), { force: true });
+  if (session && Number.isFinite(session.started)) {
+    const now = Date.now();
+    // A turn that ends while still paused for you has been blocked since then.
+    const blockedMs = (session.blockedMs || 0) + (session.waiting != null && session.waitStart ? now - session.waitStart : 0);
+    recordTurn({ project: parsePayload(raw).cwd || process.cwd(), ms: now - session.started, blockedMs, outcome, at: now });
+  }
 
   // The music is every working session's, so it ends with the last of them.
   // Everyone else's carries on, and this session still gets its own chime.
@@ -746,7 +754,7 @@ function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChi
   if (noChime) return false;
 
   // Chime plays in this short-lived hook process.
-  new AudioPlayer().stop({ playChime: true, outcome, volume, chimeVolume });
+  new AudioPlayer().stop({ playChime: true, outcome, volume, chimeVolume, genre });
   return true;
 }
 
@@ -792,7 +800,7 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
   const session = readSession(id);
   if (!session || session.waiting != null) return false;
 
-  writeSession(id, { ...session, waiting: waitKey(raw) });
+  writeSession(id, { ...session, waiting: waitKey(raw), waitStart: Date.now() });
   if (working(listSessions()).length === 0) stopDaemon({ keepSessions: true });
   const tool = payloadToolName(raw);
   notify(raw, tool ? `needs you (${tool})` : "needs you");
@@ -821,7 +829,8 @@ function hookResume(raw, genre, volume, { reactive = false } = {}) {
   // to finish is the first sign of work carrying on.
   if (session.waiting !== "" && session.waiting !== waitKey(raw)) return false;
 
-  writeSession(id, { ...session, waiting: null });
+  const blockedMs = (session.blockedMs || 0) + (session.waitStart ? Date.now() - session.waitStart : 0);
+  writeSession(id, { ...session, waiting: null, waitStart: null, blockedMs });
   if (!daemonRunning()) spawnDaemon(genre, volume, reactive);
   return true;
 }

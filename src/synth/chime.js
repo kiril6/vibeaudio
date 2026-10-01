@@ -10,16 +10,30 @@ const {
   createWavBuffer
 } = require("./generator");
 
-function generateSuccessChime(durationSec = 1.6) {
+// The success chime is the tonic chord of whatever key the music is in - root,
+// fifth, octave, third - so it lands as the resolution of the piece instead of
+// a stranger's bell over it. The default is the original C major chime.
+const DEFAULT_CHIME_KEY = "C major";
+const SUCCESS_CHIME_NOTES = {
+  "C major": ["C5", "G5", "C6", "E6"],
+  "D major": ["D5", "A5", "D6", "F#6"],
+  "D minor": ["D5", "A5", "D6", "F6"],
+  // Sits low on purpose: A, E and C are consonant over each of the drone's
+  // three roots (D, A, E), so one chime serves all of them.
+  "A minor": ["A4", "E5", "A5", "C6"]
+};
+
+function generateSuccessChime(durationSec = 1.6, key = DEFAULT_CHIME_KEY) {
+  const names = SUCCESS_CHIME_NOTES[key] || SUCCESS_CHIME_NOTES[DEFAULT_CHIME_KEY];
   const totalSamples = Math.floor(SAMPLE_RATE * durationSec);
   const left = new Float64Array(totalSamples);
   const right = new Float64Array(totalSamples);
 
   const chimeNotes = [
-    { note: "C5", delay: 0.00, pan: 0.4 },
-    { note: "G5", delay: 0.09, pan: 0.6 },
-    { note: "C6", delay: 0.18, pan: 0.45 },
-    { note: "E6", delay: 0.27, pan: 0.55 }
+    { note: names[0], delay: 0.00, pan: 0.4 },
+    { note: names[1], delay: 0.09, pan: 0.6 },
+    { note: names[2], delay: 0.18, pan: 0.45 },
+    { note: names[3], delay: 0.27, pan: 0.55 }
   ];
 
   for (const c of chimeNotes) {
@@ -130,6 +144,8 @@ function generateAttentionChime(durationSec = 1.3) {
 }
 
 module.exports = {
+  DEFAULT_CHIME_KEY,
+  SUCCESS_CHIME_NOTES,
   generateChime: generateSuccessChime,
   generateSuccessChime,
   generateFailureChime,

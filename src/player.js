@@ -18,7 +18,7 @@ const { generateRainLoop } = require("./synth/rain");
 const { generateOceanLoop } = require("./synth/ocean");
 const { generatePianoLoop } = require("./synth/piano");
 const { generateJazzLoop } = require("./synth/jazz");
-const { generateSuccessChime, generateFailureChime, generateAttentionChime } = require("./synth/chime");
+const { generateSuccessChime, generateFailureChime, generateAttentionChime, DEFAULT_CHIME_KEY, SUCCESS_CHIME_NOTES } = require("./synth/chime");
 const { hashString } = require("./synth/generator");
 const pkg = require("../package.json");
 
@@ -633,13 +633,45 @@ const CHIMES = {
   attention: generateAttentionChime
 };
 
-function getChimePath(outcome = "success", gain = 1) {
+/**
+ * The key each genre sits in, so the success chime can resolve onto it. Read
+ * off the generators: lofi, 8bit, jazz and piano are C major (or its relative
+ * A minor, which shares the chord); synthwave and electronic are D minor; zen
+ * is D major; drone's roots (D, A, E) all take an A minor chord. Rain and
+ * ocean are noise with no pitch, and `random` is resolved by whoever started
+ * the music, so those keep the original chime.
+ */
+const GENRE_KEYS = {
+  lofi: "C major",
+  "8bit": "C major",
+  jazz: "C major",
+  piano: "C major",
+  synthwave: "D minor",
+  electronic: "D minor",
+  zen: "D major",
+  drone: "A minor"
+};
+
+function chimeKeyFor(genre) {
+  // resolveGenre would roll the dice here, and a chime in a key picked at
+  // random is no more matched than the default.
+  if (String(genre || "").trim().toLowerCase() === "random") return DEFAULT_CHIME_KEY;
+  const key = GENRE_KEYS[resolveGenre(genre || "")];
+  return key && SUCCESS_CHIME_NOTES[key] ? key : DEFAULT_CHIME_KEY;
+}
+
+function getChimePath(outcome = "success", gain = 1, key = DEFAULT_CHIME_KEY) {
   ensureCacheDir();
   const kind = outcome === "error" ? "failure" : CHIMES[outcome] ? outcome : "success";
-  const filePath = path.join(CACHE_DIR, `chime_${kind}${gainSuffix(gain)}.wav`);
+  // Only the success chime has keys, and the default keeps its original file
+  // name so an upgrade does not leave a cached copy behind.
+  const keyed = kind === "success" && key !== DEFAULT_CHIME_KEY && SUCCESS_CHIME_NOTES[key];
+  const suffix = keyed ? `_${key.replace(" ", "")}` : "";
+  const filePath = path.join(CACHE_DIR, `chime_${kind}${suffix}${gainSuffix(gain)}.wav`);
 
   if (!fs.existsSync(filePath)) {
-    writeCacheFileAtomic(filePath, applyGain(CHIMES[kind](), gain));
+    const wav = keyed ? generateSuccessChime(1.6, key) : CHIMES[kind]();
+    writeCacheFileAtomic(filePath, applyGain(wav, gain));
   }
   return filePath;
 }
@@ -787,7 +819,7 @@ class AudioPlayer {
    * that must hand control back at once - an agent waits on its hooks, and a
    * blocking chime held the permission dialog back for its whole length.
    */
-  stop({ playChime = true, outcome = "success", volume = 0.35, chimeVolume = null, detach = false } = {}) {
+  stop({ playChime = true, outcome = "success", volume = 0.35, chimeVolume = null, detach = false, genre = this.genre } = {}) {
     const wasPlaying = this.isPlaying;
     this.isPlaying = false;
 
@@ -809,7 +841,7 @@ class AudioPlayer {
 
       const targetVol = chimeVolume !== null ? chimeVolume : Math.min(0.65, Math.max(0.35, volume * 1.1));
       const clamped = Math.max(0.05, Math.min(1.0, targetVol));
-      const chimeFile = getChimePath(outcome, bakedGain(backend, clamped));
+      const chimeFile = getChimePath(outcome, bakedGain(backend, clamped), chimeKeyFor(genre));
 
       try {
         if (detach) {
@@ -834,6 +866,8 @@ module.exports = {
   pruneSeedDirs,
   writeCacheFileAtomic,
   getChimePath,
+  chimeKeyFor,
+  GENRE_KEYS,
   clearCache,
   detectPlayer,
   bakedGain,

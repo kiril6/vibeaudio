@@ -77,6 +77,7 @@ Procedural focus music while your AI coding tools think.
       --render [file]          Write this project's music to a .wav and exit (full scale, ignores --volume)
       --status                 Show what is installed, running and detected, then exit
       --notify | --no-notify   Also show a desktop banner naming the project when a turn finishes or needs you (off by default)
+      --report [days]          How long you waited on agents, and where (default: 7 days)
       --doctor                 Check the setup; each problem comes with its fix (exit 1 if any)
       --stop                   Stop the background player, then exit
       --mute [minutes]         Silence everything for a call (default: 60 min, 0 = until unmuted)
@@ -175,6 +176,7 @@ function parseArgs(argv) {
   let statusFlag = false;
   let doctorFlag = false;
   let notifyFlag = null;
+  let reportDays = null;
   let stopFlag = false;
   let muteFlag = null;
   let muteMinutes = null;
@@ -282,6 +284,17 @@ function parseArgs(argv) {
     if (arg === "--status") {
       statusFlag = true;
       i += 1;
+      continue;
+    }
+
+    if (arg === "--report") {
+      // Optional window in days, like --mute's minutes: `vibe --report 30`.
+      i += 1;
+      reportDays = 7;
+      if (args[i] !== undefined && /^\d+$/.test(args[i])) {
+        reportDays = Math.min(Math.max(parseInt(args[i], 10), 1), 365);
+        i += 1;
+      }
       continue;
     }
 
@@ -441,6 +454,7 @@ function parseArgs(argv) {
     status: statusFlag,
     doctor: doctorFlag,
     notify: notifyFlag,
+    report: reportDays,
     stop: stopFlag,
     mute: muteFlag,
     muteMinutes,
@@ -870,6 +884,93 @@ function doctorChecks() {
   return checks;
 }
 
+/** 95 -> "1m 35s", 4_000_000 -> "1h 06m". */
+function formatDuration(ms) {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+}
+
+/**
+ * The summary of ~/.vibeaudio/history.jsonl. "You waited" is the agent's own
+ * working time - a turn's length minus the stretches it spent blocked on a
+ * dialog of yours - because the two are different complaints: one is the
+ * agent being slow, the other is you being away.
+ */
+function printReport(days, now = Date.now()) {
+  const { readTurns } = require("./history");
+  const turns = readTurns(days, now);
+  const dim = (s) => `\x1b[90m${s}\x1b[0m`;
+  const bold = (s) => `\x1b[1m${s}\x1b[0m`;
+  console.log(`\n\x1b[1m\x1b[36mVibeAudio\x1b[0m report — last ${days === 1 ? "day" : `${days} days`}\n`);
+
+  if (!turns.length) {
+    console.log(`  No turns recorded yet.`);
+    console.log(dim(`  Turns are logged when your agent's hooks fire (vibe --install-hooks). A command wrapped as \`vibe <command>\` is not.`));
+    console.log(dim(`  The log stays on this machine; VIBE_NO_HISTORY=1 turns it off.`));
+    console.log();
+    return;
+  }
+
+  const working = (t) => t.ms - (t.blockedMs || 0);
+  const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+  const sorted = turns.map((t) => t.ms).sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const longest = turns.reduce((a, b) => (b.ms > a.ms ? b : a));
+  const failed = turns.filter((t) => t.outcome === "failure").length;
+  const waitedOnAgents = sum(turns.map(working));
+  const blocked = sum(turns.map((t) => t.blockedMs || 0));
+
+  // Two projects called `api` under different parents stay apart.
+  const names = new Map();
+  for (const t of turns) {
+    const parts = String(t.project || "?").split(/[\\/]/).filter(Boolean);
+    const clash = [...names.entries()].some(([p, n]) => p !== t.project && n === parts.slice(-1)[0]);
+    names.set(t.project, clash ? parts.slice(-2).join("/") : parts.slice(-1)[0] || "?");
+  }
+  const label = (t) => names.get(t.project);
+
+  const row = (k, v, extra = "") => console.log(`  ${k.padEnd(18)}${bold(v)}${extra ? dim(`  ${extra}`) : ""}`);
+  row("Turns", String(turns.length), failed ? `${failed} failed` : "");
+  row("You waited", formatDuration(waitedOnAgents), `on agents, ${formatDuration(waitedOnAgents / turns.length)} per turn`);
+  if (blocked >= 1000) row("Agents waited", formatDuration(blocked), "on you — permission dialogs and questions");
+  row("Typical turn", formatDuration(median), "median");
+  row("Longest turn", formatDuration(longest.ms), label(longest));
+
+  const byProject = new Map();
+  for (const t of turns) {
+    const p = byProject.get(label(t)) || { ms: 0, n: 0 };
+    p.ms += working(t);
+    p.n += 1;
+    byProject.set(label(t), p);
+  }
+  const top = [...byProject.entries()].sort((a, b) => b[1].ms - a[1].ms).slice(0, 5);
+  const widest = top[0][1].ms || 1;
+  console.log(`\n${bold("Where the time went")}`);
+  for (const [name, p] of top) {
+    console.log(`  ${name.slice(0, 18).padEnd(19)}${formatDuration(p.ms).padStart(8)}  ${"█".repeat(Math.max(1, Math.round((p.ms / widest) * 14))).padEnd(14)} ${dim(`${p.n} ${p.n === 1 ? "turn" : "turns"}`)}`);
+  }
+
+  if (days <= 14) {
+    console.log(`\n${bold("By day")}`);
+    const byDay = new Map();
+    for (const t of turns) {
+      const key = new Date(t.at).toLocaleDateString("en-CA");
+      byDay.set(key, (byDay.get(key) || 0) + working(t));
+    }
+    const maxDay = Math.max(...byDay.values()) || 1;
+    for (let d = days - 1; d >= 0; d--) {
+      const date = new Date(now - d * 86400000);
+      const ms = byDay.get(date.toLocaleDateString("en-CA")) || 0;
+      const name = `${date.toLocaleDateString("en-US", { weekday: "short" })} ${date.getDate()}`;
+      console.log(`  ${name.padEnd(8)}${(ms ? formatDuration(ms) : "—").padStart(8)}  ${"█".repeat(ms ? Math.max(1, Math.round((ms / maxDay) * 14)) : 0)}`);
+    }
+  }
+  console.log();
+}
+
 function printDoctor() {
   const mark = { ok: "\x1b[32m✔\x1b[0m", warn: "\x1b[33m!\x1b[0m", fail: "\x1b[31m✘\x1b[0m" };
   const checks = doctorChecks();
@@ -1163,6 +1264,7 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, 
           volume,
           chimeVolume,
           noChime,
+          genre,
           raw
         });
       });
@@ -1355,6 +1457,7 @@ async function run() {
     status: showStatus,
     doctor: showDoctor,
     notify: notifyChange,
+    report: reportDays,
     stop: shouldStop,
     mute: muteChange,
     muteMinutes,
@@ -1440,6 +1543,10 @@ async function run() {
 
   if (showDoctor) {
     return printDoctor();
+  }
+
+  if (reportDays !== null) {
+    return printReport(reportDays);
   }
 
   if (shouldClear) {
