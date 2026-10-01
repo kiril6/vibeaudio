@@ -158,6 +158,17 @@ Cursor **is** in the launcher: it ships `cursor-agent`, which `TARGETS.cursor.cm
 
 **HUD** (`src/hud.js`): animates an ASCII waveform in the terminal **title bar only** — the wrapped tool may own the screen by the time music starts, so drawing inline would corrupt a full-screen TUI. `stop()` is inert unless `start()` ran and is idempotent, since `cleanup()` can be reached from more than one path.
 
+## Finishing a task
+
+A change is not done at the code. Before calling a task finished, go through this, and say in the closing message which items applied:
+
+- **Tests**: `npm test` passes, with a test that fails without the change. Anything that touches the audio cache, `HOME` or the daemon follows the rules above.
+- **README.md**: the feature list, the relevant table (hook targets and events, flags, env vars, troubleshooting), the FAQ line that the change makes stale, and the `--help` text in `src/cli.js` when a flag changes. Search for the old wording and for counts ("8 genres", "seven agents") - they go stale silently.
+- **docs/index.html** (the GitHub Pages site, served from `main`): badges, feature cards and counts. New audio means `scripts/render-demo.js`, committing only the new clips - m4a re-encodes are not byte-stable.
+- **CLAUDE.md**: the architecture note for any new mechanism, invariant or hazard, including how it was verified.
+- **The issue**: comment with what shipped and what is still open, and close it only when the issue's own acceptance is met - something written from docs alone is not "verified".
+- **Release**: only when asked. `npm version`, `git push --follow-tags`, a GitHub release with notes, then poll the registry directly (`curl registry.npmjs.org/vibeaudio/latest`) - `npm view` lags several minutes. Never `npm publish` by hand.
+
 ## Conventions
 
 - Every module in `src/synth/` is pure — no I/O, just math producing sample arrays — keep it that way so `test/test-synth.js` can assert on generator output directly.
