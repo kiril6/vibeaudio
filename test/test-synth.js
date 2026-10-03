@@ -1184,7 +1184,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     assert.ok(/Muted/.test((await run(["--status"])).out), "--status must say it is muted");
 
     // A mute you forget about is worse than no mute, so it expires by default.
-    const { setMuted, muteState, DEFAULT_MUTE_MINUTES } = require("../src/player");
+    const { DEFAULT_MUTE_MINUTES } = require("../src/player");
     assert.strictEqual(DEFAULT_MUTE_MINUTES, 60, "the default mute must be bounded, not forever");
 
     const bounded = await run(["--mute", "15"]);
@@ -1202,20 +1202,22 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
 
     // Expiry must be self-healing: whoever reads it next clears it, so an
     // expired mute can never sit there looking live.
+    // In a child with its own HOME: MUTE_FILE resolves from os.homedir() at
+    // require time, and in-process this wrote - then cleared - the real one.
     const own = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-expiry-"));
-    const realHome = process.env.HOME;
     try {
-      fs.writeFileSync(
-        require("../src/player").MUTE_FILE,
-        JSON.stringify({ since: new Date().toISOString(), until: Date.now() - 1000 })
-      );
-      assert.strictEqual(muteState(), null, "an expired mute must read as not muted");
-      assert.ok(!fs.existsSync(require("../src/player").MUTE_FILE), "reading an expired mute must delete it");
-      assert.ok(muteState() === null, "and stay deleted");
+      const expiry = require("child_process").spawnSync(process.execPath, ["-e", `
+        const fs = require("fs"), path = require("path"), assert = require("assert");
+        const { MUTE_FILE, muteState } = require(${JSON.stringify(path.join(__dirname, "..", "src", "player"))});
+        fs.mkdirSync(path.dirname(MUTE_FILE), { recursive: true });
+        fs.writeFileSync(MUTE_FILE, JSON.stringify({ since: new Date().toISOString(), until: Date.now() - 1000 }));
+        assert.strictEqual(muteState(), null, "an expired mute must read as not muted");
+        assert.ok(!fs.existsSync(MUTE_FILE), "reading an expired mute must delete it");
+        assert.ok(muteState() === null, "and stay deleted");
+      `], { env: { ...process.env, HOME: own, USERPROFILE: own }, encoding: "utf8", timeout: 10000 });
+      assert.strictEqual(expiry.status, 0, expiry.stderr);
     } finally {
-      setMuted(false);
       fs.rmSync(own, { recursive: true, force: true });
-      process.env.HOME = realHome;
     }
 
     console.log("   ✓ Mute crosses process boundaries, and expires itself so it can't be forgotten.");
