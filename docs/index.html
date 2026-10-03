@@ -209,10 +209,10 @@ html{ scroll-behavior:smooth; }
 .terminal-dots span:nth-child(1){ background:var(--pink); box-shadow:0 0 6px var(--pink); }
 .terminal-dots span:nth-child(2){ background:var(--purple); box-shadow:0 0 6px var(--purple); }
 .terminal-dots span:nth-child(3){ background:var(--cyan); box-shadow:0 0 6px var(--cyan); }
-.terminal-agent-tabs{ display:flex; align-items:center; gap:6px; overflow-x:auto; }
+.terminal-agent-tabs{ display:flex; align-items:center; gap:5px; overflow-x:auto; }
 .agent-tab{
   background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); color:var(--ink-dim);
-  font-family:var(--mono); font-size:11px; padding:4px 10px; border-radius:4px; cursor:pointer;
+  font-family:var(--mono); font-size:11px; padding:4px 8px; border-radius:4px; cursor:pointer;
   transition:all .15s; white-space:nowrap; outline:none; line-height:1.2;
 }
 .agent-tab:hover{ color:var(--ink); border-color:var(--cyan); background:rgba(0,229,255,.08); }
@@ -297,6 +297,7 @@ html{ scroll-behavior:smooth; }
 .how-col p{ color:var(--ink-dim); font-size:13px; }
 
 .shield-badges{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:34px; }
+@media (max-width:520px){ .shield-badges .chip-static{ display:none; } .shield-badges{ margin-bottom:22px; } }
 .chip{
   --chip:var(--cyan);
   display:inline-flex; align-items:stretch; overflow:hidden;
@@ -357,6 +358,7 @@ a.chip:hover{ border-color:var(--chip); box-shadow:0 0 14px -2px var(--chip); }
 
 /* ---------- Keyboard hint ---------- */
 .kbd-hint{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--ink-faint); margin-top:10px; }
+@media (hover:none){ .kbd-hint{ display:none; } } /* no keyboard on a phone */
 kbd{ background:var(--bg-raised); border:1px solid var(--line); border-radius:3px; padding:1px 5px; font-size:10.5px; font-family:var(--mono); color:var(--ink-dim); box-shadow:0 1px 0 var(--line); }
 
 
@@ -428,10 +430,10 @@ footer a{ color:var(--ink-dim); }
       <div class="shield-badges">
         <a class="chip" id="npm-chip" hidden style="--chip:var(--pink)" href="https://www.npmjs.com/package/vibeaudio"><span class="chip-k">npm</span><span class="chip-v" id="npm-version"></span></a>
         <a class="chip" id="dl-chip" hidden style="--chip:var(--cyan)" href="https://npm-stat.com/charts.html?package=vibeaudio"><span class="chip-k">downloads</span><span class="chip-v" id="dl-count"></span></a>
-        <span class="chip" style="--chip:var(--c-8bit)"><span class="chip-k">license</span><span class="chip-v">MIT</span></span>
-        <span class="chip" style="--chip:var(--cyan)"><span class="chip-k">node</span><span class="chip-v">&ge;18</span></span>
-        <span class="chip" style="--chip:var(--purple)"><span class="chip-k">deps</span><span class="chip-v">zero</span></span>
-        <span class="chip" style="--chip:var(--amber)"><span class="chip-k">platform</span><span class="chip-v">macOS · Linux · Windows</span></span>
+        <span class="chip chip-static" style="--chip:var(--c-8bit)"><span class="chip-k">license</span><span class="chip-v">MIT</span></span>
+        <span class="chip chip-static" style="--chip:var(--cyan)"><span class="chip-k">node</span><span class="chip-v">&ge;18</span></span>
+        <span class="chip chip-static" style="--chip:var(--purple)"><span class="chip-k">deps</span><span class="chip-v">zero</span></span>
+        <span class="chip chip-static" style="--chip:var(--amber)"><span class="chip-k">platform</span><span class="chip-v">macOS · Linux · Windows</span></span>
       </div>
       <span class="eyebrow">procedural · zero dependencies</span>
       <h1>Focus music<br>while your <em>AI</em> codes.</h1>
@@ -612,15 +614,15 @@ footer a{ color:var(--ink-dim); }
     <div class="hud-integrations">
       <div class="hud-item">
         <span class="hud-tag">tmux status bar</span>
-        <code>set -g status-right '#(vibe --state | jq -r ".title // empty")'</code>
+        <code>set -g status-right '#(vibe --state | jq -r .status)'</code>
       </div>
       <div class="hud-item">
-        <span class="hud-tag">Starship prompt</span>
-        <code>custom.vibe.command = "vibe --state | jq -r .indicator"</code>
+        <span class="hud-tag">Starship prompt · starship.toml</span>
+        <code>[custom.vibe]<br>command = "vibe --state | jq -r 'if .status != \"idle\" then \"🎧 \" + .status else \"\" end'"<br>when = "command -v vibe &gt;/dev/null"</code>
       </div>
       <div class="hud-item">
         <span class="hud-tag">macOS Voice alert</span>
-        <code>vibe --events | while read -r e; do [ $(echo $e | jq .type) = '"done"' ] &amp;&amp; say "Agent finished"; done</code>
+        <code>vibe --events | jq --unbuffered -r 'select(.event=="waiting") | .project' | while read p; do say "$(basename "$p") needs you"; done</code>
       </div>
     </div>
   </div>
@@ -647,12 +649,13 @@ footer a{ color:var(--ink-dim); }
         <p style="color:var(--ink-dim);margin-top:8px;font-size:12.5px;">Auto-detects Claude Code, Codex, Cursor, Grok, Gemini CLI, Windsurf, Copilot, or Qwen. Rather be walked through it? Run <code>vibe</code> on its own for an interactive configuration menu.</p>
       </div>
       <div id="tab-claude" class="inst-panel" hidden>
-        <div class="code-copy"><code>/plugin marketplace add kiril6/vibeaudio &amp;&amp; /plugin install vibeaudio@vibeaudio</code><button class="copy-btn" data-copy="/plugin marketplace add kiril6/vibeaudio && /plugin install vibeaudio@vibeaudio" title="Copy">⧉</button></div>
-        <p style="color:var(--ink-dim);margin-top:8px;font-size:12.5px;">Run inside your Claude Code session — zero npm dependencies required.</p>
+        <div class="code-copy"><code>/plugin marketplace add kiril6/vibeaudio</code><button class="copy-btn" data-copy="/plugin marketplace add kiril6/vibeaudio" title="Copy">⧉</button></div>
+        <div class="code-copy" style="margin-top:8px;"><code>/plugin install vibeaudio@vibeaudio</code><button class="copy-btn" data-copy="/plugin install vibeaudio@vibeaudio" title="Copy">⧉</button></div>
+        <p style="color:var(--ink-dim);margin-top:8px;font-size:12.5px;">Type each one inside a Claude Code session. No npm install; the hooks need Node 18+ on your <code>PATH</code>.</p>
       </div>
       <div id="tab-codex" class="inst-panel" hidden>
         <div class="code-copy"><code>codex plugin marketplace add kiril6/vibeaudio &amp;&amp; codex plugin add vibeaudio@vibeaudio</code><button class="copy-btn" data-copy="codex plugin marketplace add kiril6/vibeaudio && codex plugin add vibeaudio@vibeaudio" title="Copy">⧉</button></div>
-        <p style="color:var(--ink-dim);margin-top:8px;font-size:12.5px;">Run inside Codex — native plugin lifecycle management.</p>
+        <p style="color:var(--ink-dim);margin-top:8px;font-size:12.5px;">Run in your shell. Codex asks you to approve the plugin's hooks once, as it does for any hook.</p>
       </div>
     </div></div>
     <div class="step"><span class="n">3</span><div>
@@ -1012,7 +1015,7 @@ footer a{ color:var(--ink-dim); }
   var AGENT_PROMPTS = {
     claude: { cmd: 'claude "refactor the auth module"', activity: "● reading src/auth/ — 12 files", edit: "● editing session.ts, token.ts, middleware.ts" },
     codex: { cmd: 'codex "implement auth callback handler"', activity: "● analyzing oauth flow — 8 files", edit: "● editing callback.ts, router.ts" },
-    cursor: { cmd: 'cursor "migrate session tokens to jwt"', activity: "● indexing models/ — 15 files", edit: "● editing jwt.ts, auth.config.ts" },
+    cursor: { cmd: 'cursor-agent "migrate session tokens to jwt"', activity: "● indexing models/ — 15 files", edit: "● editing jwt.ts, auth.config.ts" },
     gemini: { cmd: 'gemini "fix memory leak in stream processor"', activity: "● analyzing heap profiles", edit: "● patching pool.ts, gc.ts" },
     grok: { cmd: 'grok "optimize database query plan"', activity: "● inspecting query logs — 4 tables", edit: "● adding index on user_sessions" }
   };
