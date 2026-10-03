@@ -29,6 +29,7 @@ AI coding agents take 15–45 seconds to reason, read files and write code. Star
 * 🎛️ **Music that follows the work** ([reactive mode](#reactive-mode-opt-in), opt-in). Calm while the agent reads, fuller while it edits, busiest when it runs commands or hands work to sub-agents — you can hear *what* it's doing, not just for how long.
 * 🌅 **It fades, it doesn't cut.** On macOS the music eases in and out instead of starting and stopping mid-note, and `vibe --volume` reaches music that is already playing within a second.
 * 🔔 **Outcome-aware chimes.** Ascending on success, a soft descending minor chord on failure, and **silence on `Ctrl+C`** — an abort is never reported as done.
+* 💓 **A heartbeat when an agent looks stuck.** If 4 of a session's last 8 tool calls fail — the test-edit-test loop that goes nowhere — a soft pulse on the music's tonic joins the music until things start passing again. It's rare by design: on 4,497 real turns it fired in under 1%.
 * ✋ **A "your turn" chime.** When Claude Code stops to ask permission (or an MCP server asks for input), the music pauses and a rising two-note chime asks for you; it picks back up once you've answered.
 * 🔌 **Universal drop-in.** Hooks for **Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI, Qwen Code and Windsurf**; MCP for **Claude Desktop and Antigravity**; the wrapper (`vibe <command>`) for anything else.
 
@@ -395,6 +396,14 @@ plus where the time went by project and, for windows up to two weeks, by day. "Y
 ### The chime is in the music's key
 
 The success chime is the tonic chord of whatever key your genre sits in — C major for lofi, 8bit, jazz and piano, D minor for synthwave and electronic, D major for zen, A minor for drone — so it lands as the resolution of the piece rather than a bell over it. `rain`, `ocean` and `random` have no single key to match and keep the original C major chime.
+
+### When an agent looks stuck
+
+The worst stretch of agent work is twenty minutes of the same thing failing while the music says all is well. So when **4 of a session's last 8 tool calls fail**, a soft heartbeat — two low beats about once a second, on the tonic of your genre — joins the music at the next loop boundary, and leaves once enough calls succeed. With `--notify` on, you also get one banner when the session crosses the line ("api: looks stuck"), not one per failure.
+
+The threshold was picked against 4,497 real Claude Code turns (46,032 tool calls). It fires in about 1% of turns, at around minute 3, and those turns typically ran for another 3 minutes — time you could have spent stepping in. "3 in a row" was rejected because the usual loop has a successful edit between every failing test run. Each new prompt starts with a clean slate, and an interrupt (Esc) never counts as a failure.
+
+It needs the agent to report failed tool calls, which **Claude Code, Copilot CLI and Qwen Code** do (`PostToolUseFailure`). Codex, Cursor, Gemini, Grok and Windsurf don't, so for them the music never adds the heartbeat.
 
 ### Reactive mode (opt-in)
 

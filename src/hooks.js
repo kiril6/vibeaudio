@@ -545,6 +545,17 @@ function listSessions() {
 // Working, as opposed to paused for the user.
 const working = (sessions) => sessions.filter((s) => s.waiting == null);
 
+// "Stuck": STUCK_FAILURES of a session's last STUCK_WINDOW tool calls failed.
+// Measured on 4,497 real Claude Code turns (46,032 tool calls, 3.8% failing):
+// this fires in 0.9% of turns, at minute 3 by the median, and those turns ran
+// a median 3.3 minutes more - time someone could have stepped in. "3 of 8"
+// fired in 2.4%, and "3 in a row" misses the usual loop, where an edit that
+// succeeds sits between every failing test run. Rare is the point: a signal
+// that fires often is one people learn to tune out.
+const STUCK_WINDOW = 8;
+const STUCK_FAILURES = 4;
+const isStuck = (session) => (session.recent || []).filter(Boolean).length >= STUCK_FAILURES;
+
 // Claude Code's entry for Esc / the stop button: a user message whose text is
 // "[Request interrupted by user]" or "... for tool use]".
 const INTERRUPT_MARK = "[Request interrupted by user";
@@ -648,7 +659,9 @@ function runDaemon(genre, volume, { reactive = false, volumeSource = null } = {}
     // The same piece with more of it, as time escalation already does: two
     // sessions working is tier 2 at least, three or more is tier 3. Read at
     // each loop boundary, so it lands cleanly and eases off as they finish.
-    minTier: () => Math.min(3, working(listSessions()).length)
+    minTier: () => Math.min(3, working(listSessions()).length),
+    // A heartbeat under the music while any working session looks stuck.
+    tension: () => working(listSessions()).some(isStuck)
   });
   if (!started) process.exit(0);
 
@@ -896,15 +909,31 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
  * job. Match on tool_input as well if that ever shows up in practice.
  */
 function hookResume(raw, genre, volume, { reactive = false, follow = false } = {}) {
-  const id = sessionId(payloadSession(parsePayload(raw)));
+  const payload = parsePayload(raw);
+  const id = sessionId(payloadSession(payload));
   const session = readSession(id);
-  if (!session || session.waiting == null) return false; // Not waiting - the common case, on every tool call.
+  if (!session) return false;
+
+  // Every tool call lands here, so this is where the stuck signal is kept.
+  // An interrupt is the user stopping a tool, not the tool failing.
+  // ponytail: two parallel tool calls in one session can each read, then write,
+  // and one result is lost. A heuristic over eight calls survives that.
+  const failed = payload.hook_event_name === "PostToolUseFailure" && !payload.is_interrupt;
+  const recent = [...(session.recent || []), failed ? 1 : 0].slice(-STUCK_WINDOW);
+  const next = { ...session, recent };
+  const crossing = isStuck(next) === isStuck(session) ? null : isStuck(next) ? "stuck" : "recovered";
+  if (crossing === "stuck") notify(raw, `looks stuck - ${STUCK_FAILURES} of its last ${STUCK_WINDOW} tool calls failed`);
+
   // An empty key is a wait that named nothing (a Notification): the next tool
   // to finish is the first sign of work carrying on.
-  if (session.waiting !== "" && session.waiting !== waitKey(raw)) return false;
+  const resumes = session.waiting != null && (session.waiting === "" || session.waiting === waitKey(raw));
+  if (!resumes) {
+    writeSession(id, next);
+    return false; // Not waiting - the common case, on every tool call.
+  }
 
   const blockedMs = (session.blockedMs || 0) + (session.waitStart ? Date.now() - session.waitStart : 0);
-  writeSession(id, { ...session, waiting: null, waitStart: null, blockedMs });
+  writeSession(id, { ...next, waiting: null, waitStart: null, blockedMs });
   if (!daemonRunning()) spawnDaemon(genre, volume, reactive, follow);
   return true;
 }
@@ -1221,6 +1250,8 @@ module.exports = {
   hookTool,
   hookWait,
   hookResume,
+  isStuck,
+  STUCK_WINDOW,
   hookEnd,
   newTurn,
   outcomeFromPayload,

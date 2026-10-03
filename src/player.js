@@ -20,6 +20,7 @@ const { generatePianoLoop } = require("./synth/piano");
 const { generateJazzLoop } = require("./synth/jazz");
 const { generateSuccessChime, generateFailureChime, generateAttentionChime, DEFAULT_CHIME_KEY, SUCCESS_CHIME_NOTES } = require("./synth/chime");
 const { hashString } = require("./synth/generator");
+const { addTension } = require("./synth/tension");
 const pkg = require("../package.json");
 
 const CACHE_ROOT = path.join(os.homedir(), ".vibeaudio", "cache");
@@ -617,7 +618,7 @@ function writeCacheFileAtomic(filePath, buffer) {
   }
 }
 
-function getAudioPath(genre, tier = 2, seed = projectSeed(), gain = 1, bar = 0) {
+function getAudioPath(genre, tier = 2, seed = projectSeed(), gain = 1, bar = 0, tension = false) {
   ensureCacheDir();
   const normalizedGenre = resolveGenre(genre);
   const safeTier = Math.max(1, Math.min(3, tier));
@@ -629,11 +630,14 @@ function getAudioPath(genre, tier = 2, seed = projectSeed(), gain = 1, bar = 0) 
   // into this opens on exactly the bar it has always opened on.
   const barSuffix = safeBar === 0 ? "" : `_b${safeBar}`;
   const dir = seedDir(seed);
-  const filePath = path.join(dir, `loop_${normalizedGenre}_t${safeTier}${barSuffix}${gainSuffix(gain)}.wav`);
+  // The stuck heartbeat is its own file, rendered only once an agent is stuck.
+  const tensionSuffix = tension ? "_x" : "";
+  const filePath = path.join(dir, `loop_${normalizedGenre}_t${safeTier}${barSuffix}${tensionSuffix}${gainSuffix(gain)}.wav`);
 
   if (!fs.existsSync(filePath)) {
     fs.mkdirSync(dir, { recursive: true });
-    writeCacheFileAtomic(filePath, applyGain(generateLoop(normalizedGenre, safeTier, seed >>> 0, safeBar), gain));
+    const loop = generateLoop(normalizedGenre, safeTier, seed >>> 0, safeBar);
+    writeCacheFileAtomic(filePath, applyGain(tension ? addTension(loop, GENRE_KEYS[normalizedGenre]) : loop, gain));
     pruneSeedDirs();
   }
 
@@ -728,6 +732,7 @@ class AudioPlayer {
     this.seed = projectSeed();
     this.intensity = null;
     this.minTier = null;
+    this.tension = null;
     this.currentTier = 1;
     this.bar = 0;
     this.nextTimer = null;
@@ -738,7 +743,7 @@ class AudioPlayer {
    * Returns true if playback actually started. Restarts when called with
    * different settings while playing, so a genre switch is not silently dropped.
    */
-  start(genre = "lofi", volume = 0.42, { maxDurationMs = null, intensity = null, minTier = null } = {}) {
+  start(genre = "lofi", volume = 0.42, { maxDurationMs = null, intensity = null, minTier = null, tension = null } = {}) {
     const resolved = resolveGenre(genre);
     const targetVolume = Math.max(0.05, Math.min(1.0, volume));
 
@@ -762,6 +767,7 @@ class AudioPlayer {
     this.bar = 0; // Every run opens on the project's own bar.
     this.intensity = intensity;
     this.minTier = minTier;
+    this.tension = tension;
 
     installExitHook();
     activePlayers.add(this);
@@ -800,7 +806,8 @@ class AudioPlayer {
     // never both, or the volume would be applied twice.
     const backend = detectPlayer();
     const gain = bakedGain(backend, this.volume);
-    const audioFile = getAudioPath(this.genre, this.currentTier, this.seed, gain, this.bar);
+    // An agent that looks stuck adds a heartbeat, landing at this loop boundary.
+    const audioFile = getAudioPath(this.genre, this.currentTier, this.seed, gain, this.bar, Boolean(this.tension && this.tension()));
     // Advanced after the choice, so the bar that plays first is bar 0.
     this.bar = (this.bar + 1) % LOOP_BARS;
     if (!(helperUsable(backend) && this.playViaHelper(audioFile, backend))) this.spawnLoop(audioFile, backend);
