@@ -23,7 +23,10 @@ const { hashString } = require("./synth/generator");
 const { addTension } = require("./synth/tension");
 const pkg = require("../package.json");
 
-const CACHE_ROOT = path.join(os.homedir(), ".vibeaudio", "cache");
+// VIBE_CACHE_DIR is internal: the suite points it at a temp directory, so it
+// neither races live hooks pruning the real cache nor evicts a real project's
+// audio (#38).
+const CACHE_ROOT = process.env.VIBE_CACHE_DIR || path.join(os.homedir(), ".vibeaudio", "cache");
 
 /**
  * The cache key has to change whenever the audio would, or existing users keep
@@ -189,21 +192,23 @@ function ensureCacheDir() {
  */
 function pruneStaleCache() {
   try {
-    for (const entry of fs.readdirSync(CACHE_ROOT, { withFileTypes: true })) {
-      const full = path.join(CACHE_ROOT, entry.name);
-      if (entry.isDirectory() && /^v\d/.test(entry.name) && entry.name !== path.basename(CACHE_DIR)) {
-        fs.rmSync(full, { recursive: true, force: true });
-      } else if (entry.isFile() && entry.name.endsWith(".wav")) {
-        fs.rmSync(full, { force: true });
-      }
-    }
+    removeCacheEntries(path.basename(CACHE_DIR));
   } catch (e) {
     // Pruning is best-effort; a stale cache is not worth failing a run over.
   }
 }
 
+// Only what we write - key directories, and loose WAVs from before keys - and
+// never the root itself: VIBE_CACHE_DIR may name a directory holding more.
+function removeCacheEntries(keep = null) {
+  for (const entry of fs.readdirSync(CACHE_ROOT, { withFileTypes: true })) {
+    const ours = entry.isDirectory() ? /^v\d/.test(entry.name) && entry.name !== keep : entry.isFile() && entry.name.endsWith(".wav");
+    if (ours) fs.rmSync(path.join(CACHE_ROOT, entry.name), { recursive: true, force: true });
+  }
+}
+
 function clearCache() {
-  fs.rmSync(CACHE_ROOT, { recursive: true, force: true });
+  if (fs.existsSync(CACHE_ROOT)) removeCacheEntries();
   return CACHE_ROOT;
 }
 

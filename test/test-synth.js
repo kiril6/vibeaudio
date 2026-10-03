@@ -10,6 +10,13 @@ delete process.env.CLAUDE_CONFIG_DIR;
 delete process.env.CODEX_HOME;
 delete process.env.COPILOT_HOME;
 const os = require("os");
+// The suite's own audio cache, set before anything requires player.js and
+// inherited by every child. In the real one, live hooks running from this
+// checkout prune seed directories mid-run, and the suite evicts real
+// projects' audio (#38).
+const REAL_CACHE_ROOT = require("path").join(os.homedir(), ".vibeaudio", "cache");
+process.env.VIBE_CACHE_DIR = require("fs").mkdtempSync(require("path").join(os.tmpdir(), "vibe-cache-"));
+process.on("exit", () => require("fs").rmSync(process.env.VIBE_CACHE_DIR, { recursive: true, force: true }));
 const { noteToFreq, createWavBuffer } = require("../src/synth/generator");
 const { generateLofiLoop } = require("../src/synth/lofi");
 const { generateSynthwaveLoop } = require("../src/synth/synthwave");
@@ -307,6 +314,30 @@ assert.ok(
   `cache dir must be keyed by version and synth hash, got ${CACHE_DIR}`
 );
 console.log(`   ✓ Cache is scoped to ${require("path").basename(CACHE_DIR)}.`);
+
+// 17b. The suite's cache is its own (#38), children included, and clearing a
+// cache root that holds something else deletes only our own entries.
+{
+  const fs = require("fs");
+  const path = require("path");
+  const { spawnSync } = require("child_process");
+  assert.ok(CACHE_DIR.startsWith(process.env.VIBE_CACHE_DIR + path.sep), `the suite must not render into ${REAL_CACHE_ROOT}, got ${CACHE_DIR}`);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-clear-"));
+  try {
+    fs.mkdirSync(path.join(root, "v0.0.1-deadbeef", "s1"), { recursive: true });
+    fs.writeFileSync(path.join(root, "loop_old.wav"), "");
+    fs.writeFileSync(path.join(root, "notes.txt"), "not ours");
+    const run = spawnSync(process.execPath, [path.join(__dirname, "..", "bin", "vibeaudio.js"), "--clear-cache"], {
+      env: { ...process.env, VIBE_CACHE_DIR: root, HOME: root, USERPROFILE: root }, encoding: "utf8", timeout: 10000
+    });
+    assert.strictEqual(run.status, 0, run.stderr);
+    assert.ok(run.stdout.includes(root), "a child resolves the cache from VIBE_CACHE_DIR");
+    assert.deepStrictEqual(fs.readdirSync(root), ["notes.txt"], "--clear-cache removes our entries and nothing else");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  console.log("   ✓ The suite renders into its own cache, and --clear-cache deletes only what it wrote.");
+}
 
 // 18. WAV Duration Parsing (drives gapless loop scheduling)
 console.log("18. Testing WAV Duration Parsing...");
