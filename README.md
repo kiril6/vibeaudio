@@ -32,7 +32,7 @@ It is built as **calm technology**, in the sense of Mark Weiser and John Seely B
 **How it behaves:**
 
 * 🧮 **Pure synthesis, zero MP3s.** Every note, chord and pad is generated in code — no audio assets, no npm dependencies, no `node-gyp`.
-* 🍃 **Near-zero CPU & battery impact.** Renders once (~150ms) to a local cache, then hands playback to your OS's native hardware player (<0.5% CPU). No background audio DSP loops.
+* 🍃 **Light on battery.** Each loop is rendered once and cached. While music plays, your OS's own audio player does the work. With hooks, nothing of VibeAudio's keeps running between turns.
 * 🎼 **A different arrangement per project.** Your working directory seeds the progression, bass line and melody, so each repo has its own sound and keeps it.
 * 📈 **Escalating layers.** Tier 1 (0–15s) gentle intro → Tier 2 (15–45s) main groove → Tier 3 (45s+) deep focus. You can hear how deep into the task the agent is.
 * 🔁 **A phrase, not a loop.** Each piece is three bars that rotate through your project's own progressions, so a long turn moves through a ~21-second phrase instead of replaying one 7-second bar for half an hour.

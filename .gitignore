@@ -2,7 +2,7 @@ node_modules/
 .DS_Store
 *.log
 
-# Personal Claude Code settings
+# Local agent settings and stray backups
 .claude/
 .codex/
 *.bak
