@@ -33,17 +33,6 @@
         ]
       }
     ],
-    "Elicitation": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js\" --hook-wait --plugin --event Elicitation",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "hooks": [
@@ -55,34 +44,12 @@
         ]
       }
     ],
-    "PostToolUseFailure": [
+    "Interrupt": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js\" --hook-resume --plugin --event PostToolUseFailure",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "ElicitationResult": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js\" --hook-resume --plugin --event ElicitationResult",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "StopFailure": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js\" --hook-stop --plugin --event StopFailure",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js\" --hook-end --plugin --event Interrupt",
             "timeout": 5
           }
         ]
@@ -94,17 +61,6 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js\" --hook-end --plugin --event SessionEnd",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js\" --hook-wait --plugin --event Notification",
             "timeout": 5
           }
         ]

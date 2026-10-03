@@ -1,8 +1,7 @@
 {
   "name": "vibeaudio",
-  "displayName": "VibeAudio",
   "version": "0.13.1",
-  "description": "Procedural focus music while your AI coding agent works, with a chime when it finishes or needs you. Zero dependencies, synthesized in pure JS.",
+  "description": "Procedural focus music while Codex works, with a chime when it finishes or needs you. Zero dependencies, synthesized in pure JS.",
   "author": {
     "name": "Kiril Delovski",
     "email": "delovski.office@gmail.com"
@@ -17,5 +16,6 @@
     "hooks",
     "notification",
     "lofi"
-  ]
+  ],
+  "hooks": "./hooks/codex.json"
 }

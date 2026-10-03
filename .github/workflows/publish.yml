@@ -36,13 +36,15 @@ jobs:
             echo "::error::tag $GITHUB_REF_NAME but package.json says $version"
             exit 1
           fi
-          # The Claude Code plugin is versioned separately; a stale one means
-          # `claude plugin update` ships nothing. `npm version` keeps it in step.
-          plugin="$(node -p 'require("./.claude-plugin/plugin.json").version')"
-          if [ "$plugin" != "$version" ]; then
-            echo "::error::plugin.json says $plugin but package.json says $version"
-            exit 1
-          fi
+          # The plugin manifests are versioned separately; a stale one means
+          # `claude plugin update` ships nothing. `npm version` keeps them in step.
+          for manifest in .claude-plugin/plugin.json .codex-plugin/plugin.json; do
+            plugin="$(node -p "require('./$manifest').version")"
+            if [ "$plugin" != "$version" ]; then
+              echo "::error::$manifest says $plugin but package.json says $version"
+              exit 1
+            fi
+          done
 
       - run: npm test
       - run: npm publish

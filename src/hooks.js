@@ -384,6 +384,80 @@ function expectedEvents(id) {
   return [ev.start, ev.stop, ...(ev.wait || []), ...(ev.resume || []), ev.failure, ev.end, ev.interrupt].filter(Boolean);
 }
 
+/**
+ * The agents that load this repository as a plugin, and the hooks file each
+ * one reads. Copilot CLI loads `.claude-plugin/` manifests and Qwen Code
+ * converts the plugin on install (copying the folder, substituting
+ * CLAUDE_PLUGIN_ROOT), so both read Claude Code's hooks/hooks.json. Codex
+ * 0.160 would too, but Claude Code's validator rejects an event it does not
+ * know ("hooks.Interrupt: Invalid key in record") and then loads none of the
+ * file, so Codex's Interrupt cannot live there: `.codex-plugin/plugin.json`,
+ * which Codex reads before `.claude-plugin/` and Claude Code never reads,
+ * points Codex at a file of its own. Gemini CLI has its own extension format
+ * and is not one of these.
+ */
+const PLUGIN_FILES = {
+  "hooks/hooks.json": ["claude", "copilot", "qwen"],
+  "hooks/codex.json": ["codex"]
+};
+const PLUGIN_AGENTS = Object.values(PLUGIN_FILES).flat();
+
+const SLOT_ACTION = { start: "hook-start", stop: "hook-stop", failure: "hook-stop", wait: "hook-wait", resume: "hook-resume", end: "hook-end", interrupt: "hook-end" };
+
+/**
+ * Every event the given agents fire, with the one action it runs. One file
+ * can serve several agents, so it carries the union; an event an agent does
+ * not use there is dropped at runtime by `--event` (see runHookAction).
+ * Throws if two agents would need different actions for one event name,
+ * since the file could not serve both.
+ */
+function pluginHookEvents(agents) {
+  const actions = new Map();
+  for (const id of agents) {
+    for (const [slot, value] of Object.entries(TARGETS[id].events)) {
+      if (!SLOT_ACTION[slot]) continue; // `tool` is reactive mode, an --install-hooks option
+      for (const event of [].concat(value)) {
+        const prior = actions.get(event);
+        if (prior && prior !== SLOT_ACTION[slot]) throw new Error(`${event}: ${prior} for one agent, ${SLOT_ACTION[slot]} for ${id}`);
+        actions.set(event, SLOT_ACTION[slot]);
+      }
+    }
+  }
+  return actions;
+}
+
+/**
+ * A plugin hooks file (see PLUGIN_FILES), generated so it cannot drift from
+ * TARGETS. Agents sharing a file share an entry shape, so the first one's is
+ * used. `script` is the CLI's path as the host spells it: Gemini's extension
+ * substitutes ${extensionPath} itself, the others leave CLAUDE_PLUGIN_ROOT to
+ * the shell.
+ */
+function pluginHooksFile(agents, script = "${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js") {
+  const hooks = {};
+  for (const [event, action] of pluginHookEvents(agents)) {
+    hooks[event] = [TARGETS[agents[0]].entry(`node "${script}" --${action} --plugin --event ${event}`)];
+  }
+  return { hooks };
+}
+
+/**
+ * Which agent is running a plugin hook, from the environment each one sets:
+ * Copilot CLI sets COPILOT_PLUGIN_ROOT (its changelog), Qwen Code sets
+ * QWEN_PROJECT_DIR for every hook (hookRunner.ts), and Codex sets
+ * PLUGIN_ROOT (discovery.rs). Claude Code sets none of these, only
+ * CLAUDE_PLUGIN_ROOT / CLAUDE_PLUGIN_DATA / CLAUDE_PROJECT_DIR (2.1.195's
+ * bundle). Copilot also sets PLUGIN_ROOT, so it is checked first.
+ * ponytail: a variable exported in the user's own shell would leak into
+ * hooks and misattribute them; none of these names is one a user sets.
+ */
+function pluginAgent(env = process.env) {
+  if (env.COPILOT_PLUGIN_ROOT) return "copilot";
+  if (env.QWEN_PROJECT_DIR) return "qwen";
+  if (env.PLUGIN_ROOT) return "codex";
+  return "claude";
+}
+
 function settingsPath() {
   return TARGETS.claude.file();
 }
@@ -1179,8 +1253,8 @@ function readVibeEntryCount(file, id) {
 }
 
 /** True when --install-hooks has already written our entries for Claude Code. */
-function userHooksInstalled(file = null) {
-  return readVibeEntryCount(file || TARGETS.claude.file(), "claude") > 0;
+function userHooksInstalled(file = null, id = "claude") {
+  return readVibeEntryCount(file || TARGETS[id].file(), id) > 0;
 }
 
 function loadSettings(file, t = null) {
@@ -1394,6 +1468,11 @@ module.exports = {
   claudeConfigDir,
   codexHome,
   expectedEvents,
+  PLUGIN_FILES,
+  PLUGIN_AGENTS,
+  pluginHookEvents,
+  pluginHooksFile,
+  pluginAgent,
   runDaemon,
   hookStart,
   hookStop,
