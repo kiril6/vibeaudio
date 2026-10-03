@@ -889,6 +889,12 @@ function runDaemon(genre, volume, { reactive = false, volumeSource = null } = {}
   setTimeout(shutdown, MAX_DAEMON_MS);
 
   setInterval(() => {
+    // The pid file names the one daemon that owns the speakers. Two prompts
+    // at once can each find none running and spawn one; the last to write the
+    // file wins, and the other must not play over it (#42).
+    // ponytail: up to one poll of doubled audio; claim the pid file with an
+    // exclusive create before spawning if that ever matters.
+    if (readPid() !== process.pid) return shutdown();
     // A volume saved while this plays reaches it now, not at the next prompt.
     if (volumeSource) player.setVolume(volumeSource());
     if (sweep()) return;
