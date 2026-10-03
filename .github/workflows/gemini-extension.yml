@@ -1,0 +1,31 @@
+name: gemini-extension
+
+# `gemini extensions install https://github.com/kiril6/vibeaudio` installs the
+# latest release's only asset when it has one, and the repository source
+# otherwise - which is Claude Code's plugin, not a Gemini extension. So every
+# release carries the extension, built from the release's own tag. The asset
+# must stay the only one, and its name must not contain darwin/linux/win32,
+# or Gemini will not pick it (findReleaseAsset in gemini-cli).
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write # to upload the release asset
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/gemini-extension.js dist
+      - run: tar -czf vibeaudio-gemini-extension.tar.gz -C dist vibeaudio
+      - run: gh release upload "$TAG" vibeaudio-gemini-extension.tar.gz --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}

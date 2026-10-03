@@ -444,7 +444,8 @@ function pluginHooksFile(agents, script = "${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.j
 /**
  * Which agent is running a plugin hook, from the environment each one sets:
  * Copilot CLI sets COPILOT_PLUGIN_ROOT (its changelog), Qwen Code sets
- * QWEN_PROJECT_DIR for every hook (hookRunner.ts), and Codex sets
+ * QWEN_PROJECT_DIR for every hook (hookRunner.ts), Gemini CLI sets
+ * GEMINI_PROJECT_DIR for its extension's hooks (hookRunner.ts), and Codex sets
  * PLUGIN_ROOT (discovery.rs). Claude Code sets none of these, only
  * CLAUDE_PLUGIN_ROOT / CLAUDE_PLUGIN_DATA / CLAUDE_PROJECT_DIR (2.1.195's
  * bundle). Copilot also sets PLUGIN_ROOT, so it is checked first.
@@ -454,6 +455,7 @@ function pluginHooksFile(agents, script = "${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.j
 function pluginAgent(env = process.env) {
   if (env.COPILOT_PLUGIN_ROOT) return "copilot";
   if (env.QWEN_PROJECT_DIR) return "qwen";
+  if (env.GEMINI_PROJECT_DIR) return "gemini"; // after Qwen, a fork that sets it too
   if (env.PLUGIN_ROOT) return "codex";
   return "claude";
 }
