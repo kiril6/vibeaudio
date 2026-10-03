@@ -797,7 +797,7 @@ footer a{ color:var(--ink-dim); }
 
     activeBtn = btn; activeCard = card;
     if (btn){
-      btn.textContent = "◌";
+      btn.textContent = btn === heroBtn ? "◌ Loading…" : "◌";
       btn.classList.add("is-loading");
     }
     if (card) card.classList.add("active");
@@ -823,7 +823,7 @@ footer a{ color:var(--ink-dim); }
   audio.addEventListener("waiting", function(){
     if (activeBtn){
       activeBtn.classList.add("is-loading");
-      activeBtn.textContent = "◌";
+      activeBtn.textContent = activeBtn === heroBtn ? "◌ Loading…" : "◌";
     }
   });
 
@@ -958,9 +958,16 @@ footer a{ color:var(--ink-dim); }
         if (audio.paused){
           audio.play();
           activeBtn.textContent = activeBtn === heroBtn ? "■ Playing…" : "■";
+          if (activeBtn === heroBtn){
+            heroBtn.setAttribute("aria-pressed", "true");
+            heroFrame();
+          }
         } else {
           audio.pause();
-          activeBtn.textContent = "▶";
+          activeBtn.textContent = activeBtn === heroBtn ? "▶ Hear it" : "▶";
+          if (activeBtn === heroBtn){
+            heroBtn.setAttribute("aria-pressed", "false");
+          }
         }
       } else {
         heroBtn.click();
