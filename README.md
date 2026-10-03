@@ -1,7 +1,7 @@
 # 🎧 VibeAudio
 
 <p align="center">
-  <img src="docs/og.png" alt="VibeAudio — Focus music while your AI codes" width="720">
+  <img src="docs/og.png?v=2" alt="VibeAudio — Focus music while your AI codes" width="720">
 </p>
 
 [![test](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml/badge.svg)](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml) [![npm](https://img.shields.io/npm/v/vibeaudio)](https://www.npmjs.com/package/vibeaudio) [![downloads](https://img.shields.io/npm/d18m/vibeaudio?label=downloads)](https://npm-stat.com/charts.html?package=vibeaudio) [![downloads/month](https://img.shields.io/npm/dm/vibeaudio)](https://npm-stat.com/charts.html?package=vibeaudio)
