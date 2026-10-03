@@ -12,7 +12,7 @@
 
 > **In a hurry?** `npm i -g vibeaudio`, then `vibe --install-hooks`. Your next prompt has music.
 >
-> **Claude Code only?** Skip npm: `claude plugin marketplace add kiril6/vibeaudio`, then `claude plugin install vibeaudio@vibeaudio` ([details](#as-a-claude-code-plugin)).
+> **Claude Code only?** Skip npm. Inside a session: `/plugin marketplace add kiril6/vibeaudio`, then `/plugin install vibeaudio@vibeaudio` ([details](#as-a-claude-code-plugin)).
 
 ---
 
@@ -326,7 +326,14 @@ Sessions with no id in their payload share a single slot, so they behave as one.
 
 ### As a Claude Code plugin
 
-If Claude Code is the only agent you use, the plugin installs the same hooks with no npm step:
+If Claude Code is the only agent you use, the plugin installs the same hooks with no npm step. Inside a Claude Code session, type:
+
+```
+/plugin marketplace add kiril6/vibeaudio
+/plugin install vibeaudio@vibeaudio
+```
+
+Or the same from a terminal:
 
 ```bash
 claude plugin marketplace add kiril6/vibeaudio
