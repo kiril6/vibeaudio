@@ -600,6 +600,7 @@ function installHookTargets(ids, genre, volume, reactive, dryRun = false, typed 
     if (events.resume) console.log(`  ${events.resume[0].padEnd(19)}→ music resumes once you've answered`);
     if (events.failure) console.log(`  ${events.failure.padEnd(19)}→ music stops + failure chime (API error)`);
     if (events.end) console.log(`  ${events.end.padEnd(19)}→ music stops if that session started it`);
+    if (events.interrupt) console.log(`  ${events.interrupt.padEnd(19)}→ music stops silently when you interrupt`);
 
     if (id === "claude") {
       const slash = hooks.installSlashCommand({ dryRun });
@@ -770,6 +771,10 @@ function printStatus() {
     if (readVibeHooks(t.file(), t).some(({ command }) => /--genre /.test(command))) {
       console.log(`    \x1b[33m↑ pinned by an older install — vibe --install-hooks makes it follow Sound above\x1b[0m`);
     }
+    const absent = hooks.expectedEvents(id).filter((e) => !installed.some(({ event }) => event === e));
+    if (absent.length) {
+      console.log(`    \x1b[33m+ ${absent.join(", ")} added since this install — vibe --install-hooks picks them up\x1b[0m`);
+    }
   }
 
   // Background player
@@ -883,8 +888,11 @@ function doctorChecks() {
       const tokens = [...command.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);
       for (const p of tokens.slice(0, 2)) if (!fs.existsSync(p)) missing.add(p);
     }
+    const absent = hooks.expectedEvents(id).filter((e) => !installed.some(({ event }) => event === e));
     if (missing.size) {
       add("fail", label, `points at a file that no longer exists: ${[...missing].join(", ")}`, "vibe --install-hooks");
+    } else if (absent.length) {
+      add("warn", label, `installed by an older version, missing ${absent.join(", ")}`, "vibe --install-hooks");
     } else if (installed.some(({ command }) => /--genre /.test(command))) {
       add("warn", label, "pinned to a genre/volume by an older install, which overrides your saved settings", "vibe --install-hooks");
     } else {
@@ -895,15 +903,20 @@ function doctorChecks() {
     // config.toml under "<file>:<event>:<group>:<index>".
     if (id === "codex") {
       let toml = "";
-      try { toml = fs.readFileSync(path.join(os.homedir(), ".codex", "config.toml"), "utf8"); } catch (e) { /* none yet */ }
+      try { toml = fs.readFileSync(path.join(hooks.codexHome(), "config.toml"), "utf8"); } catch (e) { /* none yet */ }
       const pending = [];
       try {
         const file = t.file();
+        // Codex canonicalizes CODEX_HOME before keying (find_codex_home()), so
+        // a symlinked one - /tmp on macOS - is recorded under its real path.
+        let real = file;
+        try { real = fs.realpathSync(file); } catch (e) { /* checked below */ }
         for (const [event, entries] of Object.entries(JSON.parse(fs.readFileSync(file, "utf8")).hooks || {})) {
           (entries || []).forEach((entry, g) => {
             t.commands(entry).forEach((command, i) => {
-              const key = `${file}:${event.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase()}:${g}:${i}`;
-              if (hooks.VIBE_HOOK_FLAG.test(command || "") && !toml.includes(`"${key}"`)) pending.push(event);
+              const suffix = `:${event.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase()}:${g}:${i}`;
+              const trusted = [file, real].some((f) => toml.includes(`"${f}${suffix}"`));
+              if (hooks.VIBE_HOOK_FLAG.test(command || "") && !trusted) pending.push(event);
             });
           });
         }

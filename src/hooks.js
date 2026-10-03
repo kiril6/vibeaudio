@@ -153,15 +153,35 @@ const MAX_DAEMON_MS = 15 * 60 * 1000;
  * - failure: a turn ending in error *instead of* the stop event
  * - end:     the session closing, which can cut a turn off before stop
  *
+ * - interrupt: the user stopped the turn (Esc), a silent end like `end`
+ *
  * `seed` is the root object to write when the file does not exist yet. Cursor
  * and Copilot require a schema version; Codex rejects unknown root keys
  * outright, so nothing may be added there beyond `hooks`.
  */
+/**
+ * Where Claude Code and Codex keep their config. Both move with an env var,
+ * and a user who sets one has hooks read from there only: writing to the
+ * default path left VibeAudio installed in a file nothing read, and silent.
+ * Claude Code: `CLAUDE_CONFIG_DIR ?? ~/.claude`, NFC-normalized (cn() in
+ * 2.1.195's bundle; settings.json and commands/ both live under it).
+ * Codex: `CODEX_HOME`, empty treated as unset, else `~/.codex`
+ * (find_codex_home(), 0.160 source). Empty is unset for both here, so an
+ * exported-but-blank variable cannot turn the path relative.
+ */
+function claudeConfigDir() {
+  return (process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude")).normalize("NFC");
+}
+
+function codexHome() {
+  return process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
+}
+
 const TARGETS = {
   claude: {
     name: "Claude Code",
     cmd: "claude",
-    file: () => path.join(os.homedir(), ".claude", "settings.json"),
+    file: () => path.join(claudeConfigDir(), "settings.json"),
     // - wait: PermissionRequest fires when the dialog is shown in the terminal,
     //   the SDK (desktop app, IDEs) and print mode alike - Notification's
     //   permission_prompt is raised by the terminal UI alone, after 6s idle.
@@ -182,17 +202,23 @@ const TARGETS = {
   codex: {
     name: "Codex",
     cmd: "codex",
-    file: () => path.join(os.homedir(), ".codex", "hooks.json"),
+    file: () => path.join(codexHome(), "hooks.json"),
     // PermissionRequest runs only when Codex is about to ask for approval,
-    // with tool_name, and is present in 0.125's binary. Its docs describe
-    // Interrupt and SessionEnd too, but 0.125 has neither - and a strict parser
-    // meeting an event it does not know would take every hook down with it.
+    // with tool_name, and is present in 0.125's binary. SessionEnd arrived in
+    // 0.145 and Interrupt in 0.150 (source of each release tag). Listing them
+    // is safe on older versions: HookEventsToml has never denied unknown
+    // fields (checked 0.125 through 0.160), so an older Codex ignores an
+    // event it does not know - only the file's root is strict. Interrupt runs
+    // on the turn-abort path, not the one that runs Stop, with session_id,
+    // cwd and transcript_path.
     events: {
       start: "UserPromptSubmit",
       stop: "Stop",
       tool: "PreToolUse",
       wait: ["PermissionRequest"],
-      resume: ["PostToolUse"]
+      resume: ["PostToolUse"],
+      interrupt: "Interrupt",
+      end: "SessionEnd"
     },
     entry: (command) => ({ hooks: [{ type: "command", command, timeout: 5 }] }),
     commands: (entry) => (entry.hooks || []).map((h) => h.command),
@@ -344,6 +370,18 @@ function detectTargets() {
     const dir = t.configDir ? t.configDir() : path.dirname(t.file());
     return fs.existsSync(dir) || isInstalled(t.cmd);
   });
+}
+
+/**
+ * Every event an install by this version writes for a target, `tool` aside
+ * (reactive mode only). A hook file is written once and outlives upgrades,
+ * so an event added in a later version - Codex's Interrupt and SessionEnd in
+ * 0.13.1 - never reaches someone who installed before it unless they
+ * reinstall. `--doctor` and `--status` compare against this to say so.
+ */
+function expectedEvents(id) {
+  const ev = TARGETS[id].events;
+  return [ev.start, ev.stop, ...(ev.wait || []), ...(ev.resume || []), ev.failure, ev.end, ev.interrupt].filter(Boolean);
 }
 
 function settingsPath() {
@@ -1047,7 +1085,7 @@ function hookEnd(raw) {
   if (!session) return false;
 
   fs.rmSync(sessionFile(id), { force: true });
-  emitEvent("ended", id, session.project);
+  emitEvent(parsePayload(raw).hook_event_name === "Interrupt" ? "interrupted" : "ended", id, session.project);
   if (working(listSessions()).length === 0) {
     stopDaemon({ keepSessions: true });
     fs.rmSync(INTENSITY_FILE, { force: true });
@@ -1246,6 +1284,8 @@ function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = fa
   }
   if (ev.failure) setHook(settings.hooks, ev.failure, hookCommand("--hook-stop", genre, volume), id);
   if (ev.end) setHook(settings.hooks, ev.end, hookCommand("--hook-end", genre, volume), id);
+  // An interrupt ends the turn the same silent way a closed session does.
+  if (ev.interrupt) setHook(settings.hooks, ev.interrupt, hookCommand("--hook-end", genre, volume), id);
 
   const after = `${JSON.stringify(settings, null, 2)}\n`;
   if (!dryRun) fs.writeFileSync(file, after);
@@ -1261,7 +1301,7 @@ function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = fa
 const SLASH_MARK = "<!-- vibeaudio:slash-command -->";
 
 function slashCommandFile() {
-  return path.join(os.homedir(), ".claude", "commands", "vibe.md");
+  return path.join(claudeConfigDir(), "commands", "vibe.md");
 }
 
 function slashCommandText() {
@@ -1340,6 +1380,9 @@ function uninstallHooks(file = null, { id = "claude" } = {}) {
 
 module.exports = {
   shellQuote,
+  claudeConfigDir,
+  codexHome,
+  expectedEvents,
   runDaemon,
   hookStart,
   hookStop,

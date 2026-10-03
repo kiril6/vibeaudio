@@ -251,8 +251,8 @@ Each tool spells its events its own way, and VibeAudio writes whichever dialect 
 
 | | File | Music starts | Music stops + chime | Reactive (opt-in) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Claude Code** | `~/.claude/settings.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
-| **Codex** | `~/.codex/hooks.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
+| **Claude Code** | `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR`) | `UserPromptSubmit` | `Stop` | `PreToolUse` |
+| **Codex** | `~/.codex/hooks.json` (or `$CODEX_HOME`) | `UserPromptSubmit` | `Stop` | `PreToolUse` |
 | **Cursor** | `~/.cursor/hooks.json` | `beforeSubmitPrompt` | `stop` | `preToolUse` |
 | **Grok** | `~/.grok/hooks/vibeaudio.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
 | **Gemini CLI** | `~/.gemini/settings.json` | `BeforeAgent` | `AfterAgent` | `BeforeTool` |
@@ -265,7 +265,7 @@ Where an agent reports more than start and stop, VibeAudio listens for that too 
 | | Music pauses + "your turn" chime | Music resumes | Failure chime (API error) | Session closes mid-turn (silent) |
 | :--- | :--- | :--- | :--- | :--- |
 | **Claude Code** | `PermissionRequest`, `Elicitation` | `PostToolUse`, `PostToolUseFailure`, `ElicitationResult` | `StopFailure` | `SessionEnd` |
-| **Codex** | `PermissionRequest` | `PostToolUse` | — | — |
+| **Codex** | `PermissionRequest` | `PostToolUse` | — | `SessionEnd`, and `Interrupt` (Esc) |
 | **Gemini CLI** | `Notification` (tool permission) | `AfterTool` | — | `SessionEnd` |
 | **Copilot CLI** | `Notification` (permission prompt) | `PostToolUse`, `PostToolUseFailure` | — | `SessionEnd` |
 | **Qwen Code** | `PermissionRequest` | `PostToolUse`, `PostToolUseFailure` | `StopFailure` | `SessionEnd` |
@@ -283,6 +283,8 @@ Where an agent reports more than start and stop, VibeAudio listens for that too 
 | **Claude Code turns that never reach `Stop` still end the music** | An API error or rate limit ends the turn with `StopFailure` instead, which plays the failure chime. Interrupting (Esc, or the stop button in the desktop app) fires no hook at all, so the background player watches the session transcript for Claude Code's interrupt entry and stops silently within half a second — whether the agent was writing or running a tool. A prompt that another hook blocks (a token-saving proxy, say) never reaches `Stop` either, so the same watcher ends the music on Claude Code's "prompt blocked" entry — or never starts it, when the blocker was quicker than we were. Closing the session mid-turn stops it too — but only if that session started the music, so closing an idle terminal never silences another one. |
 | **Codex asks you to trust the hook once** | Codex keeps a per-hook trust hash in `~/.codex/config.toml` and won't run a hook it hasn't been told to trust, so the install isn't live until you approve each one the first time it fires. |
 | **Only Cursor can play the failure chime** | Its stop event reports whether the turn completed, aborted or errored. The others send no verdict, so a turn there always ends on the success chime — VibeAudio won't invent a failure the agent never claimed. |
+| **Upgraded, and a new feature isn't there?** | Hooks are written into your agent's config once, at install time, and an upgrade doesn't touch them. When a new version listens for more events (0.13.1 added Codex's `Interrupt` and `SessionEnd`), `vibe --doctor` and `vibe --status` name what's missing, and `vibe --install-hooks` adds it. |
+| **Moved your config folder?** | VibeAudio follows `CLAUDE_CONFIG_DIR` and `CODEX_HOME` the way the agents do, so hooks (and `/vibe`) go where your agent actually reads them. Set the variable in the shell you run `vibe --install-hooks` from. |
 | **Grok and Copilot CLI get a file of their own** | Each reads every `*.json` in its `hooks/` directory, so VibeAudio writes `vibeaudio.json` rather than merging into anyone else's — which makes uninstalling it a delete, and leaves no backup file behind. Copilot's honours `COPILOT_HOME`. |
 
 </details>
@@ -309,7 +311,7 @@ Sessions with no id in their payload share a single slot, so they behave as one.
 
 > **No restart needed, even mid-session — for Claude Code, Codex, Cursor and Grok.** Each re-reads its hook file every time a hook fires, so changes land on your **next prompt**. A daemon already playing keeps its old settings until that prompt replaces it — at most the tail of one turn. Whether an open Gemini CLI, Copilot CLI, Qwen Code or Windsurf session does the same hasn't been checked, so start a new session there to be sure.
 
-> **The Claude Code desktop app is covered too**, not just the terminal — both read the same `~/.claude/settings.json`. (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-claude-desktop-antigravity-via-mcp).)
+> **The Claude Code desktop app is covered too**, not just the terminal — both read the same `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`). (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-claude-desktop-antigravity-via-mcp).)
 
 > **One player is shared.** Prompt two agents at once and the last prompt owns the music. One person, one set of speakers — deliberate, not a limitation being worked around.
 
@@ -331,7 +333,7 @@ It needs Node 18+ on your `PATH` (the hooks run `node`), and it also adds `/vibe
 
 ### `/vibe` inside Claude Code
 
-Installing the Claude Code hooks also adds a `/vibe` command (`~/.claude/commands/vibe.md`), so you can control the music without leaving the session:
+Installing the Claude Code hooks also adds a `/vibe` command (`~/.claude/commands/vibe.md`, or under `$CLAUDE_CONFIG_DIR`), so you can control the music without leaving the session:
 
 ```text
 /vibe                 what's installed and playing
