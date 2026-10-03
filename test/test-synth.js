@@ -820,20 +820,25 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ Skipped on Windows (daemon ownership check is Unix-only).");
   } else {
     const uninstallHome = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-uninst-"));
+    // Waits on conditions, not fixed sleeps (#44): a daemon mid-render handles
+    // SIGTERM late on a loaded machine. Each wait awaits rather than blocks, so
+    // this probe - the daemon's parent - can reap it; a zombie still answers
+    // kill(pid, 0).
     const probeSrc = `
       const hooks = require(process.argv[1]);
+      const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return false; } };
+      const until = async (ok) => { const end = Date.now() + 5000; while (!ok() && Date.now() < end) await new Promise((r) => setTimeout(r, 50)); };
       hooks.installHooks("lofi", 0.05, hooks.settingsPath());
       const pid = hooks.hookStart("lofi", 0.05);
-      setTimeout(() => {
+      (async () => {
+        // Until the uninstall can recognise it: isOurDaemon() reads its argv.
+        await until(() => hooks.isOurDaemon(pid));
         require("child_process").execFileSync(process.execPath, [process.argv[2], "--uninstall-hooks"], { stdio: "ignore" });
-        setTimeout(() => {
-          let alive = true;
-          try { process.kill(pid, 0); } catch (e) { alive = false; }
-          console.log(JSON.stringify({ alive }));
-          if (alive) { try { process.kill(pid, "SIGTERM"); } catch (e) {} }
-          process.exit(0);
-        }, 400);
-      }, 700);
+        await until(() => !alive(pid));
+        console.log(JSON.stringify({ alive: alive(pid) }));
+        if (alive(pid)) { try { process.kill(pid, "SIGTERM"); } catch (e) {} }
+        process.exit(0);
+      })();
     `;
     const result = await new Promise((resolve) => {
       const child = spawn(
@@ -1218,13 +1223,13 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     // time, so a variable set afterwards never reaches it. A file does.
     const started = await run(["--hook-start", "--genre", "zen", "--volume", "5"]);
     assert.strictEqual(started.code, 0, "a muted hook-start must still exit cleanly");
-    await new Promise((r) => setTimeout(r, 400));
     const pidFile = path.join(home, ".vibeaudio", "daemon.pid");
     if (fs.existsSync(pidFile)) {
       const pid = parseInt(fs.readFileSync(pidFile, "utf8").trim(), 10);
-      let alive = true;
-      try { process.kill(pid, 0); } catch (e) { alive = false; }
-      assert.ok(!alive, "no daemon may survive while muted");
+      const alive = () => { try { process.kill(pid, 0); return true; } catch (e) { return false; } };
+      // It exits once it has booted and found the mute; a loaded machine boots slowly (#44).
+      for (const end = Date.now() + 5000; alive() && Date.now() < end; ) await new Promise((r) => setTimeout(r, 50));
+      assert.ok(!alive(), "no daemon may survive while muted");
     }
 
     assert.ok(/Muted/.test((await run(["--status"])).out), "--status must say it is muted");
@@ -1794,24 +1799,27 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     // Run in a child: detectPlayer() caches at module scope, so the sandbox
     // PATH has to be in place before player.js is first required.
     const driver = path.join(dir, "drive.js");
-    // spawn() is asynchronous, so each step needs a moment to actually reach
-    // the backend before the next one tears it down - otherwise the fake is
+    // spawn() is asynchronous, so each step waits until the backend has
+    // recorded it before the next one tears it down - otherwise the fake is
     // SIGTERMed before it can record anything and the test fails on itself.
+    // A wait on the log, not a fixed sleep: a loaded machine is slow (#44).
     fs.writeFileSync(driver, `
+      const fs = require("fs");
       const { AudioPlayer } = require(${JSON.stringify(path.join(__dirname, "..", "src", "player"))});
-      const settle = () => new Promise((r) => setTimeout(r, 400));
+      const logged = (re) => { try { return re.test(fs.readFileSync(${JSON.stringify(log)}, "utf8")); } catch (e) { return false; } };
+      const until = async (re) => { for (const end = Date.now() + 10000; !logged(re) && Date.now() < end; ) await new Promise((r) => setTimeout(r, 50)); };
       (async () => {
         const p = new AudioPlayer();
         const out = {};
         out.firstStart = p.start("jazz", 0.4);
-        await settle();
+        await until(/loop_jazz_/);
         out.sameAgain  = p.start("jazz", 0.4);   // identical settings: no restart
-        await settle();
         out.switched   = p.start("zen", 0.4);    // different genre: must restart
-        await settle();
+        await until(/loop_zen_/);
         out.genre      = p.genre;
         p.stop({ playChime: true, outcome: "success" });
         p.stop({ playChime: false });
+        await until(/chime_success/);
         console.log(JSON.stringify(out));
         process.exit(0);
       })();
@@ -2609,15 +2617,19 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       const driver = path.join(dir, "drive.js");
       fs.writeFileSync(driver, `
         const { playPreview, stopPreview } = require(${JSON.stringify(path.join(__dirname, "..", "src", "interactive"))});
-        const settle = () => new Promise((r) => setTimeout(r, 500));
+        const fs = require("fs");
+        // Each step waits until the fake has logged the last one: it cannot
+        // log a kill before its trap is set (#44).
+        const logged = (re) => { try { return re.test(fs.readFileSync(${JSON.stringify(log)}, "utf8")); } catch (e) { return false; } };
+        const until = async (re) => { for (const end = Date.now() + 10000; !logged(re) && Date.now() < end; ) await new Promise((r) => setTimeout(r, 50)); };
         (async () => {
           playPreview("jazz");
-          await settle();
+          await until(/^start .*loop_jazz_t2/m);
           // A second press has to silence the first: one pair of speakers.
           playPreview("zen");
-          await settle();
+          await until(/^start .*loop_zen_t2/m);
           stopPreview();
-          await settle();
+          await until(/^killed .*loop_zen_t2/m);
         })();
       `);
 
