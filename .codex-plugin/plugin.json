@@ -1,6 +1,6 @@
 {
   "name": "vibeaudio",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "description": "Procedural focus music while Codex works, with a chime when it finishes or needs you. Zero dependencies, synthesized in pure JS.",
   "author": {
     "name": "Kiril Delovski",
