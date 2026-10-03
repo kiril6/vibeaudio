@@ -1,5 +1,9 @@
 # 🎧 VibeAudio
 
+<p align="center">
+  <img src="docs/og.png" alt="VibeAudio — Focus music while your AI codes" width="720">
+</p>
+
 [![test](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml/badge.svg)](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml) [![npm](https://img.shields.io/npm/v/vibeaudio)](https://www.npmjs.com/package/vibeaudio) [![downloads](https://img.shields.io/npm/d18m/vibeaudio?label=downloads)](https://npm-stat.com/charts.html?package=vibeaudio) [![downloads/month](https://img.shields.io/npm/dm/vibeaudio)](https://npm-stat.com/charts.html?package=vibeaudio)
 
 > **Procedural focus music while your AI coding tools think.**
@@ -49,7 +53,7 @@ It is built as **calm technology**, in the sense of Mark Weiser and John Seely B
 * 🛡️ **A grace window.** Fast commands stay 100% silent — music starts only past 1.5s (`--grace`).
 * 🪟 **Several sessions, one soundtrack.** Run as many terminals of the same agent as you like: the music plays while *any* of them is working, and each finishes with its own chime. One session ending, pausing for a permission dialog or being interrupted never cuts off another that's still going.
 * 🧮 **Honest exit codes.** Your command's status passes straight through (`130` on `Ctrl+C`), so `vibe claude && next-step` behaves exactly as it would without the wrapper.
-* 🌊 **Terminal title HUD.** A live ASCII wave and elapsed timer in the window title, where it can't corrupt a full-screen TUI.
+* 🌊 **Terminal title HUD.** A live ASCII wave and elapsed timer in the window title (`[ ♫ ▃▅▆▇█▇▆▃ lofi (0:24) ]`), where it can't corrupt a full-screen TUI.
 
 </details>
 
@@ -352,10 +356,15 @@ Codex asks you to approve the plugin's hooks once, as it does for any hook. Upda
 
 The plugin needs Node 18+ on your `PATH` (the hooks run `node`). In Claude Code it also adds `/vibeaudio:vibe`, the plugin's spelling of [`/vibe`](#vibe-inside-claude-code). Update with `claude plugin update vibeaudio@vibeaudio`; remove with `claude plugin uninstall vibeaudio@vibeaudio` (music already playing stops on its own within 15 minutes, or run `/vibeaudio:vibe stop` first).
 
+<details>
+<summary><b>Plugin details & coexistence with npm</b> — settings file, coexistence, and limitations</summary>
+
 - **Settings are the same file.** `vibe --genre jazz` and the rest work as always, but the `vibe` command comes from `npm i -g vibeaudio`; the plugin alone puts nothing on your `PATH`. Use `/vibeaudio:vibe genre jazz` instead.
 - **Both at once is safe.** If `--install-hooks` has also been run, the plugin's hooks step aside and the installed ones play, so there's no double chime. Remove the installed hooks first if you want the plugin to own it.
 - **Claude Code and Codex.** Cursor, Gemini and the others still use `vibe --install-hooks`. Copilot CLI and Qwen Code can load the same plugin and it carries their events, but neither has been run with it yet.
 - **Not reactive.** `--reactive` is an `--install-hooks` option; the plugin doesn't carry it.
+
+</details>
 
 ### `/vibe` inside Claude Code
 
@@ -419,7 +428,12 @@ Hooks log each finished turn — which project, how long, how it ended, and how 
                     32s with a chime  1m 50s without (muted or --no-chime)
 ```
 
+<details>
+<summary><b>How the report metrics & return times are calculated</b></summary>
+
 plus where the time went by project and, for windows up to two weeks, by day. "You waited" is the agent's own working time; the time it spent blocked on you is shown separately, because they are different problems. "Back to it" is the other direction: how long a finished turn sat before your next prompt in the same session — gaps over 30 minutes count as breaks and are left out. Once both sides have five turns, it is split by whether a chime announced the turn, so you can see what the chime is worth to you. The log stays on your machine, never leaves it, is capped at about 1 MB, and `VIBE_NO_HISTORY=1` turns it off. Only hook-driven turns are logged — a command wrapped as `vibe <command>` is not, since its lifetime isn't the same thing as an agent's working time.
+
+</details>
 
 ### The chime is in the music's key
 
@@ -429,9 +443,14 @@ The success chime is the tonic chord of whatever key your genre sits in — C ma
 
 The worst stretch of agent work is twenty minutes of the same thing failing while the music says all is well. So when **4 of a session's last 8 tool calls fail**, a soft heartbeat — two low beats about once a second, on the tonic of your genre — joins the music at the next loop boundary, and leaves once enough calls succeed. With `--notify` on, you also get one banner when the session crosses the line ("api: looks stuck"), not one per failure.
 
+<details>
+<summary><b>How the stuck threshold was calibrated (4,497 turns analyzed)</b></summary>
+
 The threshold was picked against 4,497 real Claude Code turns (46,032 tool calls). It fires in about 1% of turns, at around minute 3, and those turns typically ran for another 3 minutes — time you could have spent stepping in. "3 in a row" was rejected because the usual loop has a successful edit between every failing test run. Each new prompt starts with a clean slate, and an interrupt (Esc) never counts as a failure.
 
 It needs the agent to report failed tool calls, which **Claude Code, Copilot CLI and Qwen Code** do (`PostToolUseFailure`). Codex, Cursor, Gemini, Grok and Windsurf don't, so for them the music never adds the heartbeat.
+
+</details>
 
 ### Reactive mode (opt-in)
 
@@ -483,14 +502,25 @@ Each session is `working`, `stuck` (4 of its last 8 tool calls failed) or `waiti
 {"v":1,"at":1791026130000,"event":"waiting","session":"…","project":"/work/api","tool":"Bash","status":"waiting"}
 ```
 
-Events: `started`, `waiting`, `resumed`, `stuck`, `recovered`, `finished` (with `outcome`: `success` or `failure`), `interrupted`, `ended` (with `reason` when `vibe --stop` or `--uninstall-hooks` ended it). Every line also carries `status`, the machine's state after the event, so a consumer that only cares about the overall state can read that one field. Some examples:
+Events: `started`, `waiting`, `resumed`, `stuck`, `recovered`, `finished` (with `outcome`: `success` or `failure`), `interrupted`, `ended` (with `reason` when `vibe --stop` or `--uninstall-hooks` ended it). Every line also carries `status`, the machine's state after the event, so a consumer that only cares about the overall state can read that one field.
 
+#### 📟 Status Bar & Desktop Integrations
+
+**tmux status bar** — show overall agent state (`waiting`, `stuck`, `working`, or `idle`):
 ```bash
-# tmux: show the state in the status bar
 set -g status-right '#(vibe --state | jq -r .status)'
+```
 
-# macOS: say it out loud when any agent needs you
+**macOS speech alert** — announce out loud whenever an agent stops to ask for your input:
+```bash
 vibe --events | jq --unbuffered -r 'select(.event=="waiting") | .project' | while read p; do say "$(basename "$p") needs you"; done
+```
+
+**Starship prompt** — custom indicator in `~/.config/starship.toml`:
+```toml
+[custom.vibe]
+command = "vibe --state | jq -r 'if .status != \"idle\" then \"🎧 \" + .status else \"\" end'"
+when = "command -v vibe >/dev/null"
 ```
 
 The stream is a local file (`~/.vibeaudio/events.jsonl`, rotated at 256 KB), so it never leaves your machine. It keeps updating while you're muted, because a mute silences sound and a light isn't sound. The `v` field is the format version, and any breaking change will increment it.
@@ -575,7 +605,7 @@ Playback stops automatically if the desktop client disconnects, and caps out aft
 
 ## 🎨 Music Genres
 
-VibeAudio includes **8 procedural music styles** synthesized entirely in code:
+VibeAudio includes **10 procedural sound styles** synthesized entirely in code:
 
 | Genre | Style | Vibe |
 | :--- | :--- | :--- |
@@ -591,7 +621,8 @@ VibeAudio includes **8 procedural music styles** synthesized entirely in code:
 | `ocean` | 🌊 **Ocean** | Low surf on a slow swell that rises and drains — **no melody at all** |
 | `random` | 🎲 **Shuffle Mode** | Picks a surprise genre for the run — **never `drone`, `rain` or `ocean`** |
 
-**Aliases also work**, so you can ask for a genre the way you'd say it — `vibe --preview chill` is `lofi`:
+<details>
+<summary><b>Genre aliases</b> — you can ask for a genre the way you'd say it (<code>chill</code>, <code>retrowave</code>, <code>bossa</code>, <code>ambient</code>…)</summary>
 
 | Canonical | Also accepted |
 | :--- | :--- |
@@ -607,6 +638,8 @@ VibeAudio includes **8 procedural music styles** synthesized entirely in code:
 | `ocean` | `waves`, `sea`, `surf` |
 
 Matching is case-insensitive, so `BOSSA` works too.
+
+</details>
 
 > **If any melody distracts you, use `drone`.** Every other genre plays something — notes, a progression, a bass line — and some people can't read while that happens. `drone` holds one low tone under a slow-breathing noise bed and never moves: closer to a fan or rainfall than to music. Tiers add weight rather than movement. If you want the fan-and-rainfall idea literally, `rain` and `ocean` are synthesized the same way (seeded noise, no recorded files): rain adds more droplets as the turn runs longer, ocean adds a second swell and then foam.
 >
@@ -747,7 +780,9 @@ It shouldn't. The cache key includes a hash of the synth sources, so changing a 
 vibe --clear-cache
 ```
 
-**Silent when the agent runs on another machine over SSH**
+<details>
+<summary><b>Silent when the agent runs on another machine over SSH (socket forwarding)</b></summary>
+
 Sound plays on the machine where the agent runs, and a remote server usually has no sound card — so VibeAudio finds no player and stays quiet. You can hear it locally by forwarding a PulseAudio socket through the SSH connection: the remote `paplay` sends the audio back over SSH to your own speakers.
 
 This needs a PulseAudio-compatible sound server on **your local machine**: a Linux desktop (PipeWire and PulseAudio both provide one) or Windows with WSLg. macOS has none built in, so this route doesn't apply there.
@@ -768,6 +803,8 @@ This needs a PulseAudio-compatible sound server on **your local machine**: a Lin
    ```
 
 If the second connection fails with the socket "already in use", an earlier session left it behind: `rm /tmp/vibe-pulse.sock` on the server, or set `StreamLocalBindUnlink yes` in the server's `sshd_config`. If `paplay` says access denied, your local PulseAudio requires its cookie — copy `~/.config/pulse/cookie` to the same path on the server.
+
+</details>
 
 **Volume flag does nothing**
 Shouldn't happen any more — where the player can't attenuate (`aplay`, PowerShell), the gain is baked into the audio instead. A `--volume` change reaches music already playing within a second on macOS hooks (it eases there), at the next loop boundary elsewhere, and in the wrapper or MCP on their next run; `vibe --status` shows the volume in effect and what set it.
