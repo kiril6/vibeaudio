@@ -20,6 +20,15 @@
 
 AI coding agents take 15–45 seconds to reason, read files and write code. Staring at a blank cursor feels slow; tabbing away means checking back to see if it's done. VibeAudio fills that gap with music while the agent thinks, and a chime when your output is ready to read.
 
+It is built as **calm technology**, in the sense of Mark Weiser and John Seely Brown's *Designing Calm Technology* (Xerox PARC, 1995): information that stays at the edge of your attention and only comes to the front when it matters. You stop noticing the music, but you notice when it changes.
+
+| Principle | In VibeAudio |
+| :--- | :--- |
+| Inform without demanding attention | The music sits in the background. What you notice is it *stopping*. |
+| Come to the front only when it matters | Chimes for done, failed and "needs you" only. The music doesn't react to every tool call unless you ask it to ([reactive mode](#reactive-mode-opt-in)). |
+| Make the background informative | Layers build as a turn runs long, and a heartbeat joins when an agent keeps failing. That fires in under 1% of turns, by design. |
+| Calm, not alarming | "Needs you" is a soft rising interval, not an alarm. A mute ends on its own after an hour. |
+
 **How it behaves:**
 
 * 🧮 **Pure synthesis, zero MP3s.** Every note, chord and pad is generated in code — no audio assets, no npm dependencies, no `node-gyp`.
