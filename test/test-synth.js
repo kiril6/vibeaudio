@@ -3010,6 +3010,8 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     assert.ok(Math.abs(logged[0].ms - 90000) < 5000 && logged[0].blockedMs === 20000, "duration and the time blocked on you are logged");
     assert.ok(Math.abs(logged[1].blockedMs - 30000) < 5000, "a turn that ends still paused counts the wait");
     assert.strictEqual(logged[1].outcome, "failure", "the outcome is logged");
+    assert.strictEqual(logged[0].session, "s1", "the session is logged, so return times pair within it");
+    assert.strictEqual(logged[0].chimed, false, "VIBE_DISABLE means no chime announced the turn");
 
     fs.rmSync(histFile);
     stop({ started: now - 1000, waiting: null }, { cwd: "/x" }, { VIBE_NO_HISTORY: "1" });
@@ -3031,6 +3033,29 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     assert.ok(/Agents waited\s+2m 00s/.test(week), "…and the blocked time is its own line");
     assert.ok(/api\s+13m 00s/.test(week) && /cli/.test(week) && !/\bproject\b/.test(week), "per project, and the old turn is outside the window");
     assert.ok(/Turns\s+4\b/.test(rep(["60"])) && /\bproject\b/.test(rep(["60"])), "a longer window brings it in");
+    assert.ok(!/Back to it/.test(week), "no turn follows another in its project closely enough to pair");
+
+    // Return time: done -> next prompt, paired per session, breaks left out.
+    const { returnTimes, RETURN_WINDOW_MS } = require("../src/history");
+    const T = (session, endS, durS, chimed, project = "/p") => ({ session, project, at: now + endS * 1000, ms: durS * 1000, chimed });
+    const gaps = returnTimes([
+      T("a", 100, 60, true), T("a", 200, 60, false), // a: back 40s after a chimed turn
+      T("b", 150, 120, true),                           // b interleaves with a in the same repo
+      T("a", 200 + RETURN_WINDOW_MS / 1000 + 100, 50),  // a: a break, not a return
+      { project: "/old", at: now, ms: 10e3 }, { project: "/old", at: now + 30e3, ms: 10e3 } // pre-session lines pair by project
+    ]);
+    assert.deepStrictEqual(gaps.map((g) => g.ms).sort((x, y) => x - y), [20000, 40000], "only same-session gaps under the window count");
+    assert.strictEqual(gaps.find((g) => g.ms === 40000).chimed, true, "the gap carries the chime of the turn it answered");
+
+    // Turns end every 10 minutes; even ones chime. After a chimed turn the next
+    // prompt comes 30s later, after a silent one 9 minutes later.
+    const back = [];
+    for (let i = 0; i < 12; i++) back.push(T("c", i * 600, i % 2 ? 570 : 60, i % 2 === 0));
+    fs.writeFileSync(histFile, back.map((t) => JSON.stringify({ ...t, at: t.at - 86400e3, blockedMs: 0, outcome: "success" })).join("\n") + "\n");
+    const withBack = rep([]);
+    assert.ok(/Back to it\s+\S+\s+median from done to your next prompt, 11 times/.test(withBack), "--report shows the median return time");
+    assert.ok(/30s with a chime\s+9m 00s without/.test(withBack), "…and splits it by chime once both sides have five");
+
     assert.strictEqual(parseArgs(["node", "vibe", "--report"]).report, 7);
     assert.strictEqual(parseArgs(["node", "vibe", "--report", "30"]).report, 30);
     assert.strictEqual(parseArgs(["node", "vibe", "npm", "test", "--report"]).report, null, "after the command it is the child's flag");

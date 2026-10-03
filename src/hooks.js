@@ -813,7 +813,9 @@ function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChi
     const now = Date.now();
     // A turn that ends while still paused for you has been blocked since then.
     const blockedMs = (session.blockedMs || 0) + (session.waiting != null && session.waitStart ? now - session.waitStart : 0);
-    recordTurn({ project: parsePayload(raw).cwd || process.cwd(), ms: now - session.started, blockedMs, outcome, at: now });
+    // ponytail: assumes a playback backend exists; a machine with none hears no music either.
+    const chimed = !noChime && !playbackDisabled();
+    recordTurn({ project: parsePayload(raw).cwd || process.cwd(), ms: now - session.started, blockedMs, outcome, session: id, chimed, at: now });
   }
 
   // The music is every working session's, so it ends with the last of them.

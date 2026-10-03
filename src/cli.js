@@ -936,10 +936,12 @@ function formatDuration(ms) {
  * The summary of ~/.vibeaudio/history.jsonl. "You waited" is the agent's own
  * working time - a turn's length minus the stretches it spent blocked on a
  * dialog of yours - because the two are different complaints: one is the
- * agent being slow, the other is you being away.
+ * agent being slow, the other is you being away. "Back to it" is the other
+ * direction: how long a finished turn waited for your next prompt, with gaps
+ * over RETURN_WINDOW_MS read as breaks and left out.
  */
 function printReport(days, now = Date.now()) {
-  const { readTurns } = require("./history");
+  const { readTurns, returnTimes } = require("./history");
   const turns = readTurns(days, now);
   const dim = (s) => `\x1b[90m${s}\x1b[0m`;
   const bold = (s) => `\x1b[1m${s}\x1b[0m`;
@@ -977,6 +979,19 @@ function printReport(days, now = Date.now()) {
   if (blocked >= 1000) row("Agents waited", formatDuration(blocked), "on you — permission dialogs and questions");
   row("Typical turn", formatDuration(median), "median");
   row("Longest turn", formatDuration(longest.ms), label(longest));
+
+  // How fast you came back once a turn was done - the human half of the loop.
+  const middle = (xs) => xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+  const gaps = returnTimes(turns);
+  if (gaps.length) {
+    row("Back to it", formatDuration(middle(gaps.map((g) => g.ms))), `median from done to your next prompt, ${gaps.length} ${gaps.length === 1 ? "time" : "times"}`);
+    // Only once both sides have enough to mean something; three turns is an anecdote.
+    const withChime = gaps.filter((g) => g.chimed === true).map((g) => g.ms);
+    const without = gaps.filter((g) => g.chimed === false).map((g) => g.ms);
+    if (withChime.length >= 5 && without.length >= 5) {
+      row("", `${formatDuration(middle(withChime))} with a chime`, `${formatDuration(middle(without))} without (muted or --no-chime)`);
+    }
+  }
 
   const byProject = new Map();
   for (const t of turns) {

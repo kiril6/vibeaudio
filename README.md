@@ -386,9 +386,11 @@ Hooks log each finished turn — which project, how long, how it ended, and how 
   You waited        3h 55m  on agents, 7m 51s per turn
   Agents waited     5m 35s  on you — permission dialogs and questions
   Typical turn      2m 57s  median
+  Back to it        41s  median from done to your next prompt, 27 times
+                    32s with a chime  1m 50s without (muted or --no-chime)
 ```
 
-plus where the time went by project and, for windows up to two weeks, by day. "You waited" is the agent's own working time; the time it spent blocked on you is shown separately, because they are different problems. The log stays on your machine, never leaves it, is capped at about 1 MB, and `VIBE_NO_HISTORY=1` turns it off. Only hook-driven turns are logged — a command wrapped as `vibe <command>` is not, since its lifetime isn't the same thing as an agent's working time.
+plus where the time went by project and, for windows up to two weeks, by day. "You waited" is the agent's own working time; the time it spent blocked on you is shown separately, because they are different problems. "Back to it" is the other direction: how long a finished turn sat before your next prompt in the same session — gaps over 30 minutes count as breaks and are left out. Once both sides have five turns, it is split by whether a chime announced the turn, so you can see what the chime is worth to you. The log stays on your machine, never leaves it, is capped at about 1 MB, and `VIBE_NO_HISTORY=1` turns it off. Only hook-driven turns are logged — a command wrapped as `vibe <command>` is not, since its lifetime isn't the same thing as an agent's working time.
 
 ### The chime is in the music's key
 
