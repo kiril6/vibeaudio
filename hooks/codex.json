@@ -50,7 +50,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js\" --hook-end --plugin --event Interrupt",
-            "timeout": 5
+            "timeout": 3
           }
         ]
       }
@@ -61,7 +61,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js\" --hook-end --plugin --event SessionEnd",
-            "timeout": 5
+            "timeout": 3
           }
         ]
       }

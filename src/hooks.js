@@ -220,7 +220,9 @@ const TARGETS = {
       interrupt: "Interrupt",
       end: "SessionEnd"
     },
-    entry: (command) => ({ hooks: [{ type: "command", command, timeout: 5 }] }),
+    // Codex caps SessionEnd and Interrupt hooks at 3s (SESSION_END_MAX_TIMEOUT_SEC,
+    // discovery.rs) and warns on every run when one asks for more.
+    entry: (command, event) => ({ hooks: [{ type: "command", command, timeout: event === "SessionEnd" || event === "Interrupt" ? 3 : 5 }] }),
     commands: (entry) => (entry.hooks || []).map((h) => h.command),
     seed: () => ({}),
     // Codex records a trusted_hash per hook in config.toml and asks before
@@ -436,7 +438,7 @@ function pluginHookEvents(agents) {
 function pluginHooksFile(agents, script = "${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js") {
   const hooks = {};
   for (const [event, action] of pluginHookEvents(agents)) {
-    hooks[event] = [TARGETS[agents[0]].entry(`node "${script}" --${action} --plugin --event ${event}`)];
+    hooks[event] = [TARGETS[agents[0]].entry(`node "${script}" --${action} --plugin --event ${event}`, event)];
   }
   return { hooks };
 }
@@ -1232,7 +1234,7 @@ function setHook(hooks, event, command, id) {
   // keeps the existing entries at their original index, which is what Codex
   // keys its per-hook trust records by.
   const kept = (hooks[event] || []).filter((entry) => !isVibeHook(entry, id));
-  kept.push(target(id).entry(command));
+  kept.push(target(id).entry(command, event));
   hooks[event] = kept;
 }
 

@@ -3237,6 +3237,11 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.strictEqual(hooks.userHooksInstalled(settings), true);
       const codexFile = path.join(home, "codex-home", "hooks.json");
       hooks.installHooks("lofi", 0.4, codexFile, { id: "codex" });
+      // Codex caps these two at 3s and warns on every run past it.
+      for (const file of [codexFile, path.join(root, "hooks", "codex.json")]) {
+        const written = JSON.parse(fs.readFileSync(file, "utf8")).hooks;
+        for (const event of ["SessionEnd", "Interrupt"]) assert.ok(written[event][0].hooks[0].timeout <= 3, `${file}: ${event} over Codex's 3s cap`);
+      }
       for (const extra of [{}, { PLUGIN_ROOT: home, CODEX_HOME: path.join(home, "codex-home") }]) {
         const run = spawnSync(process.execPath, [bin, "--hook-start", "--plugin", "--event", "UserPromptSubmit"], {
           env: env(extra), input: JSON.stringify({ session_id: "plug" }), timeout: 10000

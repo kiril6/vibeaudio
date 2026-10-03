@@ -12,7 +12,7 @@
 
 > **In a hurry?** `npm i -g vibeaudio`, then `vibe --install-hooks`. Your next prompt has music.
 >
-> **Claude Code only?** Skip npm. Inside a session: `/plugin marketplace add kiril6/vibeaudio`, then `/plugin install vibeaudio@vibeaudio` ([details](#as-a-claude-code-plugin)).
+> **Only Claude Code or Codex?** Skip npm. Inside a Claude Code session: `/plugin marketplace add kiril6/vibeaudio`, then `/plugin install vibeaudio@vibeaudio`. For Codex: `codex plugin marketplace add kiril6/vibeaudio`, then `codex plugin add vibeaudio@vibeaudio` ([details](#as-a-plugin-claude-code-and-codex)).
 
 ---
 
@@ -324,9 +324,9 @@ Sessions with no id in their payload share a single slot, so they behave as one.
 
 > **One player is shared.** Prompt two agents at once and the last prompt owns the music. One person, one set of speakers — deliberate, not a limitation being worked around.
 
-### As a Claude Code plugin
+### As a plugin (Claude Code and Codex)
 
-If Claude Code is the only agent you use, the plugin installs the same hooks with no npm step. Inside a Claude Code session, type:
+If Claude Code or Codex is the agent you use, the plugin installs the same hooks with no npm step. Inside a Claude Code session, type:
 
 ```
 /plugin marketplace add kiril6/vibeaudio
@@ -340,11 +340,20 @@ claude plugin marketplace add kiril6/vibeaudio
 claude plugin install vibeaudio@vibeaudio
 ```
 
-It needs Node 18+ on your `PATH` (the hooks run `node`), and it also adds `/vibeaudio:vibe`, the plugin's spelling of [`/vibe`](#vibe-inside-claude-code). Update with `claude plugin update vibeaudio@vibeaudio`; remove with `claude plugin uninstall vibeaudio@vibeaudio` (music already playing stops on its own within 15 minutes, or run `/vibeaudio:vibe stop` first).
+For Codex:
+
+```bash
+codex plugin marketplace add kiril6/vibeaudio
+codex plugin add vibeaudio@vibeaudio
+```
+
+Codex asks you to approve the plugin's hooks once, as it does for any hook. Update with `codex plugin marketplace upgrade vibeaudio`; remove with `codex plugin remove vibeaudio@vibeaudio`.
+
+The plugin needs Node 18+ on your `PATH` (the hooks run `node`). In Claude Code it also adds `/vibeaudio:vibe`, the plugin's spelling of [`/vibe`](#vibe-inside-claude-code). Update with `claude plugin update vibeaudio@vibeaudio`; remove with `claude plugin uninstall vibeaudio@vibeaudio` (music already playing stops on its own within 15 minutes, or run `/vibeaudio:vibe stop` first).
 
 - **Settings are the same file.** `vibe --genre jazz` and the rest work as always, but the `vibe` command comes from `npm i -g vibeaudio`; the plugin alone puts nothing on your `PATH`. Use `/vibeaudio:vibe genre jazz` instead.
 - **Both at once is safe.** If `--install-hooks` has also been run, the plugin's hooks step aside and the installed ones play, so there's no double chime. Remove the installed hooks first if you want the plugin to own it.
-- **Claude Code only.** Codex, Cursor, Gemini and the others still use `vibe --install-hooks`.
+- **Claude Code and Codex.** Cursor, Gemini and the others still use `vibe --install-hooks`. Copilot CLI and Qwen Code can load the same plugin and it carries their events, but neither has been run with it yet.
 - **Not reactive.** `--reactive` is an `--install-hooks` option; the plugin doesn't carry it.
 
 ### `/vibe` inside Claude Code
