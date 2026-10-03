@@ -438,6 +438,35 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 
 ---
 
+### Build on it: `vibe --state` and `vibe --events`
+
+The hard part of VibeAudio isn't the music. It's turning eight agents' different hook events into one set of states that mean the same thing everywhere. The music is one consumer of those states, and anything else can be another: a smart light, a menu bar icon, a tmux status line, a Stream Deck key.
+
+```bash
+vibe --state
+# {"v":1,"status":"waiting","sessions":[{"session":"…","project":"/work/api","state":"waiting","since":1791026124771,"tool":"Bash"}]}
+```
+
+Each session is `working`, `stuck` (4 of its last 8 tool calls failed) or `waiting` (on you: a permission dialog or a question). `status` is the machine's overall state: the most urgent of its sessions, in the order `waiting` > `stuck` > `working` > `idle`. One session waiting on you matters more than three working.
+
+`vibe --events` prints that snapshot once, then a JSON line for every change, as it happens:
+
+```json
+{"v":1,"at":1791026130000,"event":"waiting","session":"…","project":"/work/api","tool":"Bash","status":"waiting"}
+```
+
+Events: `started`, `waiting`, `resumed`, `stuck`, `recovered`, `finished` (with `outcome`: `success` or `failure`), `interrupted`, `ended`. Every line also carries `status`, the machine's state after the event, so a consumer that only cares about the overall state can read that one field. Some examples:
+
+```bash
+# tmux: show the state in the status bar
+set -g status-right '#(vibe --state | jq -r .status)'
+
+# macOS: say it out loud when any agent needs you
+vibe --events | jq --unbuffered -r 'select(.event=="waiting") | .project' | while read p; do say "$(basename "$p") needs you"; done
+```
+
+The stream is a local file (`~/.vibeaudio/events.jsonl`, rotated at 256 KB), so it never leaves your machine. It keeps updating while you're muted, because a mute silences sound and a light isn't sound. The `v` field is the format version, and any breaking change will increment it.
+
 ## 🖥️ Everything Else (Claude Desktop, Antigravity… via MCP)
 
 **Claude Code, [Codex](https://github.com/openai/codex), [Cursor](https://cursor.com/docs/hooks), [Grok](https://docs.x.ai/build/features/hooks), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Copilot CLI](https://docs.github.com/en/copilot/reference/hooks-configuration), [Qwen Code](https://github.com/QwenLM/qwen-code) and [Windsurf](https://docs.devin.ai/desktop/cascade/hooks) have hook systems, and `--install-hooks` writes to all eight** — use [hooks](#-agent-hooks-no-wrapper-needed) there, they're strictly better. This section is for everything else. MCP is the way in: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
@@ -616,6 +645,8 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--doctor` | Check the setup; every problem comes with the command that fixes it. Exits 1 on a failure, so it scripts | — |
 | `--notify` / `--no-notify` | Also show a desktop banner naming the project when a turn finishes, fails or needs you. Saved to `config.json` | off |
 | `--report [days]` | How long you waited on agents, and on which projects, from the local turn log | `7` days |
+| `--state` | What every agent on the machine is doing, as one line of JSON: `idle`, `working`, `stuck` or `waiting` | — |
+| `--events` | Stream agent state changes as JSON lines, starting with the current state, until stopped | — |
 | `--stop` | Stop the background player, then exit | — |
 | `--mute [minutes]` | Silence everything for a call, then exit | `60` min (`0` = until unmuted) |
 | `--unmute` | Resume normal playback, then exit | — |

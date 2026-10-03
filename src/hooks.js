@@ -25,6 +25,7 @@ const INTENSITY_FILE = path.join(STATE_DIR, "intensity");
 // them is working; each holds where its transcript began and, while paused for
 // the user, what will resume it.
 const SESSIONS_DIR = path.join(STATE_DIR, "sessions");
+const EVENTS_FILE = path.join(STATE_DIR, "events.jsonl");
 // Payloads that name no session share this one slot.
 const ANON_SESSION = "anon";
 const CLI_ENTRY = path.join(__dirname, "..", "bin", "vibeaudio.js");
@@ -452,7 +453,7 @@ function newTurn(raw) {
   const payload = parsePayload(raw);
   const transcript = typeof payload.transcript_path === "string" ? payload.transcript_path : "";
   const offset = transcript ? fileSize(transcript) : 0;
-  return { session: String(payloadSession(payload) || ""), transcript, offset, blocked: blockedJustBefore(transcript, offset) };
+  return { session: String(payloadSession(payload) || ""), project: payload.cwd || process.cwd(), transcript, offset, blocked: blockedJustBefore(transcript, offset) };
 }
 
 const BLOCK_LOOKBACK_MS = 3000;
@@ -556,6 +557,91 @@ const STUCK_WINDOW = 8;
 const STUCK_FAILURES = 4;
 const isStuck = (session) => (session.recent || []).filter(Boolean).length >= STUCK_FAILURES;
 
+/**
+ * The public face of the session files: what every agent on the machine is
+ * doing, in five words that mean the same thing whichever agent it is. The
+ * hard part of this project is mapping eight agents' hook events onto those
+ * states; the music is one consumer of them, and `vibe --state` / `--events`
+ * let anything else be another - a light, a menu bar, a tmux status line.
+ * `status` is the machine's: the most urgent of its sessions, since one
+ * session waiting on you matters more than three working.
+ */
+const STATE_RANK = ["idle", "working", "stuck", "waiting"];
+const sessionState = (s) => (s.waiting != null ? "waiting" : isStuck(s) ? "stuck" : "working");
+
+function agentState(sessions = listSessions()) {
+  const list = sessions.map((s) => ({
+    session: s.id,
+    project: s.project || null,
+    state: sessionState(s),
+    since: s.started || null,
+    ...(s.waiting ? { tool: s.waiting } : {})
+  }));
+  const status = list.reduce((a, s) => (STATE_RANK.indexOf(s.state) > STATE_RANK.indexOf(a) ? s.state : a), "idle");
+  return { v: 1, status, sessions: list };
+}
+
+const EVENTS_MAX_BYTES = 256 * 1024;
+
+/**
+ * Appends one transition to ~/.vibeaudio/events.jsonl, after the session file
+ * already reflects it, so `status` is the state the event left behind. Not
+ * gated by a mute: a mute silences sound, and a light watching this is not
+ * sound. Rotated to `.1` rather than trimmed in place, so a follower sees a
+ * fresh file instead of re-reading the lines a trim kept. Never throws.
+ */
+function emitEvent(event, session, project, extra = {}) {
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    try {
+      if (fs.statSync(EVENTS_FILE).size > EVENTS_MAX_BYTES) fs.renameSync(EVENTS_FILE, `${EVENTS_FILE}.1`);
+    } catch (e) { /* no file yet */ }
+    const line = { v: 1, at: Date.now(), event, session, project: project || null, ...extra, status: agentState().status };
+    fs.appendFileSync(EVENTS_FILE, `${JSON.stringify(line)}\n`); // One write under PIPE_BUF: appends do not interleave.
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * `vibe --events`: the current state as one line, then every event as it is
+ * written, until killed. Polled rather than fs.watch'd, which is unreliable on
+ * the platforms this runs on; a quarter second is well inside a turn.
+ */
+function followEvents(write = (s) => process.stdout.write(s), pollMs = 250) {
+  write(`${JSON.stringify({ event: "state", at: Date.now(), ...agentState() })}\n`);
+  const stat = () => {
+    try {
+      const st = fs.statSync(EVENTS_FILE);
+      return { size: st.size, ino: st.ino };
+    } catch (e) {
+      return { size: 0, ino: null };
+    }
+  };
+  let { size: pos, ino } = stat();
+  let partial = "";
+  return setInterval(() => {
+    const now = stat();
+    if (now.ino !== ino || now.size < pos) {
+      ino = now.ino; // Rotated: the new file holds only what came after.
+      pos = 0;
+      partial = "";
+    }
+    if (now.size <= pos) return;
+    try {
+      const fd = fs.openSync(EVENTS_FILE, "r");
+      const buf = Buffer.alloc(now.size - pos);
+      fs.readSync(fd, buf, 0, buf.length, pos);
+      fs.closeSync(fd);
+      pos = now.size;
+      const lines = (partial + buf.toString("utf8")).split("\n");
+      partial = lines.pop();
+      for (const l of lines) if (l) write(`${l}\n`);
+    } catch (e) { /* removed between stat and open: next poll */ }
+  }, pollMs);
+}
+
 // Claude Code's entry for Esc / the stop button: a user message whose text is
 // "[Request interrupted by user]" or "... for tool use]".
 const INTERRUPT_MARK = "[Request interrupted by user";
@@ -638,6 +724,7 @@ function runDaemon(genre, volume, { reactive = false, volumeSource = null } = {}
       if (watchers.get(s.id)()) {
         fs.rmSync(sessionFile(s.id), { force: true });
         watchers.delete(s.id);
+        emitEvent("interrupted", s.id, s.project);
       }
     }
     return working(listSessions()).length > 0;
@@ -710,7 +797,9 @@ function hookStart(genre, volume, { reactive = false, turn = null, follow = fals
   if (turn && turn.blocked) return null; // Rejected before it began: nothing to play for.
   const id = sessionId(turn && turn.session);
   // Before the spawn: the daemon reads it on startup.
-  writeSession(id, { transcript: (turn && turn.transcript) || "", offset: (turn && turn.offset) || 0, waiting: null, started: Date.now(), blockedMs: 0 });
+  const project = (turn && turn.project) || process.cwd();
+  writeSession(id, { project, transcript: (turn && turn.transcript) || "", offset: (turn && turn.offset) || 0, waiting: null, started: Date.now(), blockedMs: 0 });
+  emitEvent("started", id, project);
   if (working(listSessions()).some((s) => s.id !== id) && daemonRunning()) return readPid();
 
   stopDaemon({ keepSessions: true });
@@ -822,6 +911,7 @@ function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChi
   const session = readSession(id);
   const tracked = session !== null;
   fs.rmSync(sessionFile(id), { force: true });
+  if (tracked) emitEvent("finished", id, parsePayload(raw).cwd || session.project, { outcome });
   if (session && Number.isFinite(session.started)) {
     const now = Date.now();
     // A turn that ends while still paused for you has been blocked since then.
@@ -888,6 +978,7 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
   if (!session || session.waiting != null) return false;
 
   writeSession(id, { ...session, waiting: waitKey(raw), waitStart: Date.now() });
+  emitEvent("waiting", id, session.project, waitKey(raw) ? { tool: waitKey(raw) } : {});
   if (working(listSessions()).length === 0) stopDaemon({ keepSessions: true });
   const tool = payloadToolName(raw);
   notify(raw, tool ? `needs you (${tool})` : "needs you");
@@ -929,11 +1020,14 @@ function hookResume(raw, genre, volume, { reactive = false, follow = false } = {
   const resumes = session.waiting != null && (session.waiting === "" || session.waiting === waitKey(raw));
   if (!resumes) {
     writeSession(id, next);
+    if (crossing) emitEvent(crossing, id, session.project);
     return false; // Not waiting - the common case, on every tool call.
   }
 
   const blockedMs = (session.blockedMs || 0) + (session.waitStart ? Date.now() - session.waitStart : 0);
   writeSession(id, { ...next, waiting: null, waitStart: null, blockedMs });
+  emitEvent("resumed", id, session.project);
+  if (crossing) emitEvent(crossing, id, session.project);
   if (!daemonRunning()) spawnDaemon(genre, volume, reactive, follow);
   return true;
 }
@@ -949,9 +1043,11 @@ function hookResume(raw, genre, volume, { reactive = false, follow = false } = {
  */
 function hookEnd(raw) {
   const id = sessionId(payloadSession(parsePayload(raw)));
-  if (!readSession(id)) return false;
+  const session = readSession(id);
+  if (!session) return false;
 
   fs.rmSync(sessionFile(id), { force: true });
+  emitEvent("ended", id, session.project);
   if (working(listSessions()).length === 0) {
     stopDaemon({ keepSessions: true });
     fs.rmSync(INTENSITY_FILE, { force: true });
@@ -1252,6 +1348,9 @@ module.exports = {
   hookResume,
   isStuck,
   STUCK_WINDOW,
+  agentState,
+  followEvents,
+  EVENTS_FILE,
   hookEnd,
   newTurn,
   outcomeFromPayload,

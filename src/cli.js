@@ -78,6 +78,8 @@ Procedural focus music while your AI coding tools think.
       --status                 Show what is installed, running and detected, then exit
       --notify | --no-notify   Also show a desktop banner naming the project when a turn finishes or needs you (off by default)
       --report [days]          How long you waited on agents, and where (default: 7 days)
+      --state                  Print what every agent is doing as JSON: idle, working, stuck or waiting
+      --events                 Stream agent state changes as JSON lines, until stopped
       --doctor                 Check the setup; each problem comes with its fix (exit 1 if any)
       --stop                   Stop the background player, then exit
       --mute [minutes]         Silence everything for a call (default: 60 min, 0 = until unmuted)
@@ -174,6 +176,8 @@ function parseArgs(argv) {
   let render = null;
   let clearCacheFlag = false;
   let statusFlag = false;
+  let stateFlag = false;
+  let eventsFlag = false;
   let doctorFlag = false;
   let notifyFlag = null;
   let reportDays = null;
@@ -285,6 +289,13 @@ function parseArgs(argv) {
 
     if (arg === "--status") {
       statusFlag = true;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--state" || arg === "--events") {
+      if (arg === "--state") stateFlag = true;
+      else eventsFlag = true;
       i += 1;
       continue;
     }
@@ -470,6 +481,8 @@ function parseArgs(argv) {
     render,
     clearCache: clearCacheFlag,
     status: statusFlag,
+    state: stateFlag,
+    events: eventsFlag,
     doctor: doctorFlag,
     notify: notifyFlag,
     report: reportDays,
@@ -1518,6 +1531,8 @@ async function run() {
     render,
     clearCache: shouldClear,
     status: showStatus,
+    state: showState,
+    events: followEvents,
     doctor: showDoctor,
     notify: notifyChange,
     report: reportDays,
@@ -1608,6 +1623,18 @@ async function run() {
 
   if (showDoctor) {
     return printDoctor();
+  }
+
+  // Machine-readable, for lights, menu bars and status lines: see "Build on it" in the README.
+  if (showState) {
+    console.log(JSON.stringify(require("./hooks").agentState()));
+    return;
+  }
+
+  if (followEvents) {
+    process.stdout.on("error", () => process.exit(0)); // `vibe --events | head` closing the pipe is not an error.
+    require("./hooks").followEvents();
+    return;
   }
 
   if (reportDays !== null) {

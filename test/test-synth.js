@@ -3228,7 +3228,81 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ Four failures in eight calls adds a heartbeat on the tonic, clear of the seams; it notifies once and clears itself.");
   }
 
-  console.log("\n\x1b[32mAll 61 tests passed successfully!\x1b[0m");
+  // [62] --state and --events: the agent states, for consumers other than the music.
+  console.log("\n\x1b[1m[62] Agent state as JSON, and a stream of its changes\x1b[0m");
+  {
+    const { spawnSync, spawn } = require("child_process");
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-events-"));
+    const env = { ...process.env, HOME: home, USERPROFILE: home, VIBE_DISABLE: "1", VIBE_NO_UPDATE_CHECK: "1", VIBE_NO_HISTORY: "1" };
+    const CLI = path.join(__dirname, "..", "bin", "vibeaudio.js");
+    const hook = (action, payload) => spawnSync(process.execPath, [CLI, `--hook-${action}`], { input: JSON.stringify(payload), env, timeout: 10000 });
+    const state = () => JSON.parse(spawnSync(process.execPath, [CLI, "--state"], { env, encoding: "utf8" }).stdout);
+    const eventsFile = path.join(home, ".vibeaudio", "events.jsonl");
+    const events = () => fs.readFileSync(eventsFile, "utf8").trim().split("\n").map(JSON.parse);
+    const s1 = (extra = {}) => ({ session_id: "s1", cwd: "/work/api", ...extra });
+
+    try {
+      assert.deepStrictEqual(state(), { v: 1, status: "idle", sessions: [] }, "nothing running is idle");
+
+      hook("start", s1());
+      assert.deepStrictEqual(state().sessions.map((s) => [s.session, s.project, s.state]), [["s1", "/work/api", "working"]]);
+      hook("wait", s1({ tool_name: "Bash" }));
+      assert.strictEqual(state().sessions[0].tool, "Bash", "a waiting session says what it waits on");
+
+      // The machine's status is its most urgent session: waiting beats working.
+      hook("start", { session_id: "s2", cwd: "/work/web" });
+      assert.strictEqual(state().status, "waiting", "one session waiting on you outranks another working");
+
+      hook("resume", s1({ tool_name: "Bash", hook_event_name: "PostToolUse" }));
+      for (let i = 0; i < 4; i++) hook("resume", s1({ tool_name: "Bash", hook_event_name: "PostToolUseFailure" }));
+      assert.strictEqual(state().status, "stuck", "stuck outranks working");
+      for (let i = 0; i < 8; i++) hook("resume", s1({ tool_name: "Bash", hook_event_name: "PostToolUse" }));
+      hook("stop", s1());
+      hook("end", { session_id: "s2" });
+      hook("end", { session_id: "nobody" });
+
+      const log = events();
+      assert.deepStrictEqual(log.map((e) => e.event), ["started", "waiting", "started", "resumed", "stuck", "recovered", "finished", "ended"],
+        "each transition once - not one line per tool call, and nothing for a session never seen");
+      assert.deepStrictEqual(log.map((e) => e.status), ["working", "waiting", "waiting", "working", "stuck", "working", "working", "idle"],
+        "every line carries the status it left behind");
+      assert.strictEqual(log[1].tool, "Bash");
+      assert.strictEqual(log[6].outcome, "success");
+      assert.ok(log.every((e) => e.v === 1 && Number.isFinite(e.at) && e.session), "versioned, timestamped, attributed");
+      assert.strictEqual(log[7].project, "/work/web", "a session's project is remembered from its prompt");
+
+      // A muted machine still reports state: a light is not sound.
+      fs.writeFileSync(path.join(home, ".vibeaudio", "muted"), "0");
+      hook("start", s1());
+      assert.strictEqual(events().pop().event, "started", "muting silences sound, not state");
+
+      // The stream: current state first, then new lines - including across a rotation.
+      fs.writeFileSync(eventsFile, `${"x".repeat(300 * 1024)}\n`);
+      const follower = spawn(process.execPath, [CLI, "--events"], { env });
+      let out = "";
+      follower.stdout.on("data", (d) => { out += d; });
+      const until = async (what, check) => {
+        for (let i = 0; i < 60 && !check(); i++) await new Promise((r) => setTimeout(r, 100));
+        assert.ok(check(), what);
+      };
+      await until("--events opens with the current state", () => out.includes("\n"));
+      const first = JSON.parse(out.split("\n")[0]);
+      assert.strictEqual(first.event, "state");
+      assert.strictEqual(first.status, "working");
+      hook("stop", s1());
+      await until("a new event reaches the stream", () => /"finished"/.test(out));
+      follower.kill();
+      assert.ok(!out.includes("xxx"), "a rotation starts the follower on the new file, not over the old one");
+      assert.ok(fs.existsSync(`${eventsFile}.1`) && fs.statSync(eventsFile).size < 1024, "the log rotates past 256 KB");
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+    assert.strictEqual(parseArgs(["node", "vibe", "--events"]).events, true);
+    assert.strictEqual(parseArgs(["node", "vibe", "npm", "--state"]).state, false, "after the command it is the child's flag");
+    console.log("   ✓ One state vocabulary across agents: a JSON snapshot, and a stream that survives rotation.");
+  }
+
+  console.log("\n\x1b[32mAll 62 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);
