@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-VibeAudio: a zero-dependency Node.js CLI (`vibe <command>`) that wraps any AI coding tool (Claude Code, Gemini, Codex, etc.), playing procedurally-generated focus music while the wrapped command runs and an outcome chime when it exits. All audio is synthesized in pure JS (no MP3 assets, no native bindings) and played via macOS `afplay`.
+VibeAudio: a zero-dependency Node.js CLI (`vibe <command>`) that wraps any AI coding tool (Claude Code, Gemini, Codex, etc.), playing procedurally-generated focus music while the wrapped command runs and an outcome chime when it exits. All audio is synthesized in pure JS (no MP3 assets, no native bindings) and played natively across macOS (AVAudioPlayer/`afplay`), Linux (`paplay`/`ffplay`/`aplay`), and Windows (PowerShell `SoundPlayer`).
 
 ## Commands
 
@@ -18,7 +18,7 @@ npm link                              # to test the `vibe`/`vibeaudio` global bi
 
 There is no build step, linter, or bundler — it's plain CommonJS Node (`engines.node >= 18`). To run a single check, just run `node test/test-synth.js` (the whole file is one linear script of assertions; there's no per-test filtering).
 
-**Audio is cached per version.** After editing anything in `src/synth/`, run `--clear-cache` or you'll keep hearing the previous render.
+**Audio cache keys are derived from `synthFingerprint()`** (hashing `src/synth/*.js`), so editing any generator automatically invalidates and regenerates cache entries. Run `--clear-cache` to purge stale renders.
 
 ## Architecture
 
