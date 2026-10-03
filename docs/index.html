@@ -351,9 +351,9 @@ a.chip:hover{ border-color:var(--chip); box-shadow:0 0 14px -2px var(--chip); }
 .vol-slider{ -webkit-appearance:none; appearance:none; width:64px; height:4px; border-radius:2px; background:var(--line); outline:none; cursor:pointer; }
 .vol-slider::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:10px; height:10px; border-radius:50%; background:var(--cyan); box-shadow:0 0 6px var(--cyan); cursor:pointer; }
 .vol-slider::-moz-range-thumb{ width:10px; height:10px; border-radius:50%; background:var(--cyan); box-shadow:0 0 6px var(--cyan); border:none; cursor:pointer; }
-.vol-val{ font-size:11px; font-family:var(--mono); color:var(--ink-faint); width:28px; }
-@media (max-width:920px){ .vol-val{ display:none; } .vol-slider{ width:50px; } }
-@media (max-width:640px){ .vol-control{ display:none; } }
+.vol-val{ font-size:11px; font-family:var(--mono); color:var(--ink-dim); width:34px; text-align:right; font-variant-numeric:tabular-nums; }
+@media (max-width:640px){ .vol-val{ display:none; } .vol-slider{ width:50px; } }
+@media (max-width:520px){ .vol-control{ display:none; } }
 
 /* ---------- Keyboard hint ---------- */
 .kbd-hint{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--ink-faint); margin-top:10px; }
@@ -722,16 +722,20 @@ footer a{ color:var(--ink-dim); }
   var activeBtn = null, activeCard = null, rafId = null;
   var audioCtx, analyser, sourceNode, freqData;
 
+  var gainNode = null;
   function ensureAudioGraph(){
     if (audioCtx) return;
     var Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
     audioCtx = new Ctx();
     sourceNode = audioCtx.createMediaElementSource(audio);
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = audio.volume;
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 64;
     freqData = new Uint8Array(analyser.frequencyBinCount);
-    sourceNode.connect(analyser);
+    sourceNode.connect(gainNode);
+    gainNode.connect(analyser);
     analyser.connect(audioCtx.destination);
   }
 
@@ -741,27 +745,30 @@ footer a{ color:var(--ink-dim); }
   var volMuteBtn = document.getElementById("vol-mute-btn");
   var volVal = document.getElementById("vol-val");
   var prevVol = 0.8;
+
+  function updateVolume(val){
+    var num = parseFloat(val);
+    if (isNaN(num)) return;
+    var pct = Math.max(0, Math.min(100, Math.round(num)));
+    var frac = pct / 100;
+    audio.volume = frac;
+    if (gainNode) gainNode.gain.value = frac;
+    if (volSlider && volSlider.value != pct) volSlider.value = pct;
+    if (volVal) volVal.textContent = pct + "%";
+    if (volMuteBtn) volMuteBtn.textContent = pct === 0 ? "🔇" : pct < 50 ? "🔉" : "🔊";
+  }
+
   if (volSlider){
-    volSlider.addEventListener("input", function(){
-      var v = parseInt(this.value, 10) / 100;
-      audio.volume = v;
-      if (volVal) volVal.textContent = Math.round(v * 100) + "%";
-      if (volMuteBtn) volMuteBtn.textContent = v === 0 ? "🔇" : v < 0.5 ? "🔉" : "🔊";
-    });
+    volSlider.addEventListener("input", function(){ updateVolume(this.value); });
+    volSlider.addEventListener("change", function(){ updateVolume(this.value); });
   }
   if (volMuteBtn){
     volMuteBtn.addEventListener("click", function(){
       if (audio.volume > 0){
         prevVol = audio.volume;
-        audio.volume = 0;
-        volSlider.value = 0;
-        if (volVal) volVal.textContent = "0%";
-        volMuteBtn.textContent = "🔇";
+        updateVolume(0);
       } else {
-        audio.volume = prevVol || 0.8;
-        volSlider.value = Math.round(audio.volume * 100);
-        if (volVal) volVal.textContent = volSlider.value + "%";
-        volMuteBtn.textContent = audio.volume < 0.5 ? "🔉" : "🔊";
+        updateVolume(Math.round((prevVol || 0.8) * 100));
       }
     });
   }
