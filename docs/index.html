@@ -199,11 +199,27 @@ html{ scroll-behavior:smooth; }
   background:#0a0614; border:1px solid rgba(0,229,255,.35); border-radius:8px;
   overflow:hidden; box-shadow:0 0 50px rgba(0,229,255,.12), 0 30px 60px -30px rgba(0,0,0,.85);
 }
-.terminal-bar{ display:flex; gap:7px; padding:12px 14px; border-bottom:1px solid var(--line); background:rgba(255,255,255,.02); }
-.terminal-bar span{ width:10px; height:10px; border-radius:50%; }
-.terminal-bar span:nth-child(1){ background:var(--pink); box-shadow:0 0 6px var(--pink); }
-.terminal-bar span:nth-child(2){ background:var(--purple); box-shadow:0 0 6px var(--purple); }
-.terminal-bar span:nth-child(3){ background:var(--cyan); box-shadow:0 0 6px var(--cyan); }
+.terminal-bar{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:10px 14px; border-bottom:1px solid var(--line); background:rgba(255,255,255,.02);
+  min-height:42px;
+}
+.terminal-dots{ display:flex; align-items:center; gap:7px; flex:none; }
+.terminal-dots span{ display:block; width:10px; height:10px; border-radius:50%; flex:none; }
+.terminal-dots span:nth-child(1){ background:var(--pink); box-shadow:0 0 6px var(--pink); }
+.terminal-dots span:nth-child(2){ background:var(--purple); box-shadow:0 0 6px var(--purple); }
+.terminal-dots span:nth-child(3){ background:var(--cyan); box-shadow:0 0 6px var(--cyan); }
+.terminal-agent-tabs{ display:flex; align-items:center; gap:6px; overflow-x:auto; }
+.agent-tab{
+  background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); color:var(--ink-dim);
+  font-family:var(--mono); font-size:11px; padding:4px 10px; border-radius:4px; cursor:pointer;
+  transition:all .15s; white-space:nowrap; outline:none; line-height:1.2;
+}
+.agent-tab:hover{ color:var(--ink); border-color:var(--cyan); background:rgba(0,229,255,.08); }
+.agent-tab.active{
+  color:var(--cyan); border-color:var(--cyan); background:rgba(0,229,255,.14);
+  box-shadow:0 0 12px rgba(0,229,255,.35); text-shadow:0 0 8px rgba(0,229,255,.6); font-weight:600;
+}
 .terminal-body{ padding:20px; font-size:13px; min-height:200px; }
 .terminal-line{ color:var(--ink-dim); margin-bottom:10px; }
 .terminal-line .prompt{ color:var(--amber); text-shadow:0 0 8px rgba(255,180,84,.6); }
@@ -343,15 +359,6 @@ a.chip:hover{ border-color:var(--chip); box-shadow:0 0 14px -2px var(--chip); }
 .kbd-hint{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--ink-faint); margin-top:10px; }
 kbd{ background:var(--bg-raised); border:1px solid var(--line); border-radius:3px; padding:1px 5px; font-size:10.5px; font-family:var(--mono); color:var(--ink-dim); box-shadow:0 1px 0 var(--line); }
 
-/* ---------- Terminal Agent Tabs ---------- */
-.terminal-dots{ display:flex; gap:7px; }
-.terminal-agent-tabs{ display:flex; gap:4px; flex-wrap:wrap; }
-.agent-tab{
-  background:none; border:1px solid transparent; color:var(--ink-faint); font-family:var(--mono);
-  font-size:11px; padding:2px 7px; border-radius:3px; cursor:pointer; transition:all .15s;
-}
-.agent-tab:hover{ color:var(--ink); border-color:var(--line); }
-.agent-tab.active{ color:var(--cyan); border-color:rgba(0,229,255,.4); background:rgba(0,229,255,.1); text-shadow:0 0 8px rgba(0,229,255,.5); font-weight:600; }
 
 /* ---------- Audio Buffering State ---------- */
 @keyframes spin-pulse { 0%{ transform:rotate(0deg); opacity:.6; } 50%{ opacity:1; } 100%{ transform:rotate(360deg); opacity:.6; } }
@@ -445,11 +452,11 @@ footer a{ color:var(--ink-dim); }
       <div class="terminal-bar">
         <div class="terminal-dots"><span></span><span></span><span></span></div>
         <div class="terminal-agent-tabs" role="tablist" aria-label="Select AI agent">
-          <button class="agent-tab active" data-agent="claude" role="tab" aria-selected="true">Claude</button>
-          <button class="agent-tab" data-agent="codex" role="tab" aria-selected="false">Codex</button>
-          <button class="agent-tab" data-agent="cursor" role="tab" aria-selected="false">Cursor</button>
-          <button class="agent-tab" data-agent="gemini" role="tab" aria-selected="false">Gemini</button>
-          <button class="agent-tab" data-agent="grok" role="tab" aria-selected="false">Grok</button>
+          <button class="agent-tab active" type="button" data-agent="claude" role="tab" aria-selected="true">Claude</button>
+          <button class="agent-tab" type="button" data-agent="codex" role="tab" aria-selected="false">Codex</button>
+          <button class="agent-tab" type="button" data-agent="cursor" role="tab" aria-selected="false">Cursor</button>
+          <button class="agent-tab" type="button" data-agent="gemini" role="tab" aria-selected="false">Gemini</button>
+          <button class="agent-tab" type="button" data-agent="grok" role="tab" aria-selected="false">Grok</button>
         </div>
       </div>
       <div class="terminal-body">
@@ -933,6 +940,8 @@ footer a{ color:var(--ink-dim); }
         setTimeout(function(){ btn.textContent = prev; }, 1200);
       }).catch(function(){});
     });
+  });
+
   // ---- Keyboard shortcuts ----
   window.addEventListener("keydown", function(e){
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
@@ -1019,8 +1028,23 @@ footer a{ color:var(--ink-dim); }
       t.setAttribute("aria-selected", String(match));
     });
     PROMPT = AGENT_PROMPTS[ag].cmd;
-    if (activeBtn !== heroBtn){
+    if (activeBtn === heroBtn){
+      heroCmdline.textContent = PROMPT;
+      var agData = AGENT_PROMPTS[ag];
+      var m = manifest.lofi;
+      if (m && audio.duration){
+        var ms = audio.currentTime * 1000;
+        heroActivity.textContent = ms < 1400 ? "◌ thinking…"
+          : ms < m.tier2StartMs ? agData.activity
+          : ms < m.tier3StartMs ? agData.edit
+          : ms < m.chimeStartMs ? "● running the test suite"
+          : "✓ turn complete — the music stops, a chime plays";
+      } else {
+        heroActivity.textContent = agData.activity;
+      }
+    } else {
       heroTypePrompt();
+      heroActivity.textContent = "◌ ready — click Hear it or press Space";
     }
   }
 
