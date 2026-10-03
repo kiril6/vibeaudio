@@ -456,14 +456,25 @@ function daemonPlaying() {
 
 /**
  * Stops the player. `keepSessions` leaves the session files alone: the hooks
- * use it because they decide per session what is still going on. Every other
- * stop (--stop, --mute, uninstall) ends everything, or a later tool call would
- * resume music nobody is waiting for.
+ * use it because they decide per session what is still going on, and --mute
+ * because a mute is about sound - the turns are still in flight, and should
+ * still reach --state, --events and --report. --stop and uninstall end
+ * everything, or a later tool call would resume music nobody is waiting for;
+ * each session dropped gets an `ended` event with that `reason`, or an
+ * --events consumer would show it working forever (#24).
  */
-function stopDaemon({ keepSessions = false } = {}) {
+function stopDaemon({ keepSessions = false, reason = "stop" } = {}) {
   const pid = readPid();
   fs.rmSync(PID_FILE, { force: true });
-  if (!keepSessions) fs.rmSync(SESSIONS_DIR, { recursive: true, force: true });
+  if (!keepSessions) {
+    // Removed before its event, so each line's status is what it left behind
+    // and the last one reads idle.
+    for (const s of listSessions()) {
+      fs.rmSync(sessionFile(s.id), { force: true });
+      emitEvent("ended", s.id, s.project, { reason });
+    }
+    fs.rmSync(SESSIONS_DIR, { recursive: true, force: true });
+  }
   if (pid === null || !isOurDaemon(pid)) return false;
 
   try {

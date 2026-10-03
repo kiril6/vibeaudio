@@ -688,7 +688,7 @@ function uninstallHookTargets() {
   // `npm rm -g` right after this would take away the only thing that could
   // stop it. Done here rather than in uninstallHooks() so that function stays
   // a pure config edit for tests.
-  if (hooks.stopDaemon()) console.log(`  Stopped the background player that was still running.`);
+  if (hooks.stopDaemon({ reason: "uninstall" })) console.log(`  Stopped the background player that was still running.`);
 }
 
 /**
@@ -1600,8 +1600,9 @@ async function run() {
     const minutes = muteMinutes === null ? DEFAULT_MUTE_MINUTES : muteMinutes;
     const state = setMuted(true, minutes);
     // Muting has to silence what is playing right now, not just the next
-    // prompt - the whole point is that a call is already ringing.
-    const stopped = require("./hooks").stopDaemon();
+    // prompt - the whole point is that a call is already ringing. The turns
+    // in flight are kept: they still finish, log and show in --state.
+    const stopped = require("./hooks").stopDaemon({ keepSessions: true });
 
     console.log(`\x1b[33m🔇 Muted ${muteRemainingText(state)}.\x1b[0m`);
     if (stopped) console.log(`  Stopped the player that was running.`);

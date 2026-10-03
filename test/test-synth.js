@@ -3344,6 +3344,22 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       follower.kill();
       assert.ok(!out.includes("xxx"), "a rotation starts the follower on the new file, not over the old one");
       assert.ok(fs.existsSync(`${eventsFile}.1`) && fs.statSync(eventsFile).size < 1024, "the log rotates past 256 KB");
+
+      // #24: --mute keeps the turns in flight; --stop ends each one out loud.
+      hook("start", s1());
+      hook("start", { session_id: "s2", cwd: "/work/web" });
+      const cli = (...args) => spawnSync(process.execPath, [CLI, ...args], { env, encoding: "utf8", timeout: 10000 });
+      const before = events().length;
+      assert.strictEqual(cli("--mute").status, 0);
+      assert.strictEqual(state().sessions.length, 2, "a mute silences the music, not the turns");
+      assert.strictEqual(events().length, before, "and ends nothing");
+      cli("--unmute");
+      assert.strictEqual(cli("--stop").status, 0);
+      const ended = events().slice(before);
+      assert.deepStrictEqual(ended.map((e) => [e.event, e.reason]).sort(), [["ended", "stop"], ["ended", "stop"]], "--stop ends every session it drops");
+      assert.deepStrictEqual(ended.map((e) => e.session).sort(), ["s1", "s2"]);
+      assert.deepStrictEqual(ended.map((e) => e.status), ["working", "idle"], "the last one leaves the machine idle");
+      assert.deepStrictEqual(state(), { v: 1, status: "idle", sessions: [] });
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }

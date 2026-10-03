@@ -473,7 +473,7 @@ Each session is `working`, `stuck` (4 of its last 8 tool calls failed) or `waiti
 {"v":1,"at":1791026130000,"event":"waiting","session":"…","project":"/work/api","tool":"Bash","status":"waiting"}
 ```
 
-Events: `started`, `waiting`, `resumed`, `stuck`, `recovered`, `finished` (with `outcome`: `success` or `failure`), `interrupted`, `ended`. Every line also carries `status`, the machine's state after the event, so a consumer that only cares about the overall state can read that one field. Some examples:
+Events: `started`, `waiting`, `resumed`, `stuck`, `recovered`, `finished` (with `outcome`: `success` or `failure`), `interrupted`, `ended` (with `reason` when `vibe --stop` or `--uninstall-hooks` ended it). Every line also carries `status`, the machine's state after the event, so a consumer that only cares about the overall state can read that one field. Some examples:
 
 ```bash
 # tmux: show the state in the status bar
