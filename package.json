@@ -10,8 +10,7 @@
   "scripts": {
     "test": "node test/test-synth.js",
     "start": "node bin/vibeaudio.js",
-    "version": "node -e \"const fs=require('fs'),v=require('./package.json').version;for(const f of ['.claude-plugin/plugin.json','.codex-plugin/plugin.json']){const j=JSON.parse(fs.readFileSync(f,'utf8'));j.version=v;fs.writeFileSync(f,JSON.stringify(j,null,2)+'\\n')}\" && git add .claude-plugin/plugin.json .codex-plugin/plugin.json",
-    "postinstall": "node scripts/postinstall.js"
+    "version": "node -e \"const fs=require('fs'),v=require('./package.json').version;for(const f of ['.claude-plugin/plugin.json','.codex-plugin/plugin.json']){const j=JSON.parse(fs.readFileSync(f,'utf8'));j.version=v;fs.writeFileSync(f,JSON.stringify(j,null,2)+'\\n')}\" && git add .claude-plugin/plugin.json .codex-plugin/plugin.json"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org/",
@@ -23,7 +22,6 @@
   "files": [
     "bin/",
     "src/",
-    "scripts/postinstall.js",
     "README.md",
     "LICENSE"
   ],
