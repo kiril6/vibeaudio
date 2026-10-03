@@ -1,3 +1,10 @@
 node_modules/
 .DS_Store
 *.log
+
+# Personal Claude Code settings (a shared .claude/settings.json would be committed)
+.claude/settings.local.json
+# scripts/gemini-extension.js output
+dist/
+# npm pack
+*.tgz
