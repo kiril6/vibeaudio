@@ -2950,20 +2950,24 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         { input: JSON.stringify(payload), encoding: "utf8",
           env: { PATH: bin, HOME: nHome, USERPROFILE: nHome, ...extraEnv } }
       );
-      const waitFor = (file) => { for (let i = 0; i < 40 && !fs.existsSync(file); i++) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50); return fs.existsSync(file); };
+      // The stub's shell creates the file before it writes to it, so wait for
+      // the text, not the file: an existence check alone raced on a busy CI
+      // runner. The 10s ceiling is only reached on failure.
+      const read = (file) => { try { return fs.readFileSync(file, "utf8"); } catch (e) { return ""; } };
+      const waitFor = (file, text = "") => { for (let i = 0; i < 200 && !(fs.existsSync(file) && read(file).includes(text) && read(file).length); i++) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50); return read(file).includes(text) && read(file).length > 0; };
 
       fire("--hook-stop", { session_id: "s1", cwd: "/work/api" }, {});
       assert.ok(!fs.existsSync(log), "without --notify nothing is shown");
 
       fs.writeFileSync(path.join(nHome, ".vibeaudio", "sessions", "s1.json"), JSON.stringify({ waiting: null, ts: Date.now() }));
       fire("--hook-stop", { session_id: "s1", cwd: "/work/api" }, { VIBE_NOTIFY: "1" });
-      assert.ok(waitFor(log), "with it on, a finished turn shows a notification");
+      assert.ok(waitFor(log, "api: finished"), "with it on, a finished turn shows a notification");
       assert.ok(fs.readFileSync(log, "utf8").includes("api: finished"), "…that names the project");
 
       fs.rmSync(log);
       fs.writeFileSync(path.join(nHome, ".vibeaudio", "sessions", "s1.json"), JSON.stringify({ waiting: null, ts: Date.now() }));
       fire("--hook-wait", { session_id: "s1", cwd: "/work/api", tool_name: "Bash" }, { VIBE_NOTIFY: "1" });
-      assert.ok(waitFor(log) && fs.readFileSync(log, "utf8").includes("api: needs you (Bash)"), "a permission wait names the project and the tool");
+      assert.ok(waitFor(log, "api: needs you (Bash)"), "a permission wait names the project and the tool");
       fs.rmSync(nHome, { recursive: true, force: true });
     }
     console.log("   ✓ Off by default; on, a turn that ends or blocks names its project - as argv, never script text.");
@@ -3224,7 +3228,10 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.ok(hooks.isStuck({ recent: recent() }), "four of the last eight is - even with successes in between");
       tool("PostToolUseFailure");
       if (stubName) {
-        for (let i = 0; i < 40 && !fs.existsSync(note); i++) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+        // Wait for the text (the stub's shell creates the file before writing),
+        // then a little longer, so a second, wrong banner would have landed too.
+        const noteText = () => { try { return fs.readFileSync(note, "utf8"); } catch (e) { return ""; } };
+        for (let i = 0; i < 200 && !noteText().includes("looks stuck"); i++) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);
         const lines = fs.readFileSync(note, "utf8").split("\n").filter((l) => l.includes("looks stuck"));
         assert.strictEqual(lines.length, 1, "the notification fires once, when it crosses, not on every failure after");
