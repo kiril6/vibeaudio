@@ -143,11 +143,32 @@ function generateAttentionChime(durationSec = 1.3) {
   return createWavBuffer({ left, right, sampleRate: SAMPLE_RATE });
 }
 
+/**
+ * "Looks stuck", for someone with the music off, who has no loop for the
+ * heartbeat to sit under. It is that same heartbeat on its own - two lub-dubs
+ * on A, a resting pulse - so it means what the layer means: not an outcome and
+ * not a question, just something that has not changed for a while. Quiet, and
+ * low enough to read as a pulse rather than a tone.
+ */
+function generateStuckChime(durationSec = 1.8) {
+  const { thump, pulseFreq, BEAT_S, DUB_DELAY_S } = require("./tension");
+  const f = pulseFreq("A minor");
+  const totalSamples = Math.floor(SAMPLE_RATE * durationSec);
+  const out = new Float64Array(totalSamples);
+  for (let i = 0; i < totalSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const local = t % BEAT_S;
+    out[i] = 0.3 * (thump(local, f) + 0.7 * thump(local - DUB_DELAY_S, f));
+  }
+  return createWavBuffer({ left: out, right: out, sampleRate: SAMPLE_RATE });
+}
+
 module.exports = {
   DEFAULT_CHIME_KEY,
   SUCCESS_CHIME_NOTES,
   generateChime: generateSuccessChime,
   generateSuccessChime,
   generateFailureChime,
-  generateAttentionChime
+  generateAttentionChime,
+  generateStuckChime
 };

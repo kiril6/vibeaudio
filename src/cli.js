@@ -1425,7 +1425,7 @@ function runHookAction(action, { music = true, genre, volume, chimeVolume, noChi
       return;
 
     case "hook-resume":
-      hooks.readPayload((raw) => hooks.hookResume(raw, genre, volume, { music, reactive, follow: typed.volume === undefined }));
+      hooks.readPayload((raw) => hooks.hookResume(raw, genre, volume, { music, reactive, follow: typed.volume === undefined, chimeVolume, noChime }));
       return;
 
     case "hook-end":

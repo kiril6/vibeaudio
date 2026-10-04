@@ -64,4 +64,4 @@ function addTension(wav, key) {
   return out;
 }
 
-module.exports = { addTension, pulseFreq };
+module.exports = { addTension, pulseFreq, thump, BEAT_S, DUB_DELAY_S };

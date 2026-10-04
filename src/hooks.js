@@ -1204,7 +1204,7 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
  * one needing approval, can resume early - after the chime already did its
  * job. Match on tool_input as well if that ever shows up in practice.
  */
-function hookResume(raw, genre, volume, { reactive = false, follow = false, music = true } = {}) {
+function hookResume(raw, genre, volume, { reactive = false, follow = false, music = true, chimeVolume = null, noChime = false } = {}) {
   const payload = parsePayload(raw);
   const id = sessionId(payloadSession(payload));
   const session = readSession(id);
@@ -1218,7 +1218,13 @@ function hookResume(raw, genre, volume, { reactive = false, follow = false, musi
   const recent = [...(session.recent || []), failed ? 1 : 0].slice(-STUCK_WINDOW);
   const next = { ...session, recent };
   const crossing = isStuck(next) === isStuck(session) ? null : isStuck(next) ? "stuck" : "recovered";
-  if (crossing === "stuck") notify(raw, `looks stuck - ${STUCK_FAILURES} of its last ${STUCK_WINDOW} tool calls failed`);
+  if (crossing === "stuck") {
+    notify(raw, `looks stuck - ${STUCK_FAILURES} of its last ${STUCK_WINDOW} tool calls failed`);
+    // With music on the daemon adds the heartbeat; with it off there is no
+    // loop to put one under, so the pulse plays once on its own. Detached: the
+    // agent waits on this hook.
+    if (!music && !noChime) new AudioPlayer().stop({ playChime: true, outcome: "stuck", volume, chimeVolume, detach: true });
+  }
 
   // An empty key is a wait that named nothing (a Notification): the next tool
   // to finish is the first sign of work carrying on.

@@ -433,7 +433,7 @@ It's a setting of its own, saved to `config.json` like genre and volume, so your
 
 With music off, hooks still track every turn: the chimes, `--notify` banners, `--state`, `--events` and `--report` behave exactly as before, and no background player is started. The wrapper (`vibe npm test`) stays silent while it runs and chimes when a run that outlasted the grace window ends, so it becomes "tell me when it's done". MCP's `vibe_play` tells the model that music is off rather than claiming it started. `vibe --status` and `vibe --doctor` show the setting.
 
-Two things differ from music on. The stuck heartbeat is a layer on the music, so with none playing there is no sound for it; you still get the `stuck` event and, with `--notify`, the banner. And turning music off while something is playing doesn't cut it: `vibe --stop` does, or it ends with the current turn.
+Two things differ from music on. The stuck heartbeat is a layer on the music, so with music off it plays once on its own, the same two soft beats, when a session crosses into stuck (you also get the `stuck` event and, with `--notify`, the banner). And turning music off while something is playing doesn't cut it: `vibe --stop` does, or it ends with the current turn.
 
 ### Know where your time goes: `vibe --report`
 

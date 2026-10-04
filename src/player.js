@@ -18,7 +18,7 @@ const { generateRainLoop } = require("./synth/rain");
 const { generateOceanLoop } = require("./synth/ocean");
 const { generatePianoLoop } = require("./synth/piano");
 const { generateJazzLoop } = require("./synth/jazz");
-const { generateSuccessChime, generateFailureChime, generateAttentionChime, DEFAULT_CHIME_KEY, SUCCESS_CHIME_NOTES } = require("./synth/chime");
+const { generateSuccessChime, generateFailureChime, generateAttentionChime, generateStuckChime, DEFAULT_CHIME_KEY, SUCCESS_CHIME_NOTES } = require("./synth/chime");
 const { hashString } = require("./synth/generator");
 const { addTension } = require("./synth/tension");
 const pkg = require("../package.json");
@@ -665,7 +665,8 @@ function getAudioPath(genre, tier = 2, seed = projectSeed(), gain = 1, bar = 0, 
 const CHIMES = {
   success: generateSuccessChime,
   failure: generateFailureChime,
-  attention: generateAttentionChime
+  attention: generateAttentionChime,
+  stuck: generateStuckChime
 };
 
 /**
