@@ -550,9 +550,13 @@ vibe --events | jq --unbuffered -r 'select(.event=="waiting") | .project' | whil
 **Starship prompt** — custom indicator in `~/.config/starship.toml`:
 ```toml
 [custom.vibe]
-command = "vibe --state | jq -r 'if .status != \"idle\" then \"🎧 \" + .status else \"\" end'"
+command = "vibe --statusline"
 when = "command -v vibe >/dev/null"
+format = "([🎧 $output ]($style))"
 ```
+The parentheses matter: Starship hides a group whose variables are empty, so the 🎧 disappears with the text when idle. Put the icon in a `symbol` instead and it shows all the time. `vibe --statusline` takes about 40 ms, so running it on every prompt is fine.
+
+*Run on tmux 3.x and Starship 1.26.0, macOS arm64, Node 24: both showed `working`, `working ×2` and `waiting: web` as sessions started and waited, and nothing when idle. Not run on Linux or Windows.*
 
 The stream is a local file (`~/.vibeaudio/events.jsonl`, rotated at 256 KB), so it never leaves your machine. It keeps updating while you're muted, because a mute silences sound and a light isn't sound. The `v` field is the format version, and any breaking change will increment it.
 

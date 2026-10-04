@@ -619,7 +619,7 @@ footer a{ color:var(--ink-dim); }
       </div>
       <div class="hud-item">
         <span class="hud-tag">Starship prompt · starship.toml</span>
-        <code>[custom.vibe]<br>command = "vibe --state | jq -r 'if .status != \"idle\" then \"🎧 \" + .status else \"\" end'"<br>when = "command -v vibe &gt;/dev/null"</code>
+        <code>[custom.vibe]<br>command = "vibe --statusline"<br>when = "command -v vibe &gt;/dev/null"<br>format = "([🎧 $output ]($style))"</code>
       </div>
       <div class="hud-item">
         <span class="hud-tag">macOS Voice alert</span>
