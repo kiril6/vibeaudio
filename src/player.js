@@ -698,7 +698,9 @@ function chimeKeyFor(genre) {
 
 function getChimePath(outcome = "success", gain = 1, key = DEFAULT_CHIME_KEY) {
   ensureCacheDir();
-  const kind = outcome === "error" ? "failure" : CHIMES[outcome] ? outcome : "success";
+  // Own keys only: `CHIMES["constructor"]` is truthy, and used to reach the
+  // generator call below as a function that is not one of ours.
+  const kind = outcome === "error" ? "failure" : Object.hasOwn(CHIMES, outcome) ? outcome : "success";
   // Only the success chime has keys, and the default keeps its original file
   // name so an upgrade does not leave a cached copy behind.
   const keyed = kind === "success" && key !== DEFAULT_CHIME_KEY && SUCCESS_CHIME_NOTES[key];

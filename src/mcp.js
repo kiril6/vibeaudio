@@ -13,6 +13,19 @@ const pkg = require("../package.json");
 // own ceiling rather than looping forever.
 const MAX_PLAYBACK_MS = 15 * 60 * 1000;
 
+// All four hints on every tool, as the spec's ToolAnnotations defines them, so
+// a host can tell what each one does before the model calls it. None touches
+// anything beyond the local audio player and VibeAudio's own cache.
+const annotate = (title, { readOnly, idempotent }) => ({
+  title,
+  readOnlyHint: readOnly,
+  destructiveHint: false,
+  idempotentHint: idempotent,
+  openWorldHint: false
+});
+
+const OUTCOMES = ["success", "failure"];
+
 const TOOLS = [
   {
     name: "vibe_play",
@@ -22,6 +35,7 @@ const TOOLS = [
       "long file edits, repeated tool calls, anything the user will wait through. " +
       "Always pair it with vibe_stop when the task resolves. Skip it for quick " +
       "answers: music around a one-second reply is worse than silence.",
+    annotations: annotate("Start focus music", { readOnly: false, idempotent: true }),
     inputSchema: {
       type: "object",
       properties: {
@@ -46,13 +60,14 @@ const TOOLS = [
       "task resolves and you are ready to hand back a result, including when it " +
       "failed - pass outcome 'failure' so the chime says so. Never leave music " +
       "playing after a vibe_play task is done.",
+    annotations: annotate("Stop focus music", { readOnly: false, idempotent: false }),
     inputSchema: {
       type: "object",
       properties: {
         outcome: {
           type: "string",
           description: "Resolution outcome: 'success' (ascending chime) or 'failure' (soft minor tone)",
-          enum: ["success", "failure"]
+          enum: OUTCOMES
         },
         playChime: {
           type: "boolean",
@@ -67,6 +82,7 @@ const TOOLS = [
       "Check whether focus music is currently playing, and in which genre and " +
       "intensity tier. Use it to avoid starting a second track, or to confirm " +
       "nothing was left running.",
+    annotations: annotate("Check focus music", { readOnly: true, idempotent: true }),
     inputSchema: {
       type: "object",
       properties: {}
@@ -183,6 +199,15 @@ function handleMessage(player, msg) {
 
     if (name === "vibe_stop") {
       const outcome = args.outcome || "success";
+      // The schema's enum is a hint to the model, not a check: nothing stops a
+      // client sending anything, and this string is echoed back below.
+      if (!OUTCOMES.includes(outcome)) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          result: { isError: true, content: [{ type: "text", text: `outcome must be one of: ${OUTCOMES.join(", ")}.` }] }
+        };
+      }
       const playChime = args.playChime !== false;
 
       const wasPlaying = player.stop({ playChime, outcome });

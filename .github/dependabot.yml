@@ -1,0 +1,8 @@
+# Keeps the SHA-pinned actions in .github/workflows current. The package has no
+# dependencies, so npm is deliberately not listed.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

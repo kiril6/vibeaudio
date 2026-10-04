@@ -3,19 +3,15 @@
  * Zero dependencies - Pure Node.js ANSI and Readline
  */
 
-const { execSync } = require("child_process");
+const { spawnSync } = require("child_process");
 const readline = require("readline");
 
 // Windows has no `which`; without this every tool shows as missing there.
 const LOOKUP_CMD = process.platform === "win32" ? "where" : "which";
 
 function isInstalled(cmd) {
-  try {
-    execSync(`${LOOKUP_CMD} ${cmd}`, { stdio: "ignore" });
-    return true;
-  } catch (e) {
-    return false;
-  }
+  // An argument vector, not a command string: nothing in `cmd` reaches a shell.
+  return spawnSync(LOOKUP_CMD, [cmd], { stdio: "ignore" }).status === 0;
 }
 
 // Convenience only - the wrapper runs any command, and "Custom command..."

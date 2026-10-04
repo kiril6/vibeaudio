@@ -3815,7 +3815,70 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ The heartbeat, standalone: quiet, deterministic, once per crossing, only when there is no music to carry it.");
   }
 
-  console.log("\n\x1b[32mAll 68 tests passed successfully!\x1b[0m");
+  // [69] Hardening from the M8ven review: annotations, input checks, no shell strings, pinned workflows.
+  console.log("\n\x1b[1m[69] MCP annotations and input checks, no shell in tool lookup, pinned workflows\x1b[0m");
+  {
+    const { handleMessage, TOOLS } = require("../src/mcp");
+    const { getChimePath } = require("../src/player");
+    const { isInstalled } = require("../src/interactive");
+    const call = (player, name, args) => handleMessage(player, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }).result;
+
+    // All four hints, explicitly boolean, on every tool - and true to what each does.
+    const hints = ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"];
+    for (const tool of TOOLS) {
+      assert.ok(hints.every((h) => typeof tool.annotations[h] === "boolean"), `${tool.name} sets every hint`);
+      assert.strictEqual(tool.annotations.openWorldHint, false, `${tool.name} touches nothing outside the machine`);
+      assert.strictEqual(tool.annotations.destructiveHint, false);
+    }
+    const byName = Object.fromEntries(TOOLS.map((t) => [t.name, t.annotations]));
+    assert.strictEqual(byName.vibe_status.readOnlyHint, true, "status only reads");
+    assert.strictEqual(byName.vibe_play.readOnlyHint, false);
+    assert.strictEqual(byName.vibe_stop.idempotentHint, false, "a second stop plays a second chime");
+    const listed = handleMessage({}, { jsonrpc: "2.0", id: 1, method: "tools/list" }).result.tools;
+    assert.ok(listed.every((t) => t.annotations && hints.every((h) => h in t.annotations)), "tools/list carries them");
+
+    // vibe_stop: the schema's enum is a hint to the model, so the handler checks it.
+    const stub = { stop: () => false };
+    for (const bad of ["constructor", "__proto__", "hasOwnProperty", "toString", "../../x", "", 7, {}]) {
+      if (bad === "") continue; // empty falls back to success, as before
+      const r = call(stub, "vibe_stop", { outcome: bad });
+      assert.strictEqual(r.isError, true, `outcome ${JSON.stringify(bad)} is refused`);
+    }
+    assert.ok(/failure/.test(call(stub, "vibe_stop", { outcome: "failure" }).content[0].text), "a real outcome still goes through");
+    assert.strictEqual(call(stub, "vibe_stop", {}).isError, undefined, "and none still means success");
+
+    // The chime lookup itself: inherited Object keys are not outcomes.
+    for (const key of ["constructor", "__proto__", "hasOwnProperty", "toString", "valueOf"]) {
+      assert.strictEqual(path.basename(getChimePath(key, 1)), "chime_success.wav", `${key} falls back to the success chime`);
+    }
+    assert.ok(!fs.readdirSync(path.dirname(getChimePath("success", 1))).some((f) => /chime_(toString|valueOf|constructor)/.test(f)), "and nothing is cached under an inherited name");
+    assert.strictEqual(path.basename(getChimePath("attention", 1)), "chime_attention.wav", "real outcomes are unchanged");
+
+    // isInstalled takes an argument vector: shell syntax in the name is just a name.
+    const marker = path.join(os.tmpdir(), `vibe-injected-${process.pid}`);
+    fs.rmSync(marker, { force: true });
+    assert.strictEqual(isInstalled("node"), true);
+    assert.strictEqual(isInstalled("vibe-no-such-command-xyz"), false);
+    assert.strictEqual(isInstalled(`node; touch ${marker}`), false);
+    assert.strictEqual(isInstalled(`$(touch ${marker})`), false);
+    assert.strictEqual(isInstalled(`node && touch ${marker}`), false);
+    assert.ok(!fs.existsSync(marker), "nothing in a tool name reaches a shell");
+
+    // Workflows: least privilege and immutable action references.
+    const wfDir = path.join(__dirname, "..", ".github", "workflows");
+    for (const file of fs.readdirSync(wfDir).filter((f) => f.endsWith(".yml"))) {
+      const text = fs.readFileSync(path.join(wfDir, file), "utf8");
+      assert.ok(/^permissions:/m.test(text), `${file} declares its token permissions`);
+      for (const [, ref] of text.matchAll(/^\s*-?\s*uses:\s*(\S+)/gm)) {
+        assert.ok(/@[0-9a-f]{40}$/.test(ref), `${file}: ${ref} is pinned to a commit`);
+      }
+    }
+    const dependabot = fs.readFileSync(path.join(__dirname, "..", ".github", "dependabot.yml"), "utf8");
+    assert.ok(/package-ecosystem:\s*github-actions/.test(dependabot), "pinned actions are kept current");
+    console.log("   ✓ Every tool declares all four hints, bad outcomes are refused, tool lookup uses no shell, workflows are pinned and least-privilege.");
+  }
+
+  console.log("\n\x1b[32mAll 69 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);
