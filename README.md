@@ -942,7 +942,7 @@ npm test
 
 ## 💛 Supporting the Project
 
-If this project saves you time, you can [support its development on Ko-fi](https://ko-fi.com/kdelovski).
+If this project saves you time, you can [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/K3K2X0ERJ)
 
 ---
 
