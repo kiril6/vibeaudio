@@ -431,6 +431,19 @@ function playbackDisabled() {
 }
 
 /**
+ * Whether music plays at all, as opposed to `playbackDisabled()`, which
+ * silences everything including the chimes. Some people want only the
+ * signals (done, failed, needs you), so this is a setting of its own rather
+ * than a genre: `genre` stays what it was for when music comes back on.
+ * Env beats this directory's saved value beats the global one; a flag is
+ * resolved by parseArgs() and handed to whoever acts on it.
+ */
+function musicEnabled(env = process.env, config = loadConfig()) {
+  const raw = env.VIBE_MUSIC ?? projectSettings(config).music ?? config.music ?? "on";
+  return !["off", "0", "false", "no"].includes(String(raw).trim().toLowerCase());
+}
+
+/**
  * `minutes` of 0 means indefinite, which the user has to ask for explicitly.
  */
 function setMuted(muted, minutes = DEFAULT_MUTE_MINUTES) {
@@ -965,6 +978,7 @@ module.exports = {
   bakedGain,
   applyGain,
   playbackDisabled,
+  musicEnabled,
   resolveGenre,
   isKnownGenre,
   normalizeVolume,

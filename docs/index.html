@@ -572,6 +572,7 @@ footer a{ color:var(--ink-dim); }
       <div class="feat"><h3>Several sessions</h3><p>Music plays while any terminal is working and builds as more join; each gets its own chime.</p></div>
       <div class="feat"><h3>Title-bar HUD</h3><p>A live waveform in the terminal title — never corrupts a full-screen TUI.</p></div>
       <div class="feat"><h3>Which session?</h3><p><code>vibe --notify</code> adds a banner naming the project that finished or needs you. Off by default.</p></div>
+      <div class="feat"><h3>Signals only</h3><p><code>vibe --music off</code> keeps the chimes, banners and events and drops the music. Your genre is waiting when you turn it back on.</p></div>
       <div class="feat"><h3>Mute for calls</h3><p><code>vibe --mute</code> — expires in an hour so you never forget it's on.</p></div>
       <div class="feat"><h3>Hears when it's stuck</h3><p>When 4 of an agent's last 8 tool calls fail, a soft heartbeat joins the music — the loop that goes nowhere, made audible.</p></div>
       <div class="feat"><h3>Build on it</h3><p><code>vibe --state</code> and <code>vibe --events</code> — every agent's state as JSON, for lights, menu bars and status lines.</p></div>
@@ -614,7 +615,7 @@ footer a{ color:var(--ink-dim); }
     <div class="hud-integrations">
       <div class="hud-item">
         <span class="hud-tag">tmux status bar</span>
-        <code>set -g status-right '#(vibe --state | jq -r .status)'</code>
+        <code>set -g status-right '#(vibe --statusline)'</code>
       </div>
       <div class="hud-item">
         <span class="hud-tag">Starship prompt · starship.toml</span>

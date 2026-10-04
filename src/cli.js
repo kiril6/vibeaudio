@@ -17,6 +17,7 @@ const {
   normalizeVolume,
   loadConfig,
   saveConfig,
+  musicEnabled,
   projectSettings,
   saveProjectConfig,
   wavDurationMs,
@@ -68,6 +69,7 @@ Procedural focus music while your AI coding tools think.
       --grace <ms>             Silence window before music starts, in ms (default: ${DEFAULT_GRACE_PERIOD_MS})
       --here                   With a saved setting: this directory only, not everywhere
       --seed <n>               Force a specific arrangement (default: derived from the project directory)
+      --music <on|off>         off = signals only: chimes, banners and events, no music (a saved setting)
       --whisper                Preset: 15% volume (late night / headphones)
       --quiet                  Preset: 25% volume (focus / open office)
       --loud                   Preset: 75% volume (hear from across the room)
@@ -79,6 +81,7 @@ Procedural focus music while your AI coding tools think.
       --notify | --no-notify   Also show a desktop banner naming the project when a turn finishes or needs you (off by default)
       --report [days]          How long you waited on agents, and where (default: 7 days)
       --state                  Print what every agent is doing as JSON: idle, working, stuck or waiting
+      --statusline             Print that as one plain line for tmux or a prompt; prints nothing when idle
       --events                 Stream agent state changes as JSON lines, until stopped
       --doctor                 Check the setup; each problem comes with its fix (exit 1 if any)
       --stop                   Stop the background player, then exit
@@ -110,6 +113,7 @@ Procedural focus music while your AI coding tools think.
   VIBE_VOLUME=<5-100>          Override the saved volume for this shell
   VIBE_CHIME_VOLUME=<5-100>    Override the saved chime volume for this shell
   VIBE_GRACE_MS=<ms>           Override the saved grace window, in ms
+  VIBE_MUSIC=<on|off>          Override the saved music setting for this shell
   VIBE_SEED=<n>                Pin the arrangement instead of deriving it from the directory
   VIBE_DISABLE=1               Mute automatic playback without uninstalling anything
   VIBE_NO_UPDATE_CHECK=1       Never check npm for a newer version
@@ -136,6 +140,7 @@ const VALUE_FLAGS = new Set([
   "-v", "--volume",
   "-cv", "--chime-volume",
   "--grace",
+  "--music",
   "--seed",
   "--tools",
   "--event"
@@ -155,6 +160,7 @@ function parseArgs(argv) {
   const here = projectSettings(saved);
   const setting = (key) => (here[key] !== undefined ? here[key] : saved[key]);
 
+  let music = musicEnabled(process.env, saved);
   let genre = (process.env.VIBE_GENRE || setting("genre") || "lofi").toLowerCase();
 
   let volume = normalizeVolume(process.env.VIBE_VOLUME, normalizeVolume(setting("volume"), 0.40));
@@ -178,6 +184,7 @@ function parseArgs(argv) {
   let clearCacheFlag = false;
   let statusFlag = false;
   let stateFlag = false;
+  let statuslineFlag = false;
   let eventsFlag = false;
   let doctorFlag = false;
   let notifyFlag = null;
@@ -291,6 +298,24 @@ function parseArgs(argv) {
 
     if (arg === "--status") {
       statusFlag = true;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--music") {
+      const value = args[i + 1].toLowerCase();
+      if (value !== "on" && value !== "off") {
+        console.error(`\x1b[31m[vibeaudio] --music takes on or off, not '${args[i + 1]}'.\x1b[0m`);
+        process.exit(1);
+      }
+      music = value === "on";
+      typed.music = music;
+      i += 2;
+      continue;
+    }
+
+    if (arg === "--statusline") {
+      statuslineFlag = true;
       i += 1;
       continue;
     }
@@ -492,6 +517,8 @@ function parseArgs(argv) {
     clearCache: clearCacheFlag,
     status: statusFlag,
     state: stateFlag,
+    statusline: statuslineFlag,
+    music,
     events: eventsFlag,
     doctor: doctorFlag,
     notify: notifyFlag,
@@ -734,6 +761,7 @@ function printStatus() {
       : off("  default");
 
   console.log(`\x1b[1mSound\x1b[0m`);
+  console.log(`  music     ${musicEnabled() ? on("on") : "\x1b[33moff\x1b[0m"}${source("VIBE_MUSIC", "music")}${musicEnabled() ? "" : off("  signals only — vibe --music on")}`);
   console.log(`  genre     ${on(genreNow())}${source("VIBE_GENRE", "genre")}`);
   console.log(`  volume    ${on(`${Math.round(volumeNow() * 100)}%`)}${source("VIBE_VOLUME", "volume")}`);
   console.log(`            ${off("change either with: vibe --genre <name> --volume <n>")}`);
@@ -943,6 +971,7 @@ function doctorChecks() {
   if (mute !== null) add("warn", "Mute", `muted ${muteRemainingText(mute)}`, "vibe --unmute");
   if (playbackDisabled()) add("warn", "VIBE_DISABLE", `set to "${process.env.VIBE_DISABLE}" — automatic playback is off`, "unset VIBE_DISABLE");
   if (mute === null && !playbackDisabled()) add("ok", "Mute", "not muted");
+  if (!musicEnabled()) add("ok", "Music", "off — chimes and banners only, by your setting (vibe --music on)");
 
   const pid = readDaemonPid(hooks.PID_FILE);
   if (pid === null) add("ok", "Background player", "not running");
@@ -1178,6 +1207,7 @@ function saveDefaults(typed, hereOnly = false) {
   if (typed.volume !== undefined) patch.volume = Math.round(typed.volume * 100);
   if (typed.chimeVolume !== undefined) patch.chimeVolume = Math.round(typed.chimeVolume * 100);
   if (typed.grace !== undefined) patch.grace = typed.grace;
+  if (typed.music !== undefined) patch.music = typed.music;
 
   const { CONFIG_FILE } = require("./player");
   if (hereOnly) saveProjectConfig(patch);
@@ -1187,7 +1217,8 @@ function saveDefaults(typed, hereOnly = false) {
     genre: (v) => `genre ${v}`,
     volume: (v) => `volume ${v}%`,
     chimeVolume: (v) => `chime volume ${v}%`,
-    grace: (v) => `grace ${v}ms`
+    grace: (v) => `grace ${v}ms`,
+    music: (v) => `music ${v ? "on" : "off"}`
   };
   const changed = Object.keys(patch).map((k) => label[k](patch[k])).join(", ");
   const where = hereOnly ? ` for ${process.cwd()}` : "";
@@ -1200,6 +1231,12 @@ function saveDefaults(typed, hereOnly = false) {
   const playing = require("./hooks").daemonPlaying();
   if (playing && patch.genre && playing.genre && playing.genre !== patch.genre) {
     console.log(`  \x1b[90m${playing.genre} is still playing — vibe --stop cuts it short.\x1b[0m`);
+  }
+  if (playing && patch.music === false) {
+    console.log(`  \x1b[90m${playing.genre || "The music"} is still playing — vibe --stop cuts it short.\x1b[0m`);
+  }
+  if (patch.music === false) {
+    console.log(`  \x1b[90mSignals only: chimes, banners, --events and --report work as before.\x1b[0m`);
   }
   if (playing && playing.follows && patch.volume !== undefined) {
     console.log(`  \x1b[90mThe music playing now follows the new volume within a second.\x1b[0m`);
@@ -1335,7 +1372,7 @@ function renderToFile(target, genre) {
   console.log(`  \x1b[90mAnother project's sound: run it there, or vibe --seed <n> --render.\x1b[0m\n`);
 }
 
-function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, followVolume, plugin, hookEvent = null, tools, dryRun, typed = {} }) {
+function runHookAction(action, { music = true, genre, volume, chimeVolume, noChime, reactive, followVolume, plugin, hookEvent = null, tools, dryRun, typed = {} }) {
   const hooks = require("./hooks");
 
   if (plugin && action.startsWith("hook-")) {
@@ -1361,7 +1398,7 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, 
       // The payload names the session (so SessionEnd can tell this session's
       // music from another's) and the transcript (so an interrupt, which
       // fires no hook, can still stop it).
-      hooks.readPayload((raw) => hooks.hookStart(genre, volume, { reactive, follow: typed.volume === undefined, turn: hooks.newTurn(raw) }));
+      hooks.readPayload((raw) => hooks.hookStart(genre, volume, { music, reactive, follow: typed.volume === undefined, turn: hooks.newTurn(raw) }));
       return;
 
     case "hook-stop":
@@ -1388,7 +1425,7 @@ function runHookAction(action, { genre, volume, chimeVolume, noChime, reactive, 
       return;
 
     case "hook-resume":
-      hooks.readPayload((raw) => hooks.hookResume(raw, genre, volume, { reactive, follow: typed.volume === undefined }));
+      hooks.readPayload((raw) => hooks.hookResume(raw, genre, volume, { music, reactive, follow: typed.volume === undefined }));
       return;
 
     case "hook-end":
@@ -1455,10 +1492,10 @@ function windowsCommandNeedsShell(command) {
   return !/[\\/]/.test(command);
 }
 
-function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRACE_PERIOD_MS, noChime, noHud = false) {
+function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRACE_PERIOD_MS, noChime, noHud = false, music = true) {
   const player = new AudioPlayer();
   const hookDriven = hooksAlreadyCover(cmdArgs);
-  const hud = !noHud && !hookDriven ? new TerminalHud(genre) : null;
+  const hud = !noHud && !hookDriven && music ? new TerminalHud(genre) : null;
   const startTime = Date.now();
   let musicStarted = false;
   let finished = false;
@@ -1486,8 +1523,8 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRA
 
   // Grace window before triggering audio (silences fast commands)
   const graceTimer = hookDriven ? null : setTimeout(() => {
-    musicStarted = true;
-    player.start(genre, volume);
+    musicStarted = true; // Set with music off too: the chime marks the end of a run that outlasted the grace window.
+    if (music) player.start(genre, volume);
     if (hud) hud.start();
   }, grace);
 
@@ -1566,6 +1603,8 @@ async function run() {
     clearCache: shouldClear,
     status: showStatus,
     state: showState,
+    statusline: showStatusline,
+    music,
     events: followEvents,
     doctor: showDoctor,
     notify: notifyChange,
@@ -1596,7 +1635,7 @@ async function run() {
 
   if (hookAction) {
     try {
-      return runHookAction(hookAction, { genre, volume, chimeVolume, noChime, reactive, followVolume, plugin, hookEvent, tools, dryRun, typed });
+      return runHookAction(hookAction, { music, genre, volume, chimeVolume, noChime, reactive, followVolume, plugin, hookEvent, tools, dryRun, typed });
     } catch (e) {
       // Settings problems are the user's to fix — report them, don't stack-trace.
       console.error(`\x1b[31m[vibeaudio] ${e.message}\x1b[0m`);
@@ -1664,6 +1703,14 @@ async function run() {
   // Machine-readable, for lights, menu bars and status lines: see "Build on it" in the README.
   if (showState) {
     console.log(JSON.stringify(require("./hooks").agentState()));
+    return;
+  }
+
+  // Idle prints nothing, not even a newline, so a prompt segment disappears.
+  if (showStatusline) {
+    const hooks = require("./hooks");
+    const line = hooks.formatStatusline(hooks.agentState());
+    if (line) console.log(line);
     return;
   }
 
@@ -1736,10 +1783,10 @@ async function run() {
       }
     }
 
-    return executeCommand(selection.cmd, selection.genre, chosenVol, chimeVolume, grace, noChime, noHud);
+    return executeCommand(selection.cmd, selection.genre, chosenVol, chimeVolume, grace, noChime, noHud, music);
   }
 
-  executeCommand(cmdArgs, genre, volume, chimeVolume, grace, noChime, noHud);
+  executeCommand(cmdArgs, genre, volume, chimeVolume, grace, noChime, noHud, music);
 }
 
 module.exports = {

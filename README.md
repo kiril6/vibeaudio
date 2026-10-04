@@ -45,6 +45,7 @@ It is built as **calm technology**, in the sense of Mark Weiser and John Seely B
 * 🔔 **Outcome-aware chimes.** Ascending on success, a soft descending minor chord on failure, and **silence on `Ctrl+C`** — an abort is never reported as done.
 * 💓 **A heartbeat when an agent looks stuck.** If 4 of a session's last 8 tool calls fail — the test-edit-test loop that goes nowhere — a soft pulse on the music's tonic joins the music until things start passing again. It's rare by design: on 4,497 real turns it fired in under 1%.
 * ✋ **A "your turn" chime.** When Claude Code stops to ask permission (or an MCP server asks for input), the music pauses and a rising two-note chime asks for you; it picks back up once you've answered.
+* 🔕 **Signals without the music.** `vibe --music off` keeps the done, failed and "needs you" chimes, banners and the state stream, and drops the music. For people who bring their own, or share an office. ([details](#signals-only-vibe---music-off))
 * 🔌 **Universal drop-in.** Hooks for **Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI, Qwen Code, Windsurf and Antigravity**; MCP for **Claude Desktop**; the wrapper (`vibe <command>`) for anything else.
 
 <details>
@@ -418,6 +419,22 @@ Removing them is one command:
 vibe --uninstall-hooks
 ```
 
+### Signals only: `vibe --music off`
+
+VibeAudio does two jobs: music while an agent works, and signals (the done, failed and "needs you" chimes, banners, the stuck alert, `--events`). If you only want the second:
+
+```bash
+vibe --music off      # signals only
+vibe --music on       # music back, in the genre you had
+vibe --music off --here   # this project only
+```
+
+It's a setting of its own, saved to `config.json` like genre and volume, so your genre is still there when you turn music back on. Like the others, a flag beats `VIBE_MUSIC=off`, which beats `--here`, which beats the global value, and installed hooks pick it up on the next prompt.
+
+With music off, hooks still track every turn: the chimes, `--notify` banners, `--state`, `--events` and `--report` behave exactly as before, and no background player is started. The wrapper (`vibe npm test`) stays silent while it runs and chimes when a run that outlasted the grace window ends, so it becomes "tell me when it's done". MCP's `vibe_play` tells the model that music is off rather than claiming it started. `vibe --status` and `vibe --doctor` show the setting.
+
+Two things differ from music on. The stuck heartbeat is a layer on the music, so with none playing there is no sound for it; you still get the `stuck` event and, with `--notify`, the banner. And turning music off while something is playing doesn't cut it: `vibe --stop` does, or it ends with the current turn.
+
 ### Know where your time goes: `vibe --report`
 
 Hooks log each finished turn — which project, how long, how it ended, and how much of it the agent spent blocked on a dialog of yours — to `~/.vibeaudio/history.jsonl`. `vibe --report` (or `--report 30`) totals it:
@@ -509,9 +526,20 @@ Events: `started`, `waiting`, `resumed`, `stuck`, `recovered`, `finished` (with 
 
 #### 📟 Status Bar & Desktop Integrations
 
-**tmux status bar** — show overall agent state (`waiting`, `stuck`, `working`, or `idle`):
+**`vibe --statusline`** prints the same state as one plain line, with no `jq`, and **nothing at all when idle**, so a prompt segment disappears. It shows the most urgent state, with a count when several sessions are in it, and names the project when one is waiting on you:
+
+```
+working
+working ×2
+stuck
+waiting: api
+```
+
+It is plain text on purpose: tmux and Starship do their own styling. It doesn't run `ps` and doesn't change when you're muted.
+
+**tmux status bar:**
 ```bash
-set -g status-right '#(vibe --state | jq -r .status)'
+set -g status-right '#(vibe --statusline)'
 ```
 
 **macOS speech alert** — announce out loud whenever an agent stops to ask for your input:
@@ -698,6 +726,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--grace <ms>` | Silence window before music starts | `1500` |
 | `--here` | With a saved setting: this directory tree only, not everywhere | off |
 | `--seed <n>` | Force a specific arrangement | derived from the project directory |
+| `--music <on\|off>` | `off` keeps the chimes, banners and events and drops the music. With no command after it, saves it as a setting. `--here` for one project | `on` |
 | `--whisper` | Quick preset: 15% volume (headphones / late night) | — |
 | `--quiet` | Quick preset: 25% volume (focus / open office) | — |
 | `--loud` | Quick preset: 75% volume (hear from across the room) | — |
@@ -709,6 +738,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--doctor` | Check the setup; every problem comes with the command that fixes it. Exits 1 on a failure, so it scripts | — |
 | `--notify` / `--no-notify` | Also show a desktop banner naming the project when a turn finishes, fails or needs you. Saved to `config.json` | off |
 | `--report [days]` | How long you waited on agents, and on which projects, from the local turn log | `7` days |
+| `--statusline` | The same state as one plain line for tmux or a shell prompt (`working ×2`, `waiting: api`); prints nothing when idle | — |
 | `--state` | What every agent on the machine is doing, as one line of JSON: `idle`, `working`, `stuck` or `waiting` | — |
 | `--events` | Stream agent state changes as JSON lines, starting with the current state, until stopped | — |
 | `--stop` | Stop the background player, then exit | — |
@@ -735,6 +765,7 @@ export VIBE_CHIME_VOLUME=70     # Crisp completion chime at 70%
 export VIBE_GRACE_MS=3000       # Wait 3s of thinking before any music
 export VIBE_SEED=7              # Same arrangement everywhere, ignoring the directory
 export VIBE_DISABLE=1           # Mute, without uninstalling anything
+export VIBE_MUSIC=off           # Signals only: chimes and banners, no music, for this shell
 export VIBE_NOTIFY=1            # Desktop banner naming the project, for this shell
 export VIBE_NO_HISTORY=1        # Do not log finished turns (what --report reads)
 export VIBE_NO_UPDATE_CHECK=1   # Never ask npm whether a newer version is out

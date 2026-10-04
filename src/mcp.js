@@ -6,7 +6,7 @@
  */
 
 const readline = require("readline");
-const { AudioPlayer, AVAILABLE_GENRES, normalizeVolume, playbackDisabled, isKnownGenre, loadConfig } = require("./player");
+const { AudioPlayer, AVAILABLE_GENRES, normalizeVolume, playbackDisabled, musicEnabled, isKnownGenre, loadConfig } = require("./player");
 const pkg = require("../package.json");
 
 // A desktop client that crashes never sends vibe_stop, so playback needs its
@@ -148,6 +148,15 @@ function handleMessage(player, msg) {
       const volume = normalizeVolume(args.volume,
         normalizeVolume(process.env.VIBE_VOLUME, normalizeVolume(saved.volume, 0.4)));
 
+      // A deliberate setting, like a mute: report it as one, and start nothing.
+      if (!musicEnabled()) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          result: { content: [{ type: "text", text: "The user has turned VibeAudio's music off (signals only), so nothing will play. This is deliberate and not an error — do not try again or suggest fixes; they will turn it back on when they want music." }] }
+        };
+      }
+
       const started = player.start(genre, volume, { maxDurationMs: MAX_PLAYBACK_MS });
       // start() returns false for three unrelated reasons, and the model
       // relays whatever we say here to the user. Reporting a deliberate mute
@@ -204,6 +213,7 @@ function handleMessage(player, msg) {
                 // Without this, "isPlaying: false" while muted reads as a bug
                 // worth investigating rather than a choice the user made.
                 muted: playbackDisabled(),
+                musicOff: !musicEnabled(),
                 genre: player.genre,
                 currentTier: player.currentTier,
                 uptimeMs: player.isPlaying ? Date.now() - player.startTime : 0

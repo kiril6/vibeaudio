@@ -755,6 +755,20 @@ function agentState(sessions = listSessions()) {
   return { v: 1, status, sessions: list };
 }
 
+/**
+ * `vibe --statusline`: the state as one plain line for a tmux segment or a
+ * shell prompt, and nothing at all when idle so the segment disappears. The
+ * most urgent status, with a count when more than one session is in it; a
+ * waiting session names its project, since that is the one you have to go to.
+ * Plain text because tmux and Starship style it themselves.
+ */
+function formatStatusline({ status, sessions }) {
+  if (status === "idle") return "";
+  const active = sessions.filter((s) => s.state === status);
+  const project = status === "waiting" && active[0].project ? `: ${projectName(active[0].project)}` : "";
+  return `${status}${project}${active.length > 1 ? ` ×${active.length}` : ""}`;
+}
+
 const EVENTS_MAX_BYTES = 256 * 1024;
 
 /**
@@ -973,7 +987,7 @@ function spawnDaemon(genre, volume, reactive, follow = false) {
  * always did, so a genre change lands on the next prompt. With one working the
  * music carries on: restarting it would cut every other session's stream.
  */
-function hookStart(genre, volume, { reactive = false, turn = null, follow = false } = {}) {
+function hookStart(genre, volume, { reactive = false, turn = null, follow = false, music = true } = {}) {
   if (turn && turn.blocked) return null; // Rejected before it began: nothing to play for.
   if (turn && turn.continues) return null; // A later model call in a turn already playing.
   const id = sessionId(turn && turn.session);
@@ -985,6 +999,10 @@ function hookStart(genre, volume, { reactive = false, turn = null, follow = fals
 
   stopDaemon({ keepSessions: true });
   fs.rmSync(INTENSITY_FILE, { force: true }); // Don't inherit the last prompt's activity
+  // Signals only: the session is tracked (chimes, events and the report read
+  // it) but there is no music to start. Stopping first means a switch to off
+  // lands on the next prompt rather than playing until the turn ends.
+  if (!music) return null;
   return spawnDaemon(genre, volume, reactive, follow);
 }
 
@@ -1050,9 +1068,12 @@ function notifyEnabled(env = process.env, config = loadConfig()) {
 }
 
 /** The project a hook fired in: the payload's (see payloadProject), else ours. */
+function projectName(dir) {
+  return path.basename(String(dir).replace(/[\\/]+$/, "")) || "a session";
+}
+
 function sessionLabel(payload, cwd = process.cwd()) {
-  const dir = payloadProject(payload) || cwd;
-  return path.basename(dir.replace(/[\\/]+$/, "")) || "a session";
+  return projectName(payloadProject(payload) || cwd);
 }
 
 /**
@@ -1183,7 +1204,7 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
  * one needing approval, can resume early - after the chime already did its
  * job. Match on tool_input as well if that ever shows up in practice.
  */
-function hookResume(raw, genre, volume, { reactive = false, follow = false } = {}) {
+function hookResume(raw, genre, volume, { reactive = false, follow = false, music = true } = {}) {
   const payload = parsePayload(raw);
   const id = sessionId(payloadSession(payload));
   const session = readSession(id);
@@ -1212,7 +1233,7 @@ function hookResume(raw, genre, volume, { reactive = false, follow = false } = {
   writeSession(id, { ...next, waiting: null, waitStart: null, blockedMs });
   emitEvent("resumed", id, session.project);
   if (crossing) emitEvent(crossing, id, session.project);
-  if (!daemonRunning()) spawnDaemon(genre, volume, reactive, follow);
+  if (music && !daemonRunning()) spawnDaemon(genre, volume, reactive, follow);
   return true;
 }
 
@@ -1565,6 +1586,7 @@ module.exports = {
   isStuck,
   STUCK_WINDOW,
   agentState,
+  formatStatusline,
   followEvents,
   EVENTS_FILE,
   hookEnd,
