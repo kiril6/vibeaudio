@@ -938,7 +938,7 @@ npm test
 
 ## 💛 Supporting the Project
 
-If VibeAudio is useful to you, consider giving it a ⭐ on [GitHub](https://github.com/kiril6/vibeaudio) — it helps others find it.
+If VibeAudio is useful to you, consider giving it a ⭐ — it helps others find it.
 
 Support development: <a href="https://ko-fi.com/K3K2X0ERJ"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi" align="absmiddle" /></a>
 
