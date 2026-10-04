@@ -921,10 +921,6 @@ Apart from those two, the three commands above remove everything VibeAudio write
 
 ---
 
-If VibeAudio is useful to you, consider giving it a ⭐ on [GitHub](https://github.com/kiril6/vibeaudio) — it helps others find it.
-
----
-
 ## 🤝 Contributing
 
 Contributions welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the ground rules (zero runtime dependencies, no build step, pure synth modules) and the dev loop. Found a bug? [Open an issue](https://github.com/kiril6/vibeaudio/issues/new) with your **OS**, **Node version**, and which audio player you have installed.
@@ -941,6 +937,8 @@ npm test
 ---
 
 ## 💛 Supporting the Project
+
+If VibeAudio is useful to you, consider giving it a ⭐ on [GitHub](https://github.com/kiril6/vibeaudio) — it helps others find it.
 
 Support development: <a href="https://ko-fi.com/K3K2X0ERJ"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi" align="absmiddle" /></a>
 
