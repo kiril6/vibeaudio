@@ -87,7 +87,7 @@ Procedural focus music while your AI coding tools think.
       --clear-cache            Delete cached audio, then exit
       --mcp                    Run as Model Context Protocol (MCP) server for Desktop apps
       --install-hooks          Wire music into your agent's hooks (no wrapper needed)
-      --tools <list>           With --install-hooks: claude,codex,cursor,grok,gemini,copilot,qwen,windsurf (auto-detect)
+      --tools <list>           With --install-hooks: claude,codex,cursor,grok,gemini,copilot,qwen,windsurf,antigravity (auto-detect)
       --reactive               With --install-hooks: intensity follows the tool in use
       --dry-run                With --install-hooks: show what would change, write nothing
       --uninstall-hooks        Remove the hooks again, from every agent
@@ -604,7 +604,7 @@ function installHookTargets(ids, genre, volume, reactive, dryRun = false, typed 
     }
     console.log(`  ${events.start.padEnd(19)}→ music starts (${genre} @ ${Math.round(volume * 100)}%)`);
     console.log(`  ${events.stop.padEnd(19)}→ music stops + success chime`);
-    if (reactive) {
+    if (result.reactive) { // off for a target with no pre-tool event
       console.log(`  ${events.tool.padEnd(19)}→ intensity follows the tool in use (reactive mode)`);
     }
     if (events.wait) console.log(`  ${events.wait[0].padEnd(19)}→ music pauses + "your turn" chime`);
@@ -648,7 +648,7 @@ function printHookPlan({ file, backup, name, before, after, id }, t) {
   const ours = (text) => {
     const map = new Map();
     if (!text) return map;
-    for (const [event, entries] of hooks.hookEntries(JSON.parse(text).hooks, t)) {
+    for (const [event, entries] of hooks.hookEntries(hooks.hooksOf(JSON.parse(text), t), t)) {
       const mine = entries.filter((e) => hooks.isVibeHook(e, id));
       if (mine.length) map.set(event, JSON.stringify(mine));
     }
@@ -1118,8 +1118,8 @@ function readVibeHooks(file, t = null) {
   try {
     const settings = JSON.parse(fs.readFileSync(file, "utf8"));
     const out = [];
-    for (const [event, entries] of Object.entries(settings.hooks || {})) {
-      for (const entry of entries || []) {
+    for (const [event, entries] of Object.entries(require("./hooks").hooksOf(settings, t) || {})) {
+      for (const entry of Array.isArray(entries) ? entries : []) {
         for (const command of commands(entry)) {
           if (VIBE_HOOK_FLAG.test(command || "")) out.push({ event, command });
         }
@@ -1430,7 +1430,7 @@ function hooksAlreadyCover(cmdArgs, settingsFile = null) {
     if (!fs.existsSync(file)) return false;
 
     const settings = JSON.parse(fs.readFileSync(file, "utf8"));
-    return Object.values(settings.hooks || {}).some((entries) =>
+    return Object.values(hooks.hooksOf(settings, hooks.TARGETS[id]) || {}).some((entries) =>
       // Not `.some(hooks.isVibeHook)` - Array.some would pass the index as the
       // target id and every lookup would throw.
       (entries || []).some((entry) => hooks.isVibeHook(entry, id))

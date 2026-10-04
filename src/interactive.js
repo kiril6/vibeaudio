@@ -36,6 +36,7 @@ const AI_TOOLS = [
   { name: "GitHub Copilot CLI", cmd: ["copilot"], check: "copilot", hookTarget: "copilot" },
   { name: "Qwen Code", cmd: ["qwen"], check: "qwen", hookTarget: "qwen" },
   { name: "Windsurf", cmd: ["windsurf"], check: "windsurf", hookTarget: "windsurf" },
+  { name: "Antigravity CLI", cmd: ["agy"], check: "agy", hookTarget: "antigravity" },
   { name: "Aider", cmd: ["aider"], check: "aider" },
   { name: "Ollama (Llama 3)", cmd: ["ollama", "run", "llama3"], check: "ollama" },
   { name: "Custom command...", cmd: null }

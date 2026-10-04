@@ -106,9 +106,16 @@ function payloadToolName(raw) {
   return String(payload.tool_name || payload.toolName || byEvent);
 }
 
-// Windsurf calls the conversation `trajectory_id`.
+// Windsurf calls the conversation `trajectory_id`; Antigravity, `conversationId`.
 function payloadSession(payload) {
-  return payload.session_id || payload.trajectory_id;
+  return payload.session_id || payload.trajectory_id || payload.conversationId;
+}
+
+/** The project a hook fired in: `cwd` for most agents, Antigravity's first workspace. */
+function payloadProject(payload) {
+  if (typeof payload.cwd === "string" && payload.cwd) return payload.cwd;
+  const ws = Array.isArray(payload.workspacePaths) ? payload.workspacePaths[0] : null;
+  return typeof ws === "string" && ws ? ws : null;
 }
 
 /**
@@ -346,6 +353,36 @@ const TARGETS = {
     seed: () => ({}),
     liveReload: false,
     note: "Windsurf's hooks do not load in Restricted Mode, and whether an open session reloads them is not documented — start a new one to be sure."
+  },
+  antigravity: {
+    name: "Antigravity",
+    cmd: "agy",
+    // Verified live with the agy CLI 1.1.25 (a logging hook in this file, two
+    // turns): ~/.gemini/config/ is Antigravity's global customization root,
+    // and its hooks.json holds *named* hooks - {"<name>": {"<Event>": [...]}} -
+    // so ours live under a key of their own (hooksKey) and nobody else's are
+    // touched. Handlers are flat for these two events; timeout in seconds.
+    // - start: there is no prompt event. PreInvocation fires before every model
+    //   call with invocationNum counting from 0 per turn; newTurn() marks the
+    //   later ones `continues` and hookStart ignores them.
+    // - stop: Stop, with terminationReason (outcomeFromPayload).
+    // - no tool slot, deliberately: PreToolUse must answer with a decision,
+    //   and a hook that printed none was seen to DENY the tool, while "allow"
+    //   would bypass the user's permission prompts. So --reactive cannot apply.
+    // - no wait, failure, resume or end: there is no permission or session-end
+    //   event, and PostToolUse.error stayed empty for a failing command.
+    // Not verified: the desktop app reading this file (2.19.1 was running and
+    // fired nothing, but was idle), and what Esc fires.
+    file: () => path.join(os.homedir(), ".gemini", "config", "hooks.json"),
+    // ~/.gemini is Gemini CLI's too; this directory is Antigravity's alone.
+    configDir: () => path.join(os.homedir(), ".gemini", "antigravity"),
+    hooksKey: "vibeaudio",
+    events: { start: "PreInvocation", stop: "Stop" },
+    entry: (command) => ({ type: "command", command, timeout: 5 }),
+    commands: (entry) => (entry.hooks ? entry.hooks.map((h) => h.command) : entry.command ? [entry.command] : []),
+    seed: () => ({}),
+    liveReload: false,
+    note: "Not checked whether an open Antigravity session reloads hooks — start a new one to be sure. Reactive mode does not apply: Antigravity's pre-tool hook must approve or deny every tool, so VibeAudio installs none."
   }
 };
 
@@ -580,7 +617,17 @@ function newTurn(raw) {
   const payload = parsePayload(raw);
   const transcript = typeof payload.transcript_path === "string" ? payload.transcript_path : "";
   const offset = transcript ? fileSize(transcript) : 0;
-  return { session: String(payloadSession(payload) || ""), project: payload.cwd || process.cwd(), transcript, offset, blocked: blockedJustBefore(transcript, offset) };
+  return {
+    session: String(payloadSession(payload) || ""),
+    project: payloadProject(payload) || process.cwd(),
+    transcript,
+    offset,
+    blocked: blockedJustBefore(transcript, offset),
+    // Antigravity has no prompt event: its start is PreInvocation, which fires
+    // before every model call and counts them from 0 within the turn. Only the
+    // first one is a new turn; the rest would restart the music mid-turn.
+    continues: Number(payload.invocationNum) > 0
+  };
 }
 
 const BLOCK_LOOKBACK_MS = 3000;
@@ -928,6 +975,7 @@ function spawnDaemon(genre, volume, reactive, follow = false) {
  */
 function hookStart(genre, volume, { reactive = false, turn = null, follow = false } = {}) {
   if (turn && turn.blocked) return null; // Rejected before it began: nothing to play for.
+  if (turn && turn.continues) return null; // A later model call in a turn already playing.
   const id = sessionId(turn && turn.session);
   // Before the spawn: the daemon reads it on startup.
   const project = (turn && turn.project) || process.cwd();
@@ -952,7 +1000,10 @@ function outcomeFromPayload(raw) {
   const payload = parsePayload(raw);
   if (payload.hook_event_name === "StopFailure") return "failure";
   const status = String(payload.status || "").toLowerCase();
-  return status === "error" || status === "aborted" ? "failure" : "success";
+  if (status === "error" || status === "aborted") return "failure";
+  // Antigravity's Stop: NO_TOOL_CALL is the normal end (seen live; its docs
+  // say model_stop). An error or the step limit is a turn that did not finish.
+  return /error|max_steps/i.test(String(payload.terminationReason || "")) ? "failure" : "success";
 }
 
 /**
@@ -998,9 +1049,9 @@ function notifyEnabled(env = process.env, config = loadConfig()) {
   return ["1", "true", "on", "yes"].includes(raw);
 }
 
-/** The project a hook fired in: the payload's cwd (Claude, Codex, Gemini), else ours. */
+/** The project a hook fired in: the payload's (see payloadProject), else ours. */
 function sessionLabel(payload, cwd = process.cwd()) {
-  const dir = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : cwd;
+  const dir = payloadProject(payload) || cwd;
   return path.basename(dir.replace(/[\\/]+$/, "")) || "a session";
 }
 
@@ -1044,14 +1095,14 @@ function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChi
   const session = readSession(id);
   const tracked = session !== null;
   fs.rmSync(sessionFile(id), { force: true });
-  if (tracked) emitEvent("finished", id, parsePayload(raw).cwd || session.project, { outcome });
+  if (tracked) emitEvent("finished", id, payloadProject(parsePayload(raw)) || session.project, { outcome });
   if (session && Number.isFinite(session.started)) {
     const now = Date.now();
     // A turn that ends while still paused for you has been blocked since then.
     const blockedMs = (session.blockedMs || 0) + (session.waiting != null && session.waitStart ? now - session.waitStart : 0);
     // ponytail: assumes a playback backend exists; a machine with none hears no music either.
     const chimed = !noChime && !playbackDisabled();
-    recordTurn({ project: parsePayload(raw).cwd || process.cwd(), ms: now - session.started, blockedMs, outcome, session: id, chimed, at: now });
+    recordTurn({ project: payloadProject(parsePayload(raw)) || process.cwd(), ms: now - session.started, blockedMs, outcome, session: id, chimed, at: now });
   }
 
   // The music is every working session's, so it ends with the last of them.
@@ -1244,6 +1295,19 @@ function setHook(hooks, event, command, id) {
   hooks[event] = kept;
 }
 
+/**
+ * The object holding a target's events inside its config file: `hooks` for
+ * every agent but Antigravity, whose file is a map of named hooks and keeps
+ * ours under a name of their own (`hooksKey`).
+ */
+function hooksKey(t) {
+  return (t && t.hooksKey) || "hooks";
+}
+
+function hooksOf(settings, t) {
+  return settings ? settings[hooksKey(t)] : undefined;
+}
+
 /** [event, entries] for every event in a hooks object, skipping settings keys. */
 function hookEntries(hooks, t) {
   const configKeys = (t && t.configKeys) || [];
@@ -1253,7 +1317,7 @@ function hookEntries(hooks, t) {
 function readVibeEntryCount(file, id) {
   try {
     const { settings } = loadSettings(file, target(id));
-    return hookEntries(settings.hooks, target(id)).reduce(
+    return hookEntries(hooksOf(settings, target(id)), target(id)).reduce(
       (n, [, entries]) => n + entries.filter((e) => isVibeHook(e, id)).length,
       0
     );
@@ -1285,14 +1349,15 @@ function loadSettings(file, t = null) {
   if (settings === null || typeof settings !== "object" || Array.isArray(settings)) {
     throw new Error(`${file} does not contain a JSON object — refusing to overwrite it.`);
   }
-  if (settings.hooks !== undefined) {
-    if (settings.hooks === null || typeof settings.hooks !== "object" || Array.isArray(settings.hooks)) {
-      throw new Error(`${file} has a "hooks" key that is not an object — refusing to overwrite it.`);
+  const key = hooksKey(t);
+  if (settings[key] !== undefined) {
+    if (settings[key] === null || typeof settings[key] !== "object" || Array.isArray(settings[key])) {
+      throw new Error(`${file} has a "${key}" key that is not an object — refusing to overwrite it.`);
     }
-    for (const [event, entries] of hookEntries(settings.hooks, t)) {
+    for (const [event, entries] of hookEntries(settings[key], t)) {
       if (!Array.isArray(entries)) {
         throw new Error(
-          `${file} has hooks.${event} as ${Array.isArray(entries) ? "an array" : typeof entries}, ` +
+          `${file} has ${key}.${event} as ${Array.isArray(entries) ? "an array" : typeof entries}, ` +
           `not an array of entries — refusing to overwrite it.`
         );
       }
@@ -1354,33 +1419,39 @@ function installHooks(genre = "lofi", volume = 0.4, file = null, { reactive = fa
   }
 
   const ev = t.events;
-  settings.hooks = settings.hooks || {};
-  setHook(settings.hooks, ev.start, hookCommand("--hook-start", genre, volume, reactive), id);
-  setHook(settings.hooks, ev.stop, hookCommand("--hook-stop", genre, volume), id);
+  // Reactive needs a pre-tool event we can listen on without deciding for the
+  // agent; where there is none (Antigravity) it is off, not carried as a flag
+  // that does nothing and that --status would then report.
+  reactive = reactive && Boolean(ev.tool);
+  const key = hooksKey(t);
+  settings[key] = settings[key] || {};
+  const hooks = settings[key];
+  setHook(hooks, ev.start, hookCommand("--hook-start", genre, volume, reactive), id);
+  setHook(hooks, ev.stop, hookCommand("--hook-stop", genre, volume), id);
 
   // Only reactive mode needs per-tool-call signalling.
   if (reactive) {
-    setHook(settings.hooks, ev.tool, hookCommand("--hook-tool", genre, volume), id);
-  } else if (settings.hooks[ev.tool]) {
-    const kept = settings.hooks[ev.tool].filter((entry) => !isVibeHook(entry, id));
-    if (kept.length) settings.hooks[ev.tool] = kept;
-    else delete settings.hooks[ev.tool];
+    setHook(hooks, ev.tool, hookCommand("--hook-tool", genre, volume), id);
+  } else if (ev.tool && hooks[ev.tool]) {
+    const kept = hooks[ev.tool].filter((entry) => !isVibeHook(entry, id));
+    if (kept.length) hooks[ev.tool] = kept;
+    else delete hooks[ev.tool];
   }
 
   for (const event of ev.wait || []) {
-    setHook(settings.hooks, event, hookCommand("--hook-wait", genre, volume), id);
+    setHook(hooks, event, hookCommand("--hook-wait", genre, volume), id);
   }
   // The agent awaits a resume before the next tool's permission check, so a
   // resume can never land after the next wait.
   // ponytail: one ~40ms node start per tool call; a shell-side existence
   // check on the waiting file would skip it if that ever shows.
   for (const event of ev.resume || []) {
-    setHook(settings.hooks, event, hookCommand("--hook-resume", genre, volume, reactive), id);
+    setHook(hooks, event, hookCommand("--hook-resume", genre, volume, reactive), id);
   }
-  if (ev.failure) setHook(settings.hooks, ev.failure, hookCommand("--hook-stop", genre, volume), id);
-  if (ev.end) setHook(settings.hooks, ev.end, hookCommand("--hook-end", genre, volume), id);
+  if (ev.failure) setHook(hooks, ev.failure, hookCommand("--hook-stop", genre, volume), id);
+  if (ev.end) setHook(hooks, ev.end, hookCommand("--hook-end", genre, volume), id);
   // An interrupt ends the turn the same silent way a closed session does.
-  if (ev.interrupt) setHook(settings.hooks, ev.interrupt, hookCommand("--hook-end", genre, volume), id);
+  if (ev.interrupt) setHook(hooks, ev.interrupt, hookCommand("--hook-end", genre, volume), id);
 
   const after = `${JSON.stringify(settings, null, 2)}\n`;
   if (!dryRun) fs.writeFileSync(file, after);
@@ -1457,18 +1528,20 @@ function uninstallHooks(file = null, { id = "claude" } = {}) {
   }
 
   const { settings } = loadSettings(file, t);
-  if (!settings.hooks) return { file, removed: 0, id };
+  const key = hooksKey(t);
+  const hooks = settings[key];
+  if (!hooks) return { file, removed: 0, id };
 
   let removed = 0;
-  for (const [event, entries] of hookEntries(settings.hooks, t)) {
+  for (const [event, entries] of hookEntries(hooks, t)) {
     const kept = entries.filter((entry) => !isVibeHook(entry, id));
     removed += entries.length - kept.length;
 
-    if (kept.length) settings.hooks[event] = kept;
-    else delete settings.hooks[event];
+    if (kept.length) hooks[event] = kept;
+    else delete hooks[event];
   }
 
-  if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
+  if (Object.keys(hooks).length === 0) delete settings[key];
   fs.writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`);
   return { file, removed, id };
 }
@@ -1513,6 +1586,7 @@ module.exports = {
   isVibeHook,
   userHooksInstalled,
   hookEntries,
+  hooksOf,
   installSlashCommand,
   uninstallSlashCommand,
   VIBE_HOOK_FLAG,
