@@ -6,3 +6,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # checkout 7.0.1's macOS/Node 18 test job hung twice (PR #56) while the
+      # same job passes on 4.x; revisit once that is understood. Minor and
+      # patch updates still come through.
+      - dependency-name: actions/checkout
+        update-types: ["version-update:semver-major"]
