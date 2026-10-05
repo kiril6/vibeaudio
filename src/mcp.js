@@ -153,7 +153,10 @@ function handleMessage(player, msg) {
       // saved file here is what makes `vibe --genre jazz` mean jazz in a
       // desktop client too, rather than only in the terminal.
       const saved = loadConfig();
-      const requested = args.genre || process.env.VIBE_GENRE || saved.genre || "lofi";
+      // The argument comes from the client: only a string counts. A number or
+      // object here used to reach `.toLowerCase()` and fail the whole call.
+      const asked = typeof args.genre === "string" ? args.genre.trim() : "";
+      const requested = String(asked || process.env.VIBE_GENRE || saved.genre || "lofi");
       // An unknown genre already fell back to lofi inside the generator, but
       // player.genre kept the name nobody implements - so the model told the
       // user it was playing something that does not exist.
@@ -177,9 +180,12 @@ function handleMessage(player, msg) {
       // start() returns false for three unrelated reasons, and the model
       // relays whatever we say here to the user. Reporting a deliberate mute
       // as a missing audio player sends them debugging their sound stack.
+      // What goes back to the model is client-supplied text, so echo a short
+      // plain version of it, not whatever was sent.
+      const shown = requested.replace(/[^\w.-]/g, "").slice(0, 24);
       const fallbackNote = genre === requested
         ? ""
-        : ` (requested genre '${requested}' is not one of ${AVAILABLE_GENRES.join(", ")}, random)`;
+        : ` (requested genre '${shown}' is not one of ${AVAILABLE_GENRES.join(", ")}, random)`;
       const text = started
         ? `Started playing ${player.genre} procedural focus music at ${Math.round(volume * 100)}% volume.${fallbackNote}`
         : player.isPlaying
