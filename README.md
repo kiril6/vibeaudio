@@ -4,7 +4,7 @@
   <img src="docs/og.png?v=2" alt="VibeAudio — Focus music while your AI codes" width="720">
 </p>
 
-[![test](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml/badge.svg)](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml) [![npm](https://img.shields.io/npm/v/vibeaudio)](https://www.npmjs.com/package/vibeaudio) [![license](https://img.shields.io/npm/l/vibeaudio)](LICENSE) [![downloads](https://img.shields.io/npm/d18m/vibeaudio?label=downloads)](https://npm-stat.com/charts.html?package=vibeaudio) [![downloads/month](https://img.shields.io/npm/dm/vibeaudio)](https://npm-stat.com/charts.html?package=vibeaudio) [![M8ven Score](https://m8ven.ai/badge/mcp/kiril6/vibeaudio)](https://m8ven.ai/mcp/kiril6/vibeaudio?s=readme)
+[![test](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml/badge.svg)](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml) [![npm](https://img.shields.io/npm/v/vibeaudio)](https://www.npmjs.com/package/vibeaudio) [![license](https://img.shields.io/npm/l/vibeaudio)](LICENSE) [![node](https://img.shields.io/node/v/vibeaudio)](https://nodejs.org) [![downloads](https://img.shields.io/npm/d18m/vibeaudio?label=downloads)](https://npm-stat.com/charts.html?package=vibeaudio) [![downloads/month](https://img.shields.io/npm/dm/vibeaudio)](https://npm-stat.com/charts.html?package=vibeaudio) [![M8ven Score](https://m8ven.ai/badge/mcp/kiril6/vibeaudio)](https://m8ven.ai/mcp/kiril6/vibeaudio?s=readme)
 
 > **Procedural focus music while your AI coding tools think.**
 > Every project gets its own arrangement. Zero dependencies, zero audio files.
