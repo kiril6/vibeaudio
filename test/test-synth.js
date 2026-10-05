@@ -2331,6 +2331,23 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         fs.appendFileSync(tA, userText(INTERRUPT));
         await settle("A's Esc must end the music", () => !alive(bothPid));
         assert.ok(!playing(), "with both interrupted nothing is left to play");
+
+        // The 15-minute limit is silence from the agent, not time since the
+        // prompt: a turn that keeps calling tools outlasts it, one that goes
+        // quiet does not. Scaled to 2.5s here; every hook refreshes the session.
+        cli(["--stop"]);
+        const shortEnv = { ...env, VIBE_MAX_DAEMON_MS: "2500" };
+        const run = (args, payload = "") => spawnSync(process.execPath, [CLI, ...args], { input: payload, env: shortEnv, timeout: 20000 });
+        run(["--hook-start", "--genre", "zen", "--volume", "5"], sid("L"));
+        await settle("the long turn's music must start", () => playing());
+        const longPid = parseInt(fs.readFileSync(pidFile, "utf8"), 10);
+        for (let i = 0; i < 12; i++) {
+          await sleep(500);
+          run(["--hook-resume", "--genre", "zen", "--volume", "5"], sid("L", { tool_name: "Read", hook_event_name: "PostToolUse" }));
+        }
+        assert.ok(alive(longPid) && playing(), "6s of tool calls is past the limit, and the music must still be playing");
+        await settle("a session that goes quiet is dropped and the music stops", () => !alive(longPid));
+        assert.ok(!playing(), "and the pid file goes with it");
       } finally {
         cli(["--stop"]);
         fs.rmSync(dir, { recursive: true, force: true });

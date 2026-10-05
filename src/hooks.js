@@ -143,8 +143,13 @@ function hookTool() {
   setTimeout(commit, 500).unref();
 }
 
-// A lost Stop hook must not leave music looping forever.
-const MAX_DAEMON_MS = 15 * 60 * 1000;
+// A lost Stop hook must not leave music looping forever. This is how long a
+// session may go without a hook before it is taken for a crashed agent; every
+// tool call refreshes it, so a long turn that keeps working keeps its music.
+// VIBE_MAX_DAEMON_MS is internal, for the suite.
+const MAX_DAEMON_MS = Number(process.env.VIBE_MAX_DAEMON_MS) || 15 * 60 * 1000;
+// The daemon's own ceiling, whatever the sessions say: a backstop, not the rule.
+const DAEMON_CEILING_MS = Math.max(MAX_DAEMON_MS, 4 * 60 * 60 * 1000);
 
 /**
  * The agents VibeAudio can wire itself into, and the few things that differ
@@ -519,7 +524,7 @@ function readPid() {
  * so an unverified kill would eventually SIGTERM an unrelated process.
  *
  * Failing closed is the safe direction here: a daemon we decline to kill stops
- * itself at MAX_DAEMON_MS, while killing a stranger's process has no such
+ * itself once no session is left (MAX_DAEMON_MS of silence), while killing a stranger's process has no such
  * ceiling.
  *
  * ponytail: posix only. Windows has no cheap command-line lookup, so the pid
@@ -694,8 +699,8 @@ function writeSession(id, data) {
 
 /**
  * Every session with a turn in flight. One that has not been touched for
- * MAX_DAEMON_MS is a crashed agent - it never sent Stop - and is dropped here,
- * the same ceiling the daemon itself stops at.
+ * MAX_DAEMON_MS is a crashed agent - it never sent Stop - and is dropped here;
+ * the daemon stops once none is left, with DAEMON_CEILING_MS as the backstop.
  */
 function listSessions() {
   let names;
@@ -947,7 +952,7 @@ function runDaemon(genre, volume, { reactive = false, volumeSource = null } = {}
 
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
-  setTimeout(shutdown, MAX_DAEMON_MS);
+  setTimeout(shutdown, DAEMON_CEILING_MS);
 
   setInterval(() => {
     // The pid file names the one daemon that owns the speakers. Two prompts

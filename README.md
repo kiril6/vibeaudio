@@ -321,7 +321,7 @@ Every session of an agent is tracked separately, by the session id in its hook p
 
 * **More sessions, more music.** Two sessions working at once plays at least tier 2 and three or more plays tier 3 — the same piece with more layers, arriving at the next loop boundary and easing off as sessions finish. It only ever raises the tier, so it works alongside time escalation and [reactive mode](#reactive-mode-opt-in).
 * **Dialogs and Esc are per session.** A permission dialog in one terminal plays the "your turn" chime but only pauses the music once *every* session is waiting; Esc ends just that session's turn.
-* **Crashed agents can't hold it hostage.** A session that never sent `Stop` is dropped after 15 minutes, the same ceiling the background player stops at.
+* **Crashed agents can't hold it hostage.** A session that goes 15 minutes without any hook (no tool call, no `Stop`) is taken for a crashed agent and dropped. A long turn that keeps working keeps its music.
 
 Sessions with no id in their payload share a single slot, so they behave as one. VibeAudio keeps one stream: per-session genres or several streams mixed together aren't supported.
 
@@ -499,7 +499,7 @@ Changes land at the next loop boundary, so it shifts musically rather than cutti
 * **Backs up first, once.** The first install copies your file alongside as `*.vibeaudio.bak`. Later installs leave it alone — re-copying would overwrite your real pre-VibeAudio config with a copy of VibeAudio's own last install.
 * **Reinstalling updates, never duplicates.** Uninstalling sweeps every supported agent and removes only VibeAudio's own entries.
 * **Refuses rather than clobbers.** Malformed JSON aborts the write; a temporary `npx` checkout is rejected outright, since the hook records an absolute path that npm's cache eviction would later delete.
-* **Can't run away.** The background player is capped at 15 minutes, so a missed stop event can't leave music looping.
+* **Can't run away.** The background player stops once its sessions have been silent for 15 minutes (and after 4 hours at most), so a missed stop event can't leave music looping.
 
 </details>
 
