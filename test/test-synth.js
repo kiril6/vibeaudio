@@ -3905,7 +3905,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     const dependabot = fs.readFileSync(path.join(__dirname, "..", ".github", "dependabot.yml"), "utf8");
     assert.ok(/package-ecosystem:\s*github-actions/.test(dependabot), "pinned actions are kept current");
     const security = fs.readFileSync(path.join(__dirname, "..", "SECURITY.md"), "utf8");
-    assert.ok(/Reporting a vulnerability/.test(security) && /@/.test(security), "SECURITY.md says how to report");
+    assert.ok(/Reporting a vulnerability/.test(security) && /security\/advisories\/new/.test(security), "SECURITY.md says how to report");
     assert.ok(!/postinstall/.test(JSON.stringify(require("../package.json").scripts)) && /no install scripts/i.test(security), "and its no-install-scripts claim is true");
     console.log("   ✓ Every tool declares all four hints, bad input is refused or echoed plainly, tool lookup uses no shell, workflows are pinned and least-privilege.");
   }

@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please email **delovski.office@gmail.com** with "vibeaudio security" in the subject, and include the version (`vibe --version`), what you did and what happened. Don't open a public issue for something exploitable. You'll get a reply within a few days; this is a one-person project, so a fix usually follows within a week for anything real.
+Use GitHub's private reporting: open the repository's **Security** tab and choose **Report a vulnerability** ([direct link](https://github.com/kiril6/vibeaudio/security/advisories/new)). Include the version (`vibe --version`), what you did and what happened. Don't open a public issue for something exploitable. You'll get a reply within a few days; this is a one-person project, so a fix usually follows within a week for anything real.
 
 ## Supported versions
 
