@@ -45,7 +45,9 @@ function parseDefaultOutput(json) {
 function macOutput() {
   if (process.platform !== "darwin") return null;
   const run = (cmd, args) => {
-    const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 5000 });
+    // SIGKILL, not the default SIGTERM: a lookup stuck on audio hardware (a CI
+    // runner has none) can ignore TERM, and spawnSync then waits on it forever.
+    const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 5000, killSignal: "SIGKILL" });
     return r.status === 0 ? r.stdout : null;
   };
   const settings = run("osascript", ["-e", "get volume settings"]);

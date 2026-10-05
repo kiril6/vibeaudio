@@ -2961,9 +2961,13 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     }));
     const r = require("child_process").spawnSync(process.execPath, [path.join(__dirname, "..", "bin", "vibeaudio.js"), "--doctor"], {
       env: { ...process.env, HOME: docHome, USERPROFILE: docHome, VIBE_NO_UPDATE_CHECK: "1" },
-      encoding: "utf8"
+      encoding: "utf8",
+      // A stall must fail in a minute, not hold a CI runner for six hours.
+      timeout: 60000,
+      killSignal: "SIGKILL"
     });
     fs.rmSync(docHome, { recursive: true, force: true });
+    assert.notStrictEqual(r.status, null, "--doctor must finish: it timed out");
     const out = r.stdout.replace(/\x1b\[[0-9;]*m/g, "");
     assert.strictEqual(r.status, 1, "a failing check must make the exit code non-zero");
     assert.ok(/✘ Saved settings/.test(out), "an unparseable config.json is reported");
@@ -3878,7 +3882,33 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     console.log("   ✓ Every tool declares all four hints, bad outcomes are refused, tool lookup uses no shell, workflows are pinned and least-privilege.");
   }
 
-  console.log("\n\x1b[32mAll 69 tests passed successfully!\x1b[0m");
+  // [70] A stuck audio lookup cannot hang --doctor.
+  console.log("\n\x1b[1m[70] --doctor's audio lookups cannot hang on a process that ignores SIGTERM\x1b[0m");
+  {
+    if (process.platform !== "darwin") {
+      console.log("   ✓ Skipped: the output lookup only runs on macOS.");
+    } else {
+      const { spawnSync } = require("child_process");
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-stuck-lookup-"));
+      // exec keeps the ignored-TERM disposition, so only SIGKILL can end it.
+      for (const name of ["osascript", "system_profiler"]) {
+        fs.writeFileSync(path.join(dir, name), "#!/bin/sh\ntrap '' TERM\nexec sleep 40\n", { mode: 0o755 });
+      }
+      const started = Date.now();
+      const r = spawnSync(process.execPath, ["-e", `console.log(JSON.stringify(require(${JSON.stringify(path.join(__dirname, "..", "src", "output.js"))}).macOutput()))`], {
+        env: { ...process.env, PATH: `${dir}:${process.env.PATH}` },
+        encoding: "utf8",
+        timeout: 30000,
+        killSignal: "SIGKILL"
+      });
+      fs.rmSync(dir, { recursive: true, force: true });
+      assert.strictEqual(r.stdout.trim(), "null", "a lookup that never answers is no finding, not a failure");
+      assert.ok(Date.now() - started < 15000, `returned in ${Date.now() - started}ms, not after the stuck process gave up`);
+      console.log("   ✓ A lookup that ignores SIGTERM is killed at its timeout and yields no finding.");
+    }
+  }
+
+  console.log("\n\x1b[32mAll 70 tests passed successfully!\x1b[0m");
 })().catch((err) => {
   console.error(`\n\x1b[31mTest failure:\x1b[0m ${err.message}`);
   process.exit(1);

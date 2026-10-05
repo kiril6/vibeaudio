@@ -957,7 +957,7 @@ class AudioPlayer {
             .on("error", () => {})
             .unref();
         } else {
-          spawnSync(backend.cmd, backend.args(chimeFile, clamped), { stdio: "ignore", timeout: 2500 });
+          spawnSync(backend.cmd, backend.args(chimeFile, clamped), { stdio: "ignore", timeout: 2500, killSignal: "SIGKILL" });
         }
       } catch (e) {
         // Ignore timeout

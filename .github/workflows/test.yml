@@ -16,6 +16,8 @@ jobs:
     # is fine: playback is optional by design and the suite asserts on generated
     # buffers, parsing and process behaviour, never on sound.
     runs-on: ${{ matrix.os }}
+    # The suite takes ~2 minutes. A hang once held a runner for the 6-hour default.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -33,6 +35,7 @@ jobs:
   package:
     # Catches a broken bin shebang or a files[] entry that stops shipping.
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
