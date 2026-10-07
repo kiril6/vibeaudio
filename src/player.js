@@ -438,8 +438,8 @@ function playbackDisabled() {
  * Env beats this directory's saved value beats the global one; a flag is
  * resolved by parseArgs() and handed to whoever acts on it.
  */
-function musicEnabled(env = process.env, config = loadConfig()) {
-  const raw = env.VIBE_MUSIC ?? projectSettings(config).music ?? config.music ?? "on";
+function musicEnabled(env = process.env, config = loadConfig(), cwd = process.cwd()) {
+  const raw = env.VIBE_MUSIC ?? projectSettings(config, cwd).music ?? config.music ?? "on";
   return !["off", "0", "false", "no"].includes(String(raw).trim().toLowerCase());
 }
 
@@ -751,6 +751,7 @@ class AudioPlayer {
     this.genre = "lofi";
     this.volume = 0.42;
     this.seed = projectSeed();
+    this.projectDir = null; // Set when a client names the project (MCP); null means the cwd.
     this.intensity = null;
     this.minTier = null;
     this.tension = null;
@@ -764,12 +765,13 @@ class AudioPlayer {
    * Returns true if playback actually started. Restarts when called with
    * different settings while playing, so a genre switch is not silently dropped.
    */
-  start(genre = "lofi", volume = 0.42, { maxDurationMs = null, intensity = null, minTier = null, tension = null } = {}) {
+  start(genre = "lofi", volume = 0.42, { maxDurationMs = null, intensity = null, minTier = null, tension = null, project = null } = {}) {
     const resolved = resolveGenre(genre);
     const targetVolume = Math.max(0.05, Math.min(1.0, volume));
 
     if (this.isPlaying) {
-      if (resolved === this.genre && targetVolume === this.volume) return false;
+      // A different project is a different arrangement, so it restarts too.
+      if (resolved === this.genre && targetVolume === this.volume && (project || null) === this.projectDir) return false;
       this.stop({ playChime: false });
     }
 
@@ -784,7 +786,8 @@ class AudioPlayer {
     this.startTime = Date.now();
     this.genre = resolved;
     this.volume = targetVolume;
-    this.seed = projectSeed();
+    this.projectDir = project || null;
+    this.seed = projectSeed(project || process.cwd());
     this.bar = 0; // Every run opens on the project's own bar.
     this.intensity = intensity;
     this.minTier = minTier;

@@ -6,7 +6,9 @@
  */
 
 const readline = require("readline");
-const { AudioPlayer, AVAILABLE_GENRES, normalizeVolume, playbackDisabled, musicEnabled, isKnownGenre, loadConfig } = require("./player");
+const path = require("path");
+const { fileURLToPath } = require("url");
+const { AudioPlayer, AVAILABLE_GENRES, normalizeVolume, playbackDisabled, musicEnabled, isKnownGenre, loadConfig, projectSettings } = require("./player");
 const pkg = require("../package.json");
 
 // A desktop client that crashes never sends vibe_stop, so playback needs its
@@ -25,6 +27,64 @@ const annotate = (title, { readOnly, idempotent }) => ({
 });
 
 const OUTCOMES = ["success", "failure"];
+
+/**
+ * Which project this conversation is about. Hooks and the wrapper know it (they
+ * run in it); an MCP server is launched once by the client, in a directory the
+ * client chose, so it has to be told. Two sources, in order:
+ *   1. `project_dir`, an argument the model passes when it has a workspace.
+ *   2. The client's roots (`roots/list`), the protocol's own answer.
+ * With neither, the server's cwd, which is what it always used.
+ * The value is only hashed and matched against keys in our own config file; it
+ * is never opened, so it is not a file-access question - but it comes from the
+ * client, so it must be a plain absolute path of sane length.
+ */
+const MAX_PROJECT_DIR = 1024;
+function cleanProjectDir(value) {
+  if (typeof value !== "string") return null;
+  const v = value.trim();
+  if (!v || v.length > MAX_PROJECT_DIR || v.includes("\0") || !path.isAbsolute(v)) return null;
+  return path.resolve(v);
+}
+
+// A root is a file: URI. Anything else (a remote workspace) is not a path here.
+function rootDirs(roots) {
+  const dirs = [];
+  for (const root of Array.isArray(roots) ? roots : []) {
+    try {
+      const uri = root && typeof root.uri === "string" ? root.uri : "";
+      if (!uri.startsWith("file:")) continue;
+      const dir = cleanProjectDir(fileURLToPath(uri));
+      if (dir) dirs.push(dir);
+    } catch (e) { /* a malformed URI is skipped, not fatal */ }
+  }
+  return dirs;
+}
+
+/** { dir, source }: what to seed from, and why - vibe_status reports the second. */
+function resolveProject(args, session) {
+  const explicit = cleanProjectDir(args && args.project_dir);
+  let dir = null;
+  let source = "cwd";
+  if (explicit) { dir = explicit; source = "project_dir"; }
+  else if (session && session.roots.length) { dir = session.roots[0]; source = "roots"; }
+  // VIBE_SEED outranks every directory (projectSeed reads it); say so.
+  if (process.env.VIBE_SEED && !isNaN(parseInt(process.env.VIBE_SEED, 10))) source = "VIBE_SEED";
+  return { dir, source };
+}
+
+// What the client has told us about itself. `send` writes a request to it.
+function newSession(send = null) {
+  return { supportsRoots: false, roots: [], rootsRequest: null, send, nextId: 1 };
+}
+
+// Ask for the roots. Our own id space ("vibeaudio-roots-N") cannot collide with
+// the client's, and a reply is matched by it.
+function requestRoots(session) {
+  if (!session || !session.supportsRoots || !session.send) return;
+  session.rootsRequest = `vibeaudio-roots-${session.nextId++}`;
+  session.send({ jsonrpc: "2.0", id: session.rootsRequest, method: "roots/list" });
+}
 
 const TOOLS = [
   {
@@ -49,6 +109,13 @@ const TOOLS = [
           description: "Playback volume from 5 to 100 (default: 40)",
           minimum: 5,
           maximum: 100
+        },
+        project_dir: {
+          type: "string",
+          description:
+            "Absolute path of the active workspace, if there is one. Omit it when you " +
+            "have no workspace - do not guess a path. It makes this project sound like " +
+            "itself and applies the genre and volume the user saved for it."
         }
       }
     }
@@ -90,10 +157,22 @@ const TOOLS = [
   }
 ];
 
-function handleMessage(player, msg) {
+function handleMessage(player, msg, session = null) {
   const { id, method, params } = msg;
 
+  // The client's answer to our roots/list: it has a result, not a method.
+  if (method === undefined && session && id !== undefined && id === session.rootsRequest) {
+    session.rootsRequest = null;
+    session.roots = rootDirs(msg.result && msg.result.roots);
+    return null;
+  }
+  // Any other response is an answer to something we asked, not a request: it
+  // gets no reply (a "method not found" for it would be sent to the client).
+  if (method === undefined && (msg.result !== undefined || msg.error !== undefined)) return null;
+
   if (method === "initialize") {
+    // roots is a client capability: only a client that declares it can be asked.
+    if (session) session.supportsRoots = Boolean(params && params.capabilities && params.capabilities.roots);
     return {
       jsonrpc: "2.0",
       id,
@@ -117,13 +196,22 @@ function handleMessage(player, msg) {
           "and you are ready to hand back a result.\n" +
           "Do not use it for quick answers - starting and stopping music around a " +
           "one-second reply is worse than silence. Leave the genre and volume alone " +
-          "unless the user asks; they are the user's preference, not yours."
+          "unless the user asks; they are the user's preference, not yours.\n" +
+          "If you have a workspace, pass its absolute path as vibe_play's project_dir so " +
+          "this project sounds like itself; omit it when you have none."
       }
     };
   }
 
   if (method === "notifications/initialized") {
-    // Client acknowledgment - no response needed
+    // Client acknowledgment - no response needed, but this is the first moment
+    // a request of ours is allowed, so ask which project it has open.
+    requestRoots(session);
+    return null;
+  }
+
+  if (method === "notifications/roots/list_changed") {
+    requestRoots(session);
     return null;
   }
 
@@ -153,10 +241,16 @@ function handleMessage(player, msg) {
       // saved file here is what makes `vibe --genre jazz` mean jazz in a
       // desktop client too, rather than only in the terminal.
       const saved = loadConfig();
+      const project = resolveProject(args, session);
+      const dir = project.dir || process.cwd();
+      // What `vibe --here` saved for this project sits between the environment
+      // and the machine-wide default, as it does for the CLI and the hooks.
+      const here = projectSettings(saved, dir);
+      const setting = (key) => (here[key] !== undefined ? here[key] : saved[key]);
       // The argument comes from the client: only a string counts. A number or
       // object here used to reach `.toLowerCase()` and fail the whole call.
       const asked = typeof args.genre === "string" ? args.genre.trim() : "";
-      const requested = String(asked || process.env.VIBE_GENRE || saved.genre || "lofi");
+      const requested = String(asked || process.env.VIBE_GENRE || setting("genre") || "lofi");
       // An unknown genre already fell back to lofi inside the generator, but
       // player.genre kept the name nobody implements - so the model told the
       // user it was playing something that does not exist.
@@ -165,10 +259,10 @@ function handleMessage(player, msg) {
       // as the CLI, so a mistyped VIBE_VOLUME falls back instead of reaching
       // the player as NaN.
       const volume = normalizeVolume(args.volume,
-        normalizeVolume(process.env.VIBE_VOLUME, normalizeVolume(saved.volume, 0.4)));
+        normalizeVolume(process.env.VIBE_VOLUME, normalizeVolume(setting("volume"), 0.4)));
 
       // A deliberate setting, like a mute: report it as one, and start nothing.
-      if (!musicEnabled()) {
+      if (!musicEnabled(process.env, saved, dir)) {
         return {
           jsonrpc: "2.0",
           id,
@@ -176,7 +270,7 @@ function handleMessage(player, msg) {
         };
       }
 
-      const started = player.start(genre, volume, { maxDurationMs: MAX_PLAYBACK_MS });
+      const started = player.start(genre, volume, { maxDurationMs: MAX_PLAYBACK_MS, project: project.dir });
       // start() returns false for three unrelated reasons, and the model
       // relays whatever we say here to the user. Reporting a deliberate mute
       // as a missing audio player sends them debugging their sound stack.
@@ -232,6 +326,7 @@ function handleMessage(player, msg) {
     }
 
     if (name === "vibe_status") {
+      const statusProject = resolveProject({}, session);
       return {
         jsonrpc: "2.0",
         id,
@@ -244,7 +339,13 @@ function handleMessage(player, msg) {
                 // Without this, "isPlaying: false" while muted reads as a bug
                 // worth investigating rather than a choice the user made.
                 muted: playbackDisabled(),
-                musicOff: !musicEnabled(),
+                musicOff: !musicEnabled(process.env, loadConfig(), statusProject.dir || process.cwd()),
+                // Which project the next vibe_play seeds from and how we learned
+                // it (project_dir | roots | cwd | VIBE_SEED), and, while music
+                // plays, the one it is playing for.
+                project: statusProject.dir || process.cwd(),
+                projectSource: statusProject.source,
+                playingProject: player.isPlaying ? (player.projectDir || process.cwd()) : null,
                 genre: player.genre,
                 currentTier: player.currentTier,
                 uptimeMs: player.isPlaying ? Date.now() - player.startTime : 0
@@ -281,6 +382,8 @@ function handleMessage(player, msg) {
 
 function startMcpServer() {
   const player = new AudioPlayer();
+  const send = (message) => process.stdout.write(JSON.stringify(message) + "\n");
+  const session = newSession(send);
 
   // In stdio MCP mode, stderr is used for logging, stdout is strictly reserved for JSON-RPC
   process.stderr.write(`[vibeaudio] MCP Server running on stdio (v${pkg.version})\n`);
@@ -306,7 +409,7 @@ function startMcpServer() {
 
     let response;
     try {
-      response = handleMessage(player, msg);
+      response = handleMessage(player, msg, session);
     } catch (err) {
       process.stderr.write(`[vibeaudio] Handler error: ${err.message}\n`);
       // A request (one with an id) must always get a reply. Swallowing the
@@ -316,7 +419,7 @@ function startMcpServer() {
       }
     }
 
-    if (response) process.stdout.write(JSON.stringify(response) + "\n");
+    if (response) send(response);
   });
 
   // Client disconnected - never leave audio looping behind.
@@ -336,4 +439,4 @@ function startMcpServer() {
   });
 }
 
-module.exports = { startMcpServer, handleMessage, TOOLS };
+module.exports = { startMcpServer, handleMessage, TOOLS, newSession, resolveProject, cleanProjectDir, rootDirs };

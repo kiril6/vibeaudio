@@ -630,9 +630,11 @@ VIBE_VOLUME = "25"
 Restart the app afterwards — this one is read from the environment the server was launched with, so unlike the saved default it can't change under a running client.
 
 #### Exposed MCP Tools:
-* `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `rain`, `ocean`, `random`; `volume`: `5-100`).
+* `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `rain`, `ocean`, `random`; `volume`: `5-100`; `project_dir`: the workspace's absolute path, optional).
 * `vibe_stop`: Stop music and play the completion chime (`outcome`: `success` or `failure`).
-* `vibe_status`: Return current playback state and active tier.
+* `vibe_status`: Return current playback state and active tier, and which project the arrangement comes from.
+
+**Which project it sounds like.** Hooks and the wrapper run inside your project, so each repo has its own arrangement. An MCP server is started once by the app, so it asks: a client that supports MCP *roots* (Claude Code does) reports its open folder, and any client's model can pass `project_dir`. That project's own settings apply too: a genre saved with `vibe --genre jazz --here` plays for that project over MCP as well. With neither, it uses the folder the app launched the server in, as before; `VIBE_SEED` still overrides all of it. `vibe_status` shows the `project` and its `projectSource` (`project_dir`, `roots`, `cwd` or `VIBE_SEED`).
 
 Playback stops automatically if the desktop client disconnects, and caps out after 15 minutes — which also covers the likelier case of a model that started the music and never called `vibe_stop`.
 
