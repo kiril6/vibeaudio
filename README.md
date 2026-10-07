@@ -540,7 +540,9 @@ It is plain text on purpose: tmux and Starship do their own styling. It doesn't 
 **tmux status bar:**
 ```bash
 set -g status-right '#(vibe --statusline)'
+set -g status-interval 5
 ```
+tmux re-runs `#(...)` every `status-interval` seconds, 15 by default, so without the second line a dialog can wait up to 15 seconds before the bar says so.
 
 **macOS speech alert** — announce out loud whenever an agent stops to ask for your input:
 ```bash
@@ -556,7 +558,16 @@ format = "([🎧 $output ]($style))"
 ```
 The parentheses matter: Starship hides a group whose variables are empty, so the 🎧 disappears with the text when idle. Put the icon in a `symbol` instead and it shows all the time. `vibe --statusline` takes about 40 ms, so running it on every prompt is fine.
 
-*Run on tmux 3.x and Starship 1.26.0, macOS arm64, Node 24: both showed `working`, `working ×2` and `waiting: web` as sessions started and waited, and nothing when idle. Not run on Linux or Windows.*
+**Webhook** — post `waiting` and `stuck` to anything that takes an HTTP request (a smart plug bridge, a Stream Deck plugin, Slack's incoming webhooks):
+```bash
+vibe --events | jq --unbuffered -c 'select(.event=="waiting" or .event=="stuck") | {event, project}' \
+  | while read -r line; do curl -s -X POST -H 'Content-Type: application/json' -d "$line" https://example.com/hook; done
+```
+The `select` also drops the snapshot `--events` prints first (it has no `event` field), so only changes after you start it are sent: a session already waiting at that moment is not announced. For the current state, call `vibe --state` once.
+
+*Not covered yet: a macOS menu bar plugin (SwiftBar/xbar) and Linux desktop alerts. Neither has been run on a real setup, so neither is documented. `--notify` already raises a banner when a turn finishes or needs you.*
+
+*Verified on macOS arm64 with Node 24, tmux 3.7 and Starship 1.26: the tmux and Starship segments showed `working`, `working ×2` and `waiting: web` and disappeared when idle; the `say` and webhook pipelines fired once per `waiting` event while the stream stayed open. Not run on Linux or Windows.*
 
 The stream is a local file (`~/.vibeaudio/events.jsonl`, rotated at 256 KB), so it never leaves your machine. It keeps updating while you're muted, because a mute silences sound and a light isn't sound. The `v` field is the format version, and any breaking change will increment it.
 

@@ -2195,7 +2195,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         const transcript = path.join(dir, "session.jsonl");
         const userText = (text) => JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text }] } }) + "\n";
         const INTERRUPT = "[Request interrupted by user]";
-        const turnPayload = (extra = {}) => JSON.stringify({ session_id: "s3", transcript_path: transcript, ...extra });
+        const turnPayload = (extra = {}) => JSON.stringify({ session_id: "s3", transcript_path: transcript, cwd: "/work/api", ...extra });
         const startTurn = async () => {
           fs.writeFileSync(log, "");
           cli(["--hook-start", "--genre", "zen", "--volume", "5"], turnPayload());
@@ -2223,6 +2223,13 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         await settle("Esc must stop the music", () => !alive(turnPid));
         assert.ok(!playing(), "and the interrupted daemon must clear its pid file");
         assert.ok(!/chime/.test(fs.readFileSync(log, "utf8")), "silently: an interrupt is never reported as done");
+        // The one event no hook raises: the daemon's sweep emits it, and it names
+        // the project from the session file because there is no payload to read.
+        const lastEvent = JSON.parse(fs.readFileSync(path.join(state, "events.jsonl"), "utf8").trim().split("\n").pop());
+        assert.deepStrictEqual(
+          [lastEvent.event, lastEvent.session, lastEvent.project, lastEvent.status],
+          ["interrupted", "s3", "/work/api", "idle"],
+          "an Esc must log interrupted with its project, leaving the machine idle");
 
         // Esc during an approved tool still fires its PostToolUse. The resumed
         // daemon watches from the prompt, not from its own start, so it sees

@@ -624,7 +624,7 @@ footer a{ color:var(--ink-dim); }
       <div class="feat"><h3>Mute for calls</h3><p><code>vibe --mute</code> — expires in an hour so you never forget it's on.</p></div>
       <div class="feat"><h3>Hears when it's stuck</h3><p>When 4 of an agent's last 8 tool calls fail, a soft heartbeat joins the music — the loop that goes nowhere, made audible. With music off it plays once on its own.</p></div>
       <div class="feat"><h3>Status line</h3><p><code>vibe --statusline</code> — one plain line for tmux or your prompt: <code>working ×2</code>, <code>waiting: api</code>. Empty when idle, about 40 ms, no <code>jq</code>.</p></div>
-      <div class="feat"><h3>Build on it</h3><p><code>vibe --state</code> and <code>vibe --events</code> — every agent's state as JSON, for lights, menu bars and status lines.</p></div>
+      <div class="feat"><h3><a href="https://github.com/kiril6/vibeaudio#build-on-it-vibe---state-and-vibe---events" style="color:inherit">Build on it</a></h3><p><code>vibe --state</code> and <code>vibe --events</code> — every agent's state as JSON, for lights, menu bars and status lines.</p></div>
       <div class="feat"><h3>Chime in key</h3><p>The done chime is the tonic chord of the music you were hearing, so it lands as the resolution.</p></div>
       <div class="feat"><h3>Where the time went</h3><p><code>vibe --report</code> — how long you waited on agents this week, on which projects, and how fast you got back to a finished turn. Stays on your machine.</p></div>
       <div class="feat"><h3>Self-check</h3><p><code>vibe --doctor</code> — every problem comes with the command that fixes it.</p></div>
@@ -664,7 +664,7 @@ footer a{ color:var(--ink-dim); }
     <div class="hud-integrations">
       <div class="hud-item">
         <span class="hud-tag">tmux status bar</span>
-        <code>set -g status-right '#(vibe --statusline)'</code>
+        <code>set -g status-right '#(vibe --statusline)'<br>set -g status-interval 5</code>
       </div>
       <div class="hud-item">
         <span class="hud-tag">Starship prompt · starship.toml</span>
@@ -673,6 +673,10 @@ footer a{ color:var(--ink-dim); }
       <div class="hud-item">
         <span class="hud-tag">macOS Voice alert</span>
         <code>vibe --events | jq --unbuffered -r 'select(.event=="waiting") | .project' | while read p; do say "$(basename "$p") needs you"; done</code>
+      </div>
+      <div class="hud-item">
+        <span class="hud-tag">Webhook · waiting and stuck</span>
+        <code>vibe --events | jq --unbuffered -c 'select(.event=="waiting" or .event=="stuck") | {event, project}' | while read -r l; do curl -s -X POST -d "$l" $URL; done</code>
       </div>
     </div>
   </div>
