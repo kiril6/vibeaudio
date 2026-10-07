@@ -396,6 +396,35 @@ footer a{ color:var(--ink-dim); }
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
 }
+
+/* ---------- Promo video frame ---------- */
+.vframe{ margin-top:26px; border:1px solid var(--line); border-radius:14px; background:#0c0716; overflow:hidden;
+  box-shadow:0 0 0 1px rgba(255,46,151,.15), 0 0 60px rgba(255,46,151,.22), 0 0 120px rgba(0,229,255,.12), 0 30px 80px rgba(0,0,0,.6); }
+.vframe-bar{ display:flex; align-items:center; gap:8px; padding:11px 16px; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#160d26,#0f0919); }
+.vframe-bar span{ width:11px; height:11px; border-radius:50%; background:#ff5f57; }
+.vframe-bar span:nth-child(2){ background:#febc2e; } .vframe-bar span:nth-child(3){ background:#28c840; }
+.vframe-bar em i{ font-style:normal; }
+.vframe-bar em b{ color:var(--pink); font-weight:400; margin:0 .35em; }
+.vframe-bar em{ margin-left:auto; font-style:normal; font-size:12px; letter-spacing:.06em; color:var(--ink-faint); }
+.vframe-stage{ position:relative; aspect-ratio:16/9; background:#07050d; }
+.vframe-stage video{ position:absolute; inset:0; width:100%; height:100%; display:block; object-fit:contain; }
+.vplay{ position:absolute; inset:0; width:100%; border:0; padding:0; cursor:pointer; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
+  background:radial-gradient(ellipse at center, rgba(7,5,13,.15) 0%, rgba(7,5,13,.62) 100%); transition:opacity .35s, backdrop-filter .35s; backdrop-filter:blur(1.5px); font-family:var(--mono); }
+.vplay:hover{ backdrop-filter:blur(0); }
+.vplay-btn{ position:relative; z-index:2; width:104px; height:104px; border-radius:50%; display:grid; place-items:center; padding-left:6px;
+  background:linear-gradient(135deg,var(--pink),var(--purple)); box-shadow:0 0 0 6px rgba(255,255,255,.08), 0 0 40px rgba(255,46,151,.7), 0 0 90px rgba(168,85,247,.5); transition:transform .25s; }
+.vplay:hover .vplay-btn, .vplay:focus-visible .vplay-btn{ transform:scale(1.1); }
+.vplay:focus-visible{ outline:2px solid var(--cyan); outline-offset:-6px; }
+.vplay-ring{ position:absolute; left:50%; top:calc(50% - 18px); width:104px; height:104px; margin:-52px 0 0 -52px; border-radius:50%; border:2px solid var(--pink); opacity:0; animation:vring 2.6s ease-out infinite; }
+.vplay-ring.r2{ border-color:var(--cyan); animation-delay:1.3s; }
+@keyframes vring{ 0%{ transform:scale(1); opacity:.7; } 100%{ transform:scale(2.6); opacity:0; } }
+.vplay-label{ position:relative; z-index:2; font-size:13px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink); text-shadow:0 0 14px rgba(0,0,0,.9); }
+.vc{ position:absolute; width:26px; height:26px; border:2px solid var(--cyan); pointer-events:none; filter:drop-shadow(0 0 6px var(--cyan)); transition:opacity .35s; }
+.vc.tl{ top:14px; left:14px; border-right:0; border-bottom:0; } .vc.tr{ top:14px; right:14px; border-left:0; border-bottom:0; }
+.vc.bl{ bottom:14px; left:14px; border-right:0; border-top:0; } .vc.br{ bottom:14px; right:14px; border-left:0; border-top:0; }
+.vframe.playing .vplay{ opacity:0; pointer-events:none; } .vframe.playing .vc{ opacity:0; }
+@media (prefers-reduced-motion: reduce){ .vplay-ring{ animation:none; } }
+@media (max-width:600px){ .vplay-btn{ width:76px; height:76px; } .vplay-btn svg{ width:28px; height:28px; } .vplay-ring{ width:76px; height:76px; margin:-38px 0 0 -38px; } .vframe-bar em{ margin:0 auto; font-size:11px; } .vframe-bar .vt{ display:none; } }
 </style>
 <script data-goatcounter="https://vibeaudio.goatcounter.com/count"
         async src="//gc.zgo.at/count.js"></script>
@@ -473,6 +502,25 @@ footer a{ color:var(--ink-dim); }
 </header>
 
 <main>
+
+<section class="wrap" id="video">
+  <span class="eyebrow">20 seconds</span>
+  <h2 style="font-size:30px;max-width:32ch;">See it. Hear it.</h2>
+  <div class="vframe" id="vframe">
+    <div class="vframe-bar" aria-hidden="true"><span></span><span></span><span></span><em>VibeAudio <i class="vt"><b>&middot;</b> Focus music while your AI codes</i> <b>&middot;</b> 0:20</em></div>
+    <div class="vframe-stage">
+      <video id="promo" playsinline preload="metadata" poster="video/poster.jpg" aria-label="VibeAudio promo: focus music while your AI codes, 20 seconds with sound">
+        <source src="video/vibeaudio-promo.mp4" type="video/mp4">
+      </video>
+      <button class="vplay" id="vplay" type="button" aria-label="Play the 20-second promo with sound">
+        <span class="vplay-ring"></span><span class="vplay-ring r2"></span>
+        <span class="vplay-btn"><svg viewBox="0 0 24 24" width="38" height="38" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l11-6.8a1 1 0 0 0 0-1.72l-11-6.8A1 1 0 0 0 8 5.2z" fill="currentColor"/></svg></span>
+        <span class="vplay-label">Play with sound</span>
+      </button>
+      <i class="vc tl"></i><i class="vc tr"></i><i class="vc bl"></i><i class="vc br"></i>
+    </div>
+  </div>
+</section>
 
 <section class="wrap">
   <span class="eyebrow">the gap this fills</span>
@@ -1178,6 +1226,14 @@ fetch("https://registry.npmjs.org/vibeaudio/latest")
     document.getElementById("nav-release").href = rel.href;
   })
   .catch(() => {});
+</script>
+<script>
+(() => {
+  const f = document.getElementById("vframe"), v = document.getElementById("promo"), b = document.getElementById("vplay");
+  if (!f || !v || !b) return;
+  b.addEventListener("click", () => { v.controls = true; f.classList.add("playing"); v.play().catch(() => { f.classList.remove("playing"); v.controls = false; }); });
+  v.addEventListener("ended", () => { v.controls = false; f.classList.remove("playing"); v.currentTime = 0; });
+})();
 </script>
 </body>
 </html>
