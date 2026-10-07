@@ -535,10 +535,13 @@ function daemonArgv(pid) {
   try {
     return execFileSync("ps", ["-p", String(pid), "-o", "args="], {
       encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
+      stdio: ["ignore", "pipe", "ignore"],
+      // Run on every prompt: a ps that never answers must not hold the hook.
+      timeout: 3000,
+      killSignal: "SIGKILL"
     });
   } catch (e) {
-    return null; // No such process, or ps unavailable.
+    return null; // No such process, ps unavailable, or it did not answer in time.
   }
 }
 

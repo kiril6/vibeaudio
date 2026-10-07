@@ -8,6 +8,9 @@ const path = require("path");
 const os = require("os");
 const { spawn, spawnSync } = require("child_process");
 
+// The most a `which`/`ps` lookup may take; they answer in milliseconds, and a hook waits on them.
+const LOOKUP_TIMEOUT_MS = 3000;
+
 const { generateLofiLoop } = require("./synth/lofi");
 const { generateSynthwaveLoop } = require("./synth/synthwave");
 const { generateChiptuneLoop } = require("./synth/chiptune");
@@ -146,7 +149,8 @@ function detectPlayer() {
   }
 
   cachedPlayer = PLAYER_CANDIDATES.find(
-    (c) => spawnSync("which", [c.cmd], { stdio: "ignore" }).status === 0
+    // A lookup that never answers is "not found", not a hook that never returns.
+    (c) => spawnSync("which", [c.cmd], { stdio: "ignore", timeout: LOOKUP_TIMEOUT_MS, killSignal: "SIGKILL" }).status === 0
   ) || null;
 
   return cachedPlayer;

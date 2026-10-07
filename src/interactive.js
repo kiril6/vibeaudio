@@ -11,7 +11,7 @@ const LOOKUP_CMD = process.platform === "win32" ? "where" : "which";
 
 function isInstalled(cmd) {
   // An argument vector, not a command string: nothing in `cmd` reaches a shell.
-  return spawnSync(LOOKUP_CMD, [cmd], { stdio: "ignore" }).status === 0;
+  return spawnSync(LOOKUP_CMD, [cmd], { stdio: "ignore", timeout: 3000, killSignal: "SIGKILL" }).status === 0;
 }
 
 // Convenience only - the wrapper runs any command, and "Custom command..."

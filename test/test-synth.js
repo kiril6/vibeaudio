@@ -27,6 +27,27 @@ const { generateJazzLoop } = require("../src/synth/jazz");
 const { generateChime } = require("../src/synth/chime");
 const { parseArgs, windowsCommandNeedsShell } = require("../src/cli");
 
+// A hung child must fail the suite by name, quickly. spawnSync waits forever by
+// default, and a macOS/Node 18 CI job did exactly that three times, in three
+// different tests, leaving only "the operation was canceled" after 15 minutes.
+// Wrapped after src/ has loaded, so it only reaches the suite's own spawns and
+// does not change what the code under test does. A call that sets its own
+// timeout keeps it, and its caller decides what a timeout means.
+{
+  const cp = require("child_process");
+  const realSpawnSync = cp.spawnSync;
+  cp.spawnSync = (cmd, args, opts) => {
+    const hasArgs = Array.isArray(args);
+    const options = (hasArgs ? opts : args) || {};
+    if (options.timeout) return realSpawnSync(cmd, ...(hasArgs ? [args] : []), options);
+    const r = realSpawnSync(cmd, ...(hasArgs ? [args] : []), { ...options, timeout: 120000, killSignal: "SIGKILL" });
+    if (r.error && r.error.code === "ETIMEDOUT") {
+      throw new Error(`spawnSync hung for 120s and was killed: ${cmd} ${(hasArgs ? args : []).join(" ").slice(0, 200)}`);
+    }
+    return r;
+  };
+}
+
 // The suite fakes `afplay` on PATH to see what plays; on macOS the real player
 // is the AVAudioPlayer helper, which would walk straight past the fake. Test
 // [59] is the one that exercises the helper itself.
