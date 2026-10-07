@@ -11,3 +11,6 @@ node_modules/
 dist/
 # npm pack
 *.tgz
+
+# Promo video sources + intermediates (final cut ships from docs/video/)
+promo/
