@@ -85,6 +85,9 @@ Procedural focus music while your AI coding tools think.
       --announce <text>        Play the signals for something that is not an agent (CI, a deploy, a script), then exit
       --outcome <o>            With --announce: success (default), failure or attention
       --exit-code <n>          With --announce: 0 is success, anything else failure (use $?)
+      --dashboard              Serve a read-only live view of every agent on this machine, and open it
+      --port <n>               With --dashboard: the port (default ${require("./dashboard").DEFAULT_PORT}, else a free one)
+      --no-open                With --dashboard: do not open the browser
       --statusline             Print that as one plain line for tmux or a prompt; prints nothing when idle
       --events                 Stream agent state changes as JSON lines, until stopped
       --doctor                 Check the setup; each problem comes with its fix (exit 1 if any)
@@ -150,7 +153,8 @@ const VALUE_FLAGS = new Set([
   "--event",
   "--announce",
   "--outcome",
-  "--exit-code"
+  "--exit-code",
+  "--port"
 ]);
 
 function parseArgs(argv) {
@@ -205,6 +209,9 @@ function parseArgs(argv) {
   let followVolume = false;
   let plugin = false;
   let hookEvent = null;
+  let dashboardFlag = false;
+  let dashboardPort = null;
+  let noOpen = false;
   let announceText = null;
   let announceOutcome = null;
   let announceExit = null;
@@ -341,6 +348,24 @@ function parseArgs(argv) {
         }
         announceExit = parseInt(value, 10);
       }
+      i += 2;
+      continue;
+    }
+
+    if (arg === "--dashboard" || arg === "--no-open") {
+      if (arg === "--dashboard") dashboardFlag = true;
+      else noOpen = true;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--port") {
+      const n = Number(args[i + 1]);
+      if (!/^\d+$/.test(args[i + 1]) || n > 65535) {
+        console.error(`\x1b[31m[vibeaudio] --port takes a number from 0 to 65535, not '${args[i + 1]}'.\x1b[0m`);
+        process.exit(1);
+      }
+      dashboardPort = n;
       i += 2;
       continue;
     }
@@ -563,6 +588,7 @@ function parseArgs(argv) {
     followVolume,
     plugin,
     hookEvent,
+    dashboard: dashboardFlag ? { port: dashboardPort, open: !noOpen } : null,
     announce: { text: announceText, outcome: announceOutcome, exitCode: announceExit },
     dryRun,
     tools,
@@ -1524,6 +1550,17 @@ function windowsCommandNeedsShell(command) {
   return !/[\\/]/.test(command);
 }
 
+function openBrowser(url) {
+  const { spawn } = require("child_process");
+  const [cmd, args] =
+    process.platform === "darwin" ? ["open", [url]]
+    : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]]
+    : ["xdg-open", [url]];
+  try {
+    spawn(cmd, args, { stdio: "ignore", detached: true }).on("error", () => {}).unref(); // no browser to open is not an error
+  } catch (e) { /* same */ }
+}
+
 function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRACE_PERIOD_MS, noChime, noHud = false, music = true) {
   const player = new AudioPlayer();
   const hookDriven = hooksAlreadyCover(cmdArgs);
@@ -1650,6 +1687,7 @@ async function run() {
     followVolume,
     plugin,
     hookEvent,
+    dashboard,
     announce: announceReq,
     dryRun,
     tools,
@@ -1764,6 +1802,21 @@ async function run() {
     const line = hooks.formatStatusline(hooks.agentState());
     if (line) console.log(line);
     return;
+  }
+
+  if (dashboard) {
+    const { startDashboard } = require("./dashboard");
+    let server;
+    try {
+      server = await startDashboard({ port: dashboard.port });
+    } catch (e) {
+      console.error(`\x1b[31m[vibeaudio] Could not start the dashboard: ${e.code === "EADDRINUSE" ? `port ${dashboard.port} is in use` : e.message}.\x1b[0m`);
+      process.exit(1);
+    }
+    const url = `http://127.0.0.1:${server.address().port}/`;
+    console.log(`\x1b[1mVibeAudio dashboard\x1b[0m  ${url}  \x1b[90m(read-only, this machine only; Ctrl+C to stop)\x1b[0m`);
+    if (dashboard.open) openBrowser(url);
+    return; // the listening server keeps the process alive
   }
 
   if (followEvents) {

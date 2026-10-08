@@ -571,6 +571,18 @@ The `select` also drops the snapshot `--events` prints first (it has no `event` 
 
 The stream is a local file (`~/.vibeaudio/events.jsonl`, rotated at 256 KB), so it never leaves your machine. It keeps updating while you're muted, because a mute silences sound and a light isn't sound. The `v` field is the format version, and any breaking change will increment it.
 
+#### 🖥️ A live view: `vibe --dashboard`
+
+```bash
+vibe --dashboard        # serves http://127.0.0.1:4747 and opens it
+```
+
+![The VibeAudio dashboard: one waiting, one stuck and one working session, with the recent events below](docs/dashboard.png)
+
+One row per session (waiting first, then stuck, then working), with the project, the tool it's waiting on and how long it has been in that state, and a feed of recent events with failures and stuck sessions in red. It's built on `--events`, so it shows every agent VibeAudio hooks into, and it updates as things happen.
+
+It's **read-only and local**: it binds to `127.0.0.1` only, refuses any request whose `Host` isn't its own address (so a web page can't reach it through DNS rebinding), sends no CORS headers, and only answers `GET`, so there's nothing a page in another tab could trigger. It uses no external assets, and nothing leaves your machine. It runs in the foreground until Ctrl+C. `--port <n>` picks the port (4747 by default; if that's taken, a free one is used), and `--no-open` skips opening the browser.
+
 #### 🔔 Beyond agents: `vibe --announce`
 
 A CI run, a deploy, a long script that wasn't started through `vibe <command>`: the same chimes can say those finished too.
@@ -773,6 +785,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--statusline` | The same state as one plain line for tmux or a shell prompt (`working ×2`, `waiting: api`); prints nothing when idle | — |
 | `--state` | What every agent on the machine is doing, as one line of JSON: `idle`, `working`, `stuck` or `waiting` | — |
 | `--events` | Stream agent state changes as JSON lines, starting with the current state, until stopped | — |
+| `--dashboard` | Serve a read-only live view of every agent on this machine at `http://127.0.0.1:4747`, and open it. `--port <n>` and `--no-open` adjust it | — |
 | `--announce <text>` | Play the chime for something that isn't an agent (CI, a deploy, a script), then exit. Add `--outcome success\|failure\|attention` or `--exit-code $?` | `success` |
 | `--stop` | Stop the background player, then exit | — |
 | `--mute [minutes]` | Silence everything for a call, then exit | `60` min (`0` = until unmuted) |

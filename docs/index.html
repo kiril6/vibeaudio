@@ -624,6 +624,7 @@ footer a{ color:var(--ink-dim); }
       <div class="feat"><h3>Mute for calls</h3><p><code>vibe --mute</code> — expires in an hour so you never forget it's on.</p></div>
       <div class="feat"><h3>Hears when it's stuck</h3><p>When 4 of an agent's last 8 tool calls fail, a soft heartbeat joins the music — the loop that goes nowhere, made audible. With music off it plays once on its own.</p></div>
       <div class="feat"><h3>Status line</h3><p><code>vibe --statusline</code> — one plain line for tmux or your prompt: <code>working ×2</code>, <code>waiting: api</code>. Empty when idle, about 40 ms, no <code>jq</code>.</p></div>
+      <div class="feat"><h3>Live dashboard</h3><p><code>vibe --dashboard</code> — a read-only page of every agent: waiting first, then stuck, then working. Local only, no dependencies.</p></div>
       <div class="feat"><h3>Beyond agents</h3><p><code>vibe --announce "deploy" --exit-code $?</code> — the same chimes for CI runs, deploys and scripts. Always exits 0, repeats are dropped.</p></div>
       <div class="feat"><h3><a href="https://github.com/kiril6/vibeaudio#build-on-it-vibe---state-and-vibe---events" style="color:inherit">Build on it</a></h3><p><code>vibe --state</code> and <code>vibe --events</code> — every agent's state as JSON, for lights, menu bars and status lines.</p></div>
       <div class="feat"><h3>Chime in key</h3><p>The done chime is the tonic chord of the music you were hearing, so it lands as the resolution.</p></div>

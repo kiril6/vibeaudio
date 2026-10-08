@@ -783,7 +783,8 @@ function agentState(sessions = listSessions()) {
     project: s.project || null,
     state: sessionState(s),
     since: s.started || null,
-    ...(s.waiting ? { tool: s.waiting } : {})
+    ...(s.waiting ? { tool: s.waiting } : {}),
+    ...(s.waiting != null && s.waitStart ? { waitingSince: s.waitStart } : {})
   }));
   const status = list.reduce((a, s) => (STATE_RANK.indexOf(s.state) > STATE_RANK.indexOf(a) ? s.state : a), "idle");
   return { v: 1, status, sessions: list };
@@ -862,6 +863,17 @@ function followEvents(write = (s) => process.stdout.write(s), pollMs = 250) {
       for (const l of lines) if (l) write(`${l}\n`);
     } catch (e) { /* removed between stat and open: next poll */ }
   }, pollMs);
+}
+
+/** The last `n` events in the log, oldest first; [] when there is none yet. */
+function recentEvents(n = 25) {
+  try {
+    return fs.readFileSync(EVENTS_FILE, "utf8").split("\n").filter(Boolean).slice(-n).flatMap((l) => {
+      try { return [JSON.parse(l)]; } catch (e) { return []; } // a torn line is not worth losing the rest
+    });
+  } catch (e) {
+    return [];
+  }
 }
 
 // Claude Code's entry for Esc / the stop button: a user message whose text is
@@ -1659,6 +1671,8 @@ module.exports = {
   qwenHome,
   grokHome,
   announce,
+  recentEvents,
+  emitEvent,
   ANNOUNCE_OUTCOMES,
   ANNOUNCE_MAX_CHARS,
   expectedEvents,
