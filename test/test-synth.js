@@ -4400,6 +4400,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.strictEqual(applyMenuSelection(pick, 0.3), false, "installing hooks must not launch the tool");
       assert.ok(fs.existsSync(hooks.TARGETS.grok.file()), "but the hooks are written");
       assert.ok(logs.some((l) => /hooked into: Grok/.test(l) && /Nothing was started/.test(l) && /grok/.test(l)), "and it says so");
+      assert.ok(logs.some((l) => /hooked into/.test(l) && /vibe --help/.test(l)), "the closing confirmation itself points at vibe --help, not only the install report above it");
       assert.ok(logs.some((l) => /vibe --status/.test(l) && /vibe --mute/.test(l) && /vibe --help/.test(l)), "and points at the commands to use next");
       assert.ok(logs.some((l) => /vibe --install-hooks/.test(l)), "and at how to set up the other agents");
 

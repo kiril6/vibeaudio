@@ -1718,7 +1718,8 @@ function applyMenuSelection(selection, volume) {
     `\n\x1b[32m✔ VibeAudio v${pkg.version} is hooked into: ${names} (${saved.genre} @ ${saved.volume}%).\x1b[0m ` +
     `Nothing was started: open ${hooked.length > 1 ? "any of them" : "it"} whenever you like (\x1b[1m${cmds}\x1b[0m), and the music plays from your first prompt.\n` +
     `  \x1b[90mMore agents? Run vibe again for each, or vibe --install-hooks to set up every one it finds.\x1b[0m\n` +
-    `  \x1b[90mStay current: run npm i -g ${pkg.name} now and then (hooks keep working); vibe --status tells you when a newer version is out.\x1b[0m\n`
+    `  \x1b[90mStay current: run npm i -g ${pkg.name} now and then (hooks keep working); vibe --status tells you when a newer version is out.\x1b[0m\n` +
+    `  \x1b[90mAll commands and options: vibe --help\x1b[0m\n`
   );
   printUpdateNotice();
   return false;
