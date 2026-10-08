@@ -1129,9 +1129,9 @@ function notifyCommand(platform, title, body) {
 // Detached and unref'd: the agent waits on this hook, and a missing
 // osascript/notify-send (a Linux box with no notification daemon) must be
 // invisible rather than an error in someone's agent.
-function notify(raw, message) {
+function banner(body) {
   if (!notifyEnabled() || playbackDisabled()) return false; // a mute means quiet, banners included
-  const command = notifyCommand(process.platform, "VibeAudio", `${sessionLabel(parsePayload(raw))}: ${message}`);
+  const command = notifyCommand(process.platform, "VibeAudio", body);
   if (!command) return false;
   try {
     const child = spawn(command.cmd, command.args, { detached: true, stdio: "ignore" });
@@ -1140,6 +1140,50 @@ function notify(raw, message) {
     return true;
   } catch (e) {
     return false;
+  }
+}
+
+function notify(raw, message) {
+  return banner(`${sessionLabel(parsePayload(raw))}: ${message}`);
+}
+
+const ANNOUNCE_FILE = path.join(STATE_DIR, "announce.json");
+const ANNOUNCE_MAX_CHARS = 200;
+const ANNOUNCE_REPEAT_MS = 5000;
+const ANNOUNCE_OUTCOMES = ["success", "failure", "attention"];
+
+/**
+ * `vibe --announce <text>`: VibeAudio's signals for something that is not an
+ * agent turn (a CI run, a deploy, a script). A chime for the outcome, the
+ * `--notify` banner, and an `announced` event, so a light watching `--events`
+ * reacts too. Never starts or stops music and never touches a session.
+ *
+ * The text is shown in a banner, so control characters go and the length is
+ * capped; it only ever travels as argv. A repeat of the same text within a few
+ * seconds is dropped whole, so a script in a loop cannot machine-gun the
+ * speakers. Mute silences the chime and banner; the event is still written,
+ * like every event.
+ *
+ * Returns false when it was a repeat, true otherwise; never throws.
+ */
+function announce(text, { outcome = "success", volume = 0.4, chimeVolume = null, noChime = false, genre } = {}) {
+  try {
+    const clean = String(text).replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, ANNOUNCE_MAX_CHARS);
+    const now = Date.now();
+    try {
+      const last = JSON.parse(fs.readFileSync(ANNOUNCE_FILE, "utf8"));
+      if (last.text === clean && now - last.at < ANNOUNCE_REPEAT_MS) return false;
+    } catch (e) { /* first one, or an unreadable file: nothing to compare */ }
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    fs.writeFileSync(ANNOUNCE_FILE, JSON.stringify({ text: clean, at: now }));
+
+    emitEvent("announced", null, null, { source: "cli", text: clean, outcome });
+    banner(`${clean}${outcome === "failure" ? " (failed)" : outcome === "attention" ? " (needs you)" : ""}`);
+    // Detached: a pipeline should not wait out the chime.
+    if (!noChime) new AudioPlayer().stop({ playChime: true, outcome, volume, chimeVolume, genre, detach: true });
+    return true;
+  } catch (e) {
+    return true; // a notifier must never fail the script that called it
   }
 }
 
@@ -1614,6 +1658,9 @@ module.exports = {
   geminiDir,
   qwenHome,
   grokHome,
+  announce,
+  ANNOUNCE_OUTCOMES,
+  ANNOUNCE_MAX_CHARS,
   expectedEvents,
   PLUGIN_FILES,
   PLUGIN_AGENTS,

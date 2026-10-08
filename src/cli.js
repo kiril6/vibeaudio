@@ -59,6 +59,7 @@ Procedural focus music while your AI coding tools think.
   vibe --genre 8bit sleep 5
   vibe --volume 30 npm test
   vibe --preview jazz
+  gh run watch; vibe --announce "CI finished" --exit-code $?   \x1b[90m# the chime for a CI run or a script\x1b[0m
   vibe --render                  \x1b[90m# save this repo's sound as a .wav to share\x1b[0m
   vibe                           \x1b[90m# menu: pick a tool and a sound (p auditions a genre)\x1b[0m
 
@@ -81,6 +82,9 @@ Procedural focus music while your AI coding tools think.
       --notify | --no-notify   Also show a desktop banner naming the project when a turn finishes or needs you (off by default)
       --report [days]          How long you waited on agents, and where (default: 7 days)
       --state                  Print what every agent is doing as JSON: idle, working, stuck or waiting
+      --announce <text>        Play the signals for something that is not an agent (CI, a deploy, a script), then exit
+      --outcome <o>            With --announce: success (default), failure or attention
+      --exit-code <n>          With --announce: 0 is success, anything else failure (use $?)
       --statusline             Print that as one plain line for tmux or a prompt; prints nothing when idle
       --events                 Stream agent state changes as JSON lines, until stopped
       --doctor                 Check the setup; each problem comes with its fix (exit 1 if any)
@@ -143,7 +147,10 @@ const VALUE_FLAGS = new Set([
   "--music",
   "--seed",
   "--tools",
-  "--event"
+  "--event",
+  "--announce",
+  "--outcome",
+  "--exit-code"
 ]);
 
 function parseArgs(argv) {
@@ -198,6 +205,9 @@ function parseArgs(argv) {
   let followVolume = false;
   let plugin = false;
   let hookEvent = null;
+  let announceText = null;
+  let announceOutcome = null;
+  let announceExit = null;
   let here_flag = false;
   let dryRun = false;
   let tools = null;
@@ -310,6 +320,27 @@ function parseArgs(argv) {
       }
       music = value === "on";
       typed.music = music;
+      i += 2;
+      continue;
+    }
+
+    if (arg === "--announce" || arg === "--outcome" || arg === "--exit-code") {
+      const value = args[i + 1];
+      if (arg === "--announce") announceText = value;
+      else if (arg === "--outcome") {
+        announceOutcome = value.toLowerCase();
+        const known = require("./hooks").ANNOUNCE_OUTCOMES;
+        if (!known.includes(announceOutcome)) {
+          console.error(`\x1b[31m[vibeaudio] --outcome takes ${known.join(", ")}, not '${value}'.\x1b[0m`);
+          process.exit(1);
+        }
+      } else {
+        if (!/^-?\d+$/.test(value)) {
+          console.error(`\x1b[31m[vibeaudio] --exit-code takes a number, not '${value}'.\x1b[0m`);
+          process.exit(1);
+        }
+        announceExit = parseInt(value, 10);
+      }
       i += 2;
       continue;
     }
@@ -532,6 +563,7 @@ function parseArgs(argv) {
     followVolume,
     plugin,
     hookEvent,
+    announce: { text: announceText, outcome: announceOutcome, exitCode: announceExit },
     dryRun,
     tools,
     typed,
@@ -1618,6 +1650,7 @@ async function run() {
     followVolume,
     plugin,
     hookEvent,
+    announce: announceReq,
     dryRun,
     tools,
     typed,
@@ -1641,6 +1674,25 @@ async function run() {
       console.error(`\x1b[31m[vibeaudio] ${e.message}\x1b[0m`);
       process.exit(1);
     }
+  }
+
+  if (announceReq.text === null && (announceReq.outcome !== null || announceReq.exitCode !== null)) {
+    console.error("\x1b[31m[vibeaudio] --outcome and --exit-code go with --announce <text>.\x1b[0m");
+    process.exit(1);
+  }
+  if (announceReq.text !== null) {
+    if (!announceReq.text.trim()) {
+      console.error("\x1b[31m[vibeaudio] --announce needs some text.\x1b[0m Run vibe --help for the options.");
+      process.exit(1);
+    }
+    if (announceReq.outcome !== null && announceReq.exitCode !== null) {
+      console.error("\x1b[31m[vibeaudio] Give --outcome or --exit-code, not both.\x1b[0m");
+      process.exit(1);
+    }
+    const outcome = announceReq.outcome || (announceReq.exitCode === null || announceReq.exitCode === 0 ? "success" : "failure");
+    // Exit 0 whatever happens: `cmd; vibe --announce ...` must not turn a pipeline red.
+    require("./hooks").announce(announceReq.text, { outcome, volume, chimeVolume, noChime, genre });
+    return;
   }
 
   if (reactive) {

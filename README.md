@@ -571,6 +571,21 @@ The `select` also drops the snapshot `--events` prints first (it has no `event` 
 
 The stream is a local file (`~/.vibeaudio/events.jsonl`, rotated at 256 KB), so it never leaves your machine. It keeps updating while you're muted, because a mute silences sound and a light isn't sound. The `v` field is the format version, and any breaking change will increment it.
 
+#### 🔔 Beyond agents: `vibe --announce`
+
+A CI run, a deploy, a long script that wasn't started through `vibe <command>`: the same chimes can say those finished too.
+
+```bash
+vibe --announce "CI green"                       # success chime
+vibe --announce "deploy" --outcome attention     # the "needs you" chime
+./deploy.sh; vibe --announce "deploy" --exit-code $?     # 0 is success, anything else failure
+gh run watch; vibe --announce "CI finished" --exit-code $?
+```
+
+It plays the chime for the outcome, shows the `--notify` banner if you have it on, and appends an `announced` event (`source: "cli"`, the text and the outcome) to `~/.vibeaudio/events.jsonl`, so a light or dashboard built on `--events` reacts too. It never starts or stops music and never touches an agent session. A mute silences the sound and banner but not the event, like every event.
+
+It always exits 0, so it can't turn a pipeline red, and the text is only ever passed as an argument, never through a shell. Text is capped at 200 characters, and the same text announced again within five seconds is dropped, so a loop can't machine-gun your speakers. `--no-chime` keeps it to the banner and event.
+
 ## 🖥️ Everything Else (Claude Desktop, VS Code… via MCP)
 
 **Claude Code, [Codex](https://github.com/openai/codex), [Cursor](https://cursor.com/docs/hooks), [Grok](https://docs.x.ai/build/features/hooks), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Copilot CLI](https://docs.github.com/en/copilot/reference/hooks-configuration), [Qwen Code](https://github.com/QwenLM/qwen-code) [Windsurf](https://docs.devin.ai/desktop/cascade/hooks) and [Antigravity](https://antigravity.google/docs/hooks) have hook systems, and `--install-hooks` writes to all nine** — use [hooks](#-agent-hooks-no-wrapper-needed) there, they're strictly better. This section is for everything else. MCP is the way in: it's plain stdio JSON-RPC, so the setup is identical everywhere and only the config file differs.
@@ -758,6 +773,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--statusline` | The same state as one plain line for tmux or a shell prompt (`working ×2`, `waiting: api`); prints nothing when idle | — |
 | `--state` | What every agent on the machine is doing, as one line of JSON: `idle`, `working`, `stuck` or `waiting` | — |
 | `--events` | Stream agent state changes as JSON lines, starting with the current state, until stopped | — |
+| `--announce <text>` | Play the chime for something that isn't an agent (CI, a deploy, a script), then exit. Add `--outcome success\|failure\|attention` or `--exit-code $?` | `success` |
 | `--stop` | Stop the background player, then exit | — |
 | `--mute [minutes]` | Silence everything for a call, then exit | `60` min (`0` = until unmuted) |
 | `--unmute` | Resume normal playback, then exit | — |
