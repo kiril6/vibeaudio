@@ -674,7 +674,12 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
   // 26. Command lookup must work off Unix too
   console.log("26. Testing Command Lookup...");
   const { isInstalled } = require("../src/interactive");
-  assert.strictEqual(isInstalled("node"), true, "node is on PATH in any environment running this suite");
+  // isInstalled() gives a lookup 3 s and reads a timeout as "not found" (that fails safe
+  // for a hook); a loaded CI runner has made `where` miss that once in a while (#58), so
+  // a positive answer is asked for up to three times. A wrong "true" can't be retried into.
+  let nodeFound = false;
+  for (let i = 0; i < 3 && !nodeFound; i++) nodeFound = isInstalled("node");
+  assert.strictEqual(nodeFound, true, "node is on PATH in any environment running this suite");
   assert.strictEqual(isInstalled("definitely-not-a-real-command-xyz"), false, "missing commands report false");
   console.log("   ✓ Tool detection resolves real commands and rejects missing ones.");
 
