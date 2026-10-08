@@ -269,10 +269,10 @@ Each tool spells its events its own way, and VibeAudio writes whichever dialect 
 | **Claude Code** | `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR`) | `UserPromptSubmit` | `Stop` | `PreToolUse` |
 | **Codex** | `~/.codex/hooks.json` (or `$CODEX_HOME`) | `UserPromptSubmit` | `Stop` | `PreToolUse` |
 | **Cursor** | `~/.cursor/hooks.json` | `beforeSubmitPrompt` | `stop` | `preToolUse` |
-| **Grok** | `~/.grok/hooks/vibeaudio.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
-| **Gemini CLI** | `~/.gemini/settings.json` | `BeforeAgent` | `AfterAgent` | `BeforeTool` |
-| **Copilot CLI** | `~/.copilot/hooks/vibeaudio.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
-| **Qwen Code** | `~/.qwen/settings.json` | `UserPromptSubmit` | `Stop` | `PreToolUse` |
+| **Grok** | `~/.grok/hooks/vibeaudio.json` (or `$GROK_HOME`) | `UserPromptSubmit` | `Stop` | `PreToolUse` |
+| **Gemini CLI** | `~/.gemini/settings.json` (or `$GEMINI_CLI_HOME/.gemini`) | `BeforeAgent` | `AfterAgent` | `BeforeTool` |
+| **Copilot CLI** | `~/.copilot/hooks/vibeaudio.json` (or `$COPILOT_HOME`) | `UserPromptSubmit` | `Stop` | `PreToolUse` |
+| **Qwen Code** | `~/.qwen/settings.json` (or `$QWEN_HOME`) | `UserPromptSubmit` | `Stop` | `PreToolUse` |
 | **Windsurf** | `~/.codeium/windsurf/hooks.json` | `pre_user_prompt` | `post_cascade_response` | `pre_run_command` |
 | **Antigravity** | `~/.gemini/config/hooks.json`, under its own `vibeaudio` name | `PreInvocation` (the first of each prompt) | `Stop` | — never ([why](#antigravity-hooks)) |
 
@@ -302,7 +302,7 @@ Where an agent reports more than start and stop, VibeAudio listens for that too 
 | **Cursor and Antigravity say how a turn ended** | Cursor's stop event reports whether the turn completed, aborted or errored, and Antigravity's gives a termination reason, so an error plays the failure chime. Claude Code and Qwen Code send a separate `StopFailure` for an API error. The others send no verdict, so a turn there always ends on the success chime — VibeAudio won't invent a failure the agent never claimed. |
 | <a id="antigravity-hooks"></a>**Antigravity never gets a pre-tool hook** | Its pre-tool hook has to approve or deny every tool call — one that answers nothing blocks the tool — so VibeAudio installs none, and `--reactive` does nothing there. It has no prompt event either: the start event fires before every model call, and VibeAudio starts the music on the first one of each prompt only. Its hooks live in `~/.gemini/config/hooks.json` under a name of their own, so your other named hooks there are never touched. Verified with the `agy` CLI; the desktop app reads the same file by Antigravity's own docs but hasn't been checked live. |
 | **Upgraded, and a new feature isn't there?** | Hooks are written into your agent's config once, at install time, and an upgrade doesn't touch them. When a new version listens for more events (0.13.1 added Codex's `Interrupt` and `SessionEnd`), `vibe --doctor` and `vibe --status` name what's missing, and `vibe --install-hooks` adds it. |
-| **Moved your config folder?** | VibeAudio follows `CLAUDE_CONFIG_DIR` and `CODEX_HOME` the way the agents do, so hooks (and `/vibe`) go where your agent actually reads them. Set the variable in the shell you run `vibe --install-hooks` from. |
+| **Moved your config folder?** | VibeAudio follows `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `COPILOT_HOME`, `GEMINI_CLI_HOME`, `QWEN_HOME` and `GROK_HOME` the way each agent does, so hooks (and `/vibe`) go where your agent actually reads them. Cursor and Windsurf have no such variable that we could confirm. Set the variable in the shell you run `vibe --install-hooks` from. |
 | **Grok and Copilot CLI get a file of their own** | Each reads every `*.json` in its `hooks/` directory, so VibeAudio writes `vibeaudio.json` rather than merging into anyone else's — which makes uninstalling it a delete, and leaves no backup file behind. Copilot's honours `COPILOT_HOME`. |
 
 </details>

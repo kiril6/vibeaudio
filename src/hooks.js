@@ -189,6 +189,32 @@ function codexHome() {
   return process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
 }
 
+/**
+ * The three further agents that move with an env var, each read from the
+ * agent's own code; empty is unset for all of them.
+ * Gemini CLI: `GEMINI_CLI_HOME` replaces the *home*, so settings live in
+ * `<it>/.gemini` (homedir() in core, 0.62.0 bundle); used as written, no `~`.
+ * Qwen Code: `QWEN_HOME` *is* the `.qwen` directory, with `~` expanded and the
+ * rest path.resolve()d (Storage.getGlobalQwenDir(), 0.25.0 bundle).
+ * Grok: `GROK_HOME` *is* the `.grok` directory (grok_home(); the npm launcher
+ * and postinstall.js of @xai-official/grok 1.0.46 write config.toml there).
+ * Cursor and Windsurf: no override found, and neither is open to read.
+ */
+function geminiDir() {
+  return path.join(process.env.GEMINI_CLI_HOME || os.homedir(), ".gemini");
+}
+
+function qwenHome() {
+  const dir = process.env.QWEN_HOME;
+  if (!dir) return path.join(os.homedir(), ".qwen");
+  const rest = /^~(?:[\\/]|$)/.test(dir) ? dir.slice(2).split(/[\\/]+/).filter(Boolean) : null;
+  return path.resolve(rest ? path.join(os.homedir(), ...rest) : dir);
+}
+
+function grokHome() {
+  return process.env.GROK_HOME || path.join(os.homedir(), ".grok");
+}
+
 const TARGETS = {
   claude: {
     name: "Claude Code",
@@ -256,10 +282,10 @@ const TARGETS = {
     // Grok reads every *.json in this directory, so we get a file of our own
     // rather than merging into someone else's - which also makes uninstall a
     // delete instead of an edit. `dedicated` says so.
-    file: () => path.join(os.homedir(), ".grok", "hooks", "vibeaudio.json"),
+    file: () => path.join(grokHome(), "hooks", "vibeaudio.json"),
     dedicated: true,
     // Directory, not file: detection can't use dirname() like the others.
-    configDir: () => path.join(os.homedir(), ".grok"),
+    configDir: () => grokHome(),
     events: { start: "UserPromptSubmit", stop: "Stop", tool: "PreToolUse" },
     entry: (command) => ({ hooks: [{ type: "command", command, timeout: 5 }] }),
     commands: (entry) => (entry.hooks || []).map((h) => h.command),
@@ -268,7 +294,7 @@ const TARGETS = {
   gemini: {
     name: "Gemini CLI",
     cmd: "gemini",
-    file: () => path.join(os.homedir(), ".gemini", "settings.json"),
+    file: () => path.join(geminiDir(), "settings.json"),
     // Verified against gemini-cli v0.59.0's source (hooks/types.ts,
     // settingsSchema.ts) - the Gemini CLI available to test against predated
     // hooks, so there was no binary to run. Hooks are on by default and
@@ -321,7 +347,7 @@ const TARGETS = {
   qwen: {
     name: "Qwen Code",
     cmd: "qwen",
-    file: () => path.join(os.homedir(), ".qwen", "settings.json"),
+    file: () => path.join(qwenHome(), "settings.json"),
     // Verified against qwen-code v0.23.3's source (hooks/types.ts): Claude
     // Code's event set, including a PermissionRequest raised when the dialog
     // is displayed, with tool_name. Timeouts are milliseconds.
@@ -1585,6 +1611,9 @@ module.exports = {
   shellQuote,
   claudeConfigDir,
   codexHome,
+  geminiDir,
+  qwenHome,
+  grokHome,
   expectedEvents,
   PLUGIN_FILES,
   PLUGIN_AGENTS,
