@@ -147,7 +147,7 @@ Want the music to follow what the agent is doing — calm while it reads, busies
 vibe --reactive --install-hooks
 ```
 
-Prefer a guided setup? Run `vibe` with nothing after it: a menu asks for your agent, genre and volume (press `p` to hear a genre first) and installs the hooks for you.
+Prefer a guided setup? Run `vibe` with nothing after it: a menu asks for your agent, genre and volume (press `p` to hear a genre first) and installs the hooks for you. Installing hooks doesn't start the agent: open it whenever you like, and the music plays from your first prompt. ("Just launch it" and "This session only" do start it.)
 
 Now run your agent normally, with no prefix. Music starts when you submit a prompt and stops with a chime when the agent finishes. [Details below.](#-agent-hooks-no-wrapper-needed)
 
@@ -522,7 +522,7 @@ Each session is `working`, `stuck` (4 of its last 8 tool calls failed) or `waiti
 {"v":1,"at":1791026130000,"event":"waiting","session":"…","project":"/work/api","tool":"Bash","status":"waiting"}
 ```
 
-Events: `started`, `waiting`, `resumed`, `stuck`, `recovered`, `finished` (with `outcome`: `success` or `failure`), `interrupted`, `ended` (with `reason` when `vibe --stop` or `--uninstall-hooks` ended it). Every line also carries `status`, the machine's state after the event, so a consumer that only cares about the overall state can read that one field.
+Events: `started`, `waiting`, `resumed`, `stuck`, `recovered`, `finished` (with `outcome`: `success` or `failure`), `interrupted`, `ended` (with `reason` when `vibe --stop` or `--uninstall-hooks` ended it) and `announced` (from [`vibe --announce`](#-beyond-agents-vibe---announce), with `text` and `outcome`, and no session). Every line also carries `status`, the machine's state after the event, so a consumer that only cares about the overall state can read that one field.
 
 #### 📟 Status Bar & Desktop Integrations
 
@@ -563,11 +563,18 @@ The parentheses matter: Starship hides a group whose variables are empty, so the
 vibe --events | jq --unbuffered -c 'select(.event=="waiting" or .event=="stuck") | {event, project}' \
   | while read -r line; do curl -s -X POST -H 'Content-Type: application/json' -d "$line" https://example.com/hook; done
 ```
-The `select` also drops the snapshot `--events` prints first (it has no `event` field), so only changes after you start it are sent: a session already waiting at that moment is not announced. For the current state, call `vibe --state` once.
+The `select` also drops the snapshot `--events` prints first (its `event` is `state`), so only changes after you start it are sent: a session already waiting at that moment is not announced. For the current state, call `vibe --state` once.
+
+**Home Assistant (or any smart light)** — send the machine's overall state on every change, and let the receiving side choose the colour. Home Assistant takes this as a [webhook trigger](https://www.home-assistant.io/docs/automation/trigger/#webhook-trigger); replace the URL and the id:
+```bash
+vibe --events | jq --unbuffered -c 'select(.event != "state") | {status, event, project}' \
+  | while read -r line; do curl -s -X POST -H 'Content-Type: application/json' -d "$line" http://homeassistant.local:8123/api/webhook/vibeaudio; done
+```
+`status` is `idle`, `working`, `stuck` or `waiting`, already the most urgent across all your sessions, so the automation is a plain switch on one field (for example amber for `waiting`, red for `stuck`, off for `idle`) and never has to count sessions itself. A web request goes out on every change, so point it at a local bridge rather than a metered service.
 
 *Not covered yet: a macOS menu bar plugin (SwiftBar/xbar) and Linux desktop alerts. Neither has been run on a real setup, so neither is documented. `--notify` already raises a banner when a turn finishes or needs you.*
 
-*Verified on macOS arm64 with Node 24, tmux 3.7 and Starship 1.26: the tmux and Starship segments showed `working`, `working ×2` and `waiting: web` and disappeared when idle; the `say` and webhook pipelines fired once per `waiting` event while the stream stayed open. Not run on Linux or Windows.*
+*Verified on macOS arm64 with Node 24, tmux 3.7 and Starship 1.26 (the Home Assistant recipe: the request it sends, against a local stand-in server, was `{"status":"waiting","event":"waiting","project":"/work/api"}` on a permission dialog; not run against Home Assistant itself): the tmux and Starship segments showed `working`, `working ×2` and `waiting: web` and disappeared when idle; the `say` and webhook pipelines fired once per `waiting` event while the stream stayed open. Not run on Linux or Windows.*
 
 The stream is a local file (`~/.vibeaudio/events.jsonl`, rotated at 256 KB), so it never leaves your machine. It keeps updating while you're muted, because a mute silences sound and a light isn't sound. The `v` field is the format version, and any breaking change will increment it.
 

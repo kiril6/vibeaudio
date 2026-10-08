@@ -263,7 +263,7 @@ const DELIVERY_FRESH = [
   {
     id: "hooks",
     name: "Agent hooks",
-    desc: "Music follows the agent's thinking. Set once, no wrapper needed"
+    desc: "Music follows the agent's thinking. Installs, then returns to your shell: nothing starts"
   },
   {
     id: "wrapper",
@@ -285,7 +285,7 @@ const DELIVERY_INSTALLED = [
   {
     id: "hooks",
     name: "Reconfigure the hooks",
-    desc: "Pick a new genre, volume or reactive setting"
+    desc: "Pick a new genre, volume or reactive setting. Nothing starts"
   }
 ];
 

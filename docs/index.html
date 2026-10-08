@@ -680,6 +680,10 @@ footer a{ color:var(--ink-dim); }
         <span class="hud-tag">Webhook · waiting and stuck</span>
         <code>vibe --events | jq --unbuffered -c 'select(.event=="waiting" or .event=="stuck") | {event, project}' | while read -r l; do curl -s -X POST -d "$l" $URL; done</code>
       </div>
+      <div class="hud-item">
+        <span class="hud-tag">Home Assistant · smart light</span>
+        <code>vibe --events | jq --unbuffered -c 'select(.event != "state") | {status, event, project}' | while read -r l; do curl -s -X POST -H 'Content-Type: application/json' -d "$l" http://homeassistant.local:8123/api/webhook/vibeaudio; done</code>
+      </div>
     </div>
   </div>
 </section>

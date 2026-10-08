@@ -102,7 +102,7 @@ Procedural focus music while your AI coding tools think.
       --dry-run                With --install-hooks: show what would change, write nothing
       --uninstall-hooks        Remove the hooks again, from every agent
   -h, --help                   Show this help message
-      --version                Show version
+      --version                Show version (update with: npm i -g vibeaudio)
 
 \x1b[1mSETTINGS:\x1b[0m
   A genre or volume with no command after it is saved as your default:
@@ -115,15 +115,43 @@ Procedural focus music while your AI coding tools think.
   \x1b[1m--here\x1b[0m setting beats the global one, so a one-off
   \x1b[1mvibe --genre 8bit npm test\x1b[0m stays a one-off.
 
+\x1b[1mINTEGRATIONS:\x1b[0m
+  Every agent's state, as one stream you can build on (lights, banners, webhooks):
+
+      vibe --events                  \x1b[90m# the current state, then one JSON line per change\x1b[0m
+      vibe --state                   \x1b[90m# one snapshot: idle, working, stuck or waiting\x1b[0m
+      vibe --statusline              \x1b[90m# one plain line for tmux or a prompt\x1b[0m
+
+  Events: started, waiting, resumed, stuck, recovered, finished, interrupted, ended, announced.
+  Recipes (tmux, Starship, voice, webhook, Home Assistant): https://kiril6.github.io/vibeaudio/
+
+\x1b[1mUNINSTALL:\x1b[0m
+  In this order, so no agent is left running a hook that points at nothing:
+
+      vibe --uninstall-hooks         \x1b[90m# 1. unwire every agent, and stop any player still running\x1b[0m
+      npm rm -g vibeaudio            \x1b[90m# 2. remove the CLI\x1b[0m
+      rm -rf ~/.vibeaudio            \x1b[90m# 3. optional: cached audio, saved settings, state\x1b[0m
+
 \x1b[1mENVIRONMENT:\x1b[0m
   VIBE_GENRE=<name>            Override the saved genre for this shell
   VIBE_VOLUME=<5-100>          Override the saved volume for this shell
   VIBE_CHIME_VOLUME=<5-100>    Override the saved chime volume for this shell
   VIBE_GRACE_MS=<ms>           Override the saved grace window, in ms
   VIBE_MUSIC=<on|off>          Override the saved music setting for this shell
+  VIBE_NOTIFY=<on|off>         Override the saved desktop-banner setting for this shell
   VIBE_SEED=<n>                Pin the arrangement instead of deriving it from the directory
   VIBE_DISABLE=1               Mute automatic playback without uninstalling anything
   VIBE_NO_UPDATE_CHECK=1       Never check npm for a newer version
+
+\x1b[1mNO SOUND?\x1b[0m
+  vibe --doctor                  \x1b[90m# checks the setup; each problem comes with its fix\x1b[0m
+  vibe --status                  \x1b[90m# shows whether you are muted, and what is installed\x1b[0m
+  vibe --unmute                  \x1b[90m# clears a mute\x1b[0m
+
+\x1b[1mMORE:\x1b[0m
+  Settings and state: ~/.vibeaudio
+  Docs: https://kiril6.github.io/vibeaudio/
+  Problems and ideas: https://github.com/kiril6/vibeaudio/issues
 `);
   printUpdateNotice();
 }
@@ -717,6 +745,7 @@ function installHookTargets(ids, genre, volume, reactive, dryRun = false, typed 
   const live = ids.filter((id) => hooks.TARGETS[id].liveReload !== false).map((id) => hooks.TARGETS[id].name);
   if (live.length) console.log(`  ${live.join(", ")}: takes effect on your next prompt - no restart needed.`);
   console.log(`  \x1b[90mChange the sound any time with: vibe --genre <name> --volume <n> — no reinstall.\x1b[0m`);
+  console.log(`  \x1b[90mCheck it with vibe --status · quiet for a call: vibe --mute · everything else: vibe --help\x1b[0m`);
   if (ids.length > 1) {
     console.log(`  \x1b[90mOne player is shared: whichever agent you prompt last owns the music.\x1b[0m`);
   }
@@ -1659,6 +1688,42 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRA
   process.on("SIGTERM", () => relaySignal("SIGTERM"));
 }
 
+/**
+ * Acts on what the menu returned, and says whether to launch the tool.
+ *
+ * Choosing hooks is setup: it installs them and stops. Nothing is started, so
+ * someone running several agents can set one up now and open it when they
+ * like - the music plays from their first prompt either way. Only "just launch
+ * it" and "this session only" go on to start the tool. A failed install is an
+ * error with a non-zero exit, not a launch without the hooks that were asked for.
+ */
+function applyMenuSelection(selection, volume) {
+  if (!selection.installHooks) return true;
+  const hooks = require("./hooks");
+  try {
+    installHookTargets([selection.hookTarget], selection.genre, volume, selection.reactive, false,
+      { genre: selection.genre, volume });
+  } catch (err) {
+    console.error(`\x1b[31m[vibeaudio] ${err.message}\x1b[0m`);
+    process.exit(1);
+  }
+  const saved = loadConfig();
+  // Everything VibeAudio is hooked into on this machine, not just this run's
+  // pick: with several agents, "which ones are set up?" is the question, and
+  // which one to open first is the user's call.
+  const hooked = Object.entries(hooks.TARGETS).filter(([id]) => hooks.userHooksInstalled(null, id));
+  const names = hooked.map(([, t]) => t.name).join(", ");
+  const cmds = hooked.map(([, t]) => t.cmd).join(", ");
+  console.log(
+    `\n\x1b[32m✔ VibeAudio v${pkg.version} is hooked into: ${names} (${saved.genre} @ ${saved.volume}%).\x1b[0m ` +
+    `Nothing was started: open ${hooked.length > 1 ? "any of them" : "it"} whenever you like (\x1b[1m${cmds}\x1b[0m), and the music plays from your first prompt.\n` +
+    `  \x1b[90mMore agents? Run vibe again for each, or vibe --install-hooks to set up every one it finds.\x1b[0m\n` +
+    `  \x1b[90mStay current: run npm i -g ${pkg.name} now and then (hooks keep working); vibe --status tells you when a newer version is out.\x1b[0m\n`
+  );
+  printUpdateNotice();
+  return false;
+}
+
 async function run() {
   const {
     genre,
@@ -1875,18 +1940,7 @@ async function run() {
     }
 
     const chosenVol = selection.volume !== undefined ? selection.volume : volume;
-
-    if (selection.installHooks) {
-      // The install can refuse (npx checkout) or abort (malformed settings).
-      // Either way, say so and still launch the tool the user asked for -
-      // they came here to start an agent, not to configure one.
-      try {
-        installHookTargets([selection.hookTarget], selection.genre, chosenVol, selection.reactive, false,
-          { genre: selection.genre, volume: chosenVol });
-      } catch (err) {
-        console.error(`\x1b[31m[vibeaudio] ${err.message}\x1b[0m`);
-      }
-    }
+    if (!applyMenuSelection(selection, chosenVol)) return;
 
     return executeCommand(selection.cmd, selection.genre, chosenVol, chimeVolume, grace, noChime, noHud, music);
   }
@@ -1898,6 +1952,7 @@ module.exports = {
   run,
   parseArgs,
   hooksAlreadyCover,
+  applyMenuSelection,
   previewAudioFile,
   windowsCommandNeedsShell
 };
