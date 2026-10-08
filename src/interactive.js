@@ -3,15 +3,36 @@
  * Zero dependencies - Pure Node.js ANSI and Readline
  */
 
-const { spawnSync } = require("child_process");
+const fs = require("fs");
+const path = require("path");
 const readline = require("readline");
 
-// Windows has no `which`; without this every tool shows as missing there.
-const LOOKUP_CMD = process.platform === "win32" ? "where" : "which";
-
-function isInstalled(cmd) {
-  // An argument vector, not a command string: nothing in `cmd` reaches a shell.
-  return spawnSync(LOOKUP_CMD, [cmd], { stdio: "ignore", timeout: 3000, killSignal: "SIGKILL" }).status === 0;
+/**
+ * Is `cmd` an executable on PATH? Read off the filesystem, not by asking
+ * `which`/`where`: a lookup is a process spawn, and on CI runners that spawn
+ * has hung and missed its timeout (#58), where a directory scan cannot. It
+ * also needs no `which` to exist, and nothing in `cmd` reaches a shell.
+ * A name with a separator is a path, as `which` treats it.
+ */
+function isInstalled(cmd, env = process.env) {
+  if (typeof cmd !== "string" || !cmd) return false;
+  const win = process.platform === "win32";
+  const exts = win ? String(env.PATHEXT || ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean) : [""];
+  const dirs = /[\\/]/.test(cmd) ? [""] : String(env.PATH ?? env.Path ?? "").split(path.delimiter).filter(Boolean);
+  const hasExt = win && exts.some((e) => cmd.toLowerCase().endsWith(e.toLowerCase()));
+  for (const dir of dirs) {
+    for (const ext of hasExt ? ["", ...exts] : exts) {
+      const file = path.join(dir, cmd + ext);
+      try {
+        if (!fs.statSync(file).isFile()) continue;
+        if (!win) fs.accessSync(file, fs.constants.X_OK);
+        return true;
+      } catch (e) {
+        // Not here, or not executable: keep looking.
+      }
+    }
+  }
+  return false;
 }
 
 // Convenience only - the wrapper runs any command, and "Custom command..."
