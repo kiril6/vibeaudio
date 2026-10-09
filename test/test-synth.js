@@ -4401,6 +4401,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.ok(fs.existsSync(hooks.TARGETS.grok.file()), "but the hooks are written");
       assert.ok(logs.some((l) => /hooked into: Grok/.test(l) && /Nothing was started/.test(l) && /grok/.test(l)), "and it says so");
       assert.ok(logs.some((l) => /hooked into/.test(l) && /vibe --help/.test(l)), "the closing confirmation itself points at vibe --help, not only the install report above it");
+      assert.ok(logs.some((l) => /vibe --speak/.test(l) && /vibe --no-speak/.test(l) && /hooked into/.test(logs.join("\n"))), "and tells the user speech exists and how to turn it off");
       assert.ok(logs.some((l) => /vibe --status/.test(l) && /vibe --mute/.test(l) && /vibe --help/.test(l)), "and points at the commands to use next");
       assert.ok(logs.some((l) => /vibe --install-hooks/.test(l)), "and at how to set up the other agents");
 
@@ -4419,6 +4420,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.ok(/UNINSTALL/.test(help) && help.indexOf("vibe --uninstall-hooks", help.indexOf("UNINSTALL")) < help.indexOf("npm rm -g vibeaudio"), "help lists the uninstall steps, hooks first");
       assert.ok(/VIBE_NOTIFY/.test(help) && /NO SOUND\?/.test(help) && /--doctor/.test(help) && /\/issues/.test(help) && /npm i -g vibeaudio/.test(help), "help covers update, notify, troubleshooting and where to ask");
       assert.ok(/INTEGRATIONS/.test(help) && /vibe --events/.test(help) && /announced/.test(help), "help points at the events stream and names its events");
+      assert.ok(/vibe --speak\s+#/.test(help.replace(/\x1b\[[0-9;]*m/g, "")) && /Alerts & extras/.test(help) && /spoken too when --speak is on/.test(help), "help shows how to turn speech on, where the menu toggles are, and that --announce is spoken");
 
       // A failed install is an error, not a launch without the hooks that were asked for.
       const gemini = hooks.TARGETS.gemini.file();

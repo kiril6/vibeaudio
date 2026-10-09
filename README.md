@@ -315,7 +315,7 @@ Every session of an agent is tracked separately, by the session id in its hook p
 * **Every session gets its own chime.** A quick question that finishes while another agent is still busy chimes "done" and the music carries on underneath.
 
 * **Which one?** With three terminals going, a chime says something finished and leaves you alt-tabbing to find out what. `vibe --notify` adds a desktop banner — `api: finished`, `web: needs you (Bash)` — named after the project the session runs in. Off by default, since a banner is more intrusive than a sound; macOS (`osascript`) and Linux (`notify-send`, needs a notification daemon), nothing on Windows yet. A mute silences the banner too.
-* **Say it out loud.** `vibe --speak` adds a spoken line after the chime, in the system voice: *"api: done."*, *"web needs you: Bash."*, *"payments looks stuck."* It speaks only when **two or more sessions** are going, which is the one case where the chime can't tell you which one; `vibe --speak-always` speaks every time, `vibe --no-speak` turns it off. Off by default. The words are fixed (a project name and a state): it never reads the agent's output, and a tool is named only if it is a built-in one, not an MCP tool whose name someone else chose. Voices: macOS `say`, Linux `spd-say` (or `espeak-ng` / `espeak`), Windows `System.Speech`; with none present it stays silent and `vibe --doctor` says so. Sessions that finish together speak one after another, not over each other, and the same sentence twice within five seconds is said once. A mute silences it too. `vibe --announce` text is spoken as well when this is on.
+* **Say it out loud.** `vibe --speak` adds a spoken line after the chime (*"api: done."*) when two or more sessions are going. [Details below.](#-spoken-announcements-vibe---speak)
 
 <details>
 <summary><b>The rest of how sessions share one stream</b></summary>
@@ -333,6 +333,29 @@ Sessions with no id in their payload share a single slot, so they behave as one.
 > **The Claude Code desktop app is covered too**, not just the terminal — both read the same `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`). (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-claude-desktop-vs-code-via-mcp).)
 
 > **One player is shared.** Prompt two agents at once and the last prompt owns the music. One person, one set of speakers — deliberate, not a limitation being worked around.
+
+### 🔊 Spoken announcements: `vibe --speak`
+
+A chime says that something finished, not which project. With `--speak`, the system voice adds one short sentence after the chime:
+
+> "api: done." · "api: failed." · "web needs you: Bash." · "payments looks stuck."
+
+```bash
+vibe --speak          # on: only when two or more sessions are going
+vibe --speak-always   # on: every time, even with one session
+vibe --no-speak       # off again (the default)
+```
+
+It is saved, so it applies from your next prompt with nothing to reinstall, and `vibe --status` shows the current setting on its `speak` line. The `vibe` menu has it too: **Alerts & extras**, then Enter on "Spoken announcements" steps through off, auto and always. `VIBE_SPEAK=off` turns it off for one shell.
+
+**To hear it once:** `vibe --speak-always`, then run any agent turn (and `vibe --unmute` first if you muted).
+
+- **Why only with two sessions by default.** The sentence answers "which one?". With a single session the chime already told you, so `--speak` stays quiet and `--speak-always` is the opt-in for every time.
+- **What it says.** A project name and one of four fixed states. It never reads the agent's output, and it names a tool only if it is one of the built-in ones (`Bash`, `Edit`, ...), not an MCP tool whose name someone else chose. Names like `my-app_v2` are spoken as "my app v2".
+- **Voices.** macOS `say`, Linux `spd-say` (or `espeak-ng` / `espeak`), Windows `System.Speech` through PowerShell. Nothing is installed by VibeAudio; with no voice present it stays silent, and `vibe --doctor` says so. Verified against the real macOS `say` and stub voices; **not run on Linux or Windows**.
+- **Safety.** The text reaches the voice as an argument (an environment variable on Windows), never as part of a shell command or script, and embedded speech commands such as `[[volm 0]]` are stripped.
+- **Several at once.** Sessions that finish together speak one after another, not over each other, and the same sentence twice within five seconds is said once. Not done: merging them into "api and web: done", and lowering the music while it speaks.
+- **Muting.** `--mute` and `VIBE_DISABLE` silence it with everything else. `vibe --announce "deploy finished"` text is spoken as well when speech is on.
 
 ### As a plugin (Claude Code and Codex)
 

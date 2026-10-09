@@ -61,7 +61,8 @@ Procedural focus music while your AI coding tools think.
   vibe --preview jazz
   gh run watch; vibe --announce "CI finished" --exit-code $?   \x1b[90m# the chime for a CI run or a script\x1b[0m
   vibe --render                  \x1b[90m# save this repo's sound as a .wav to share\x1b[0m
-  vibe                           \x1b[90m# menu: pick a tool and a sound (p auditions a genre)\x1b[0m
+  vibe --speak                   \x1b[90m# a voice names the project after the chime (--no-speak turns it off)\x1b[0m
+  vibe                           \x1b[90m# menu: pick a tool and a sound (p auditions a genre); "Alerts & extras" flips banners, speech, announce, music, mute\x1b[0m
 
 \x1b[1mOPTIONS:\x1b[0m
   -g, --genre <name>           Select genre: lofi (default), synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, random
@@ -85,7 +86,7 @@ Procedural focus music while your AI coding tools think.
       --announcements <on|off> Turn vibe --announce on or off for good (a saved setting; on by default)
       --report [days]          How long you waited on agents, and where (default: 7 days)
       --state                  Print what every agent is doing as JSON: idle, working, stuck or waiting
-      --announce <text>        Play the signals for something that is not an agent (CI, a deploy, a script), then exit
+      --announce <text>        Play the signals for something that is not an agent (CI, a deploy, a script), then exit (spoken too when --speak is on)
       --outcome <o>            With --announce: success (default), failure or attention
       --exit-code <n>          With --announce: 0 is success, anything else failure (use $?)
       --dashboard              Serve a read-only live view of every agent on this machine, and open it
@@ -1759,6 +1760,7 @@ function applyMenuSelection(selection, volume) {
     `Nothing was started: open ${hooked.length > 1 ? "any of them" : "it"} whenever you like (\x1b[1m${cmds}\x1b[0m), and the music plays from your first prompt.\n` +
     `  \x1b[90mMore agents? Run vibe again for each, or vibe --install-hooks to set up every one it finds.\x1b[0m\n` +
     `  \x1b[90mStay current: run npm i -g ${pkg.name} now and then (hooks keep working); vibe --status tells you when a newer version is out.\x1b[0m\n` +
+    `  \x1b[90mOptional: vibe --speak adds a spoken line naming the project after the chime (vibe --no-speak turns it off).\x1b[0m\n` +
     `  \x1b[90mAll commands and options: vibe --help\x1b[0m\n`
   );
   printUpdateNotice();
