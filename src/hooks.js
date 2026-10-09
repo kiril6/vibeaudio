@@ -17,6 +17,7 @@ const path = require("path");
 const { spawn, execFileSync } = require("child_process");
 const { AudioPlayer, loadConfig, playbackDisabled } = require("./player");
 const { recordTurn } = require("./history");
+const speech = require("./speech");
 
 const STATE_DIR = path.join(os.homedir(), ".vibeaudio");
 const PID_FILE = path.join(STATE_DIR, "daemon.pid");
@@ -1159,6 +1160,37 @@ function notify(raw, message) {
   return banner(`${sessionLabel(parsePayload(raw))}: ${message}`);
 }
 
+/**
+ * `--announce` can be switched off for good (menu, `--announcements off`,
+ * `VIBE_ANNOUNCE=off`) for a script that cannot be edited. On unless said
+ * otherwise; env beats the saved setting.
+ */
+function announceEnabled(env = process.env, config = loadConfig()) {
+  const raw = String(env.VIBE_ANNOUNCE ?? config.announce ?? "").trim().toLowerCase();
+  return !["0", "false", "off", "no"].includes(raw);
+}
+
+/**
+ * The spoken line for a hook event (#33), after its chime. `sessionCount` is
+ * how many sessions are in flight, this one included: in `auto` mode it takes
+ * two to be worth saying, since the point is "which one?". `chimed` says a
+ * chime was started detached, so the sentence waits for it; one that already
+ * played to the end (the Stop hook plays it inline) needs no wait. Only a
+ * built-in tool is named: an MCP tool's name is third-party text.
+ */
+function speakEvent(raw, kind, sessionCount, { chimed = false, volume = 0.4, tool = "" } = {}) {
+  try {
+    if (!speech.shouldSpeak(speech.speakMode(process.env, loadConfig()), sessionCount)) return false;
+    const named = tool && Object.hasOwn(TOOL_TIERS, tool) ? tool : "";
+    return speech.speak(speech.phrase(kind, sessionLabel(parsePayload(raw)), named), {
+      delayMs: speech.chimeDelayMs(kind, chimed),
+      volume
+    });
+  } catch (e) {
+    return false; // speech must never fail the hook
+  }
+}
+
 const ANNOUNCE_FILE = path.join(STATE_DIR, "announce.json");
 const ANNOUNCE_MAX_CHARS = 200;
 const ANNOUNCE_REPEAT_MS = 5000;
@@ -1180,6 +1212,7 @@ const ANNOUNCE_OUTCOMES = ["success", "failure", "attention"];
  */
 function announce(text, { outcome = "success", volume = 0.4, chimeVolume = null, noChime = false, genre } = {}) {
   try {
+    if (!announceEnabled()) return false; // switched off: inert, event included
     const clean = String(text).replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, ANNOUNCE_MAX_CHARS);
     const now = Date.now();
     try {
@@ -1193,6 +1226,11 @@ function announce(text, { outcome = "success", volume = 0.4, chimeVolume = null,
     banner(`${clean}${outcome === "failure" ? " (failed)" : outcome === "attention" ? " (needs you)" : ""}`);
     // Detached: a pipeline should not wait out the chime.
     if (!noChime) new AudioPlayer().stop({ playChime: true, outcome, volume, chimeVolume, genre, detach: true });
+    // The caller's own text, read after the chime. No session count to wait on:
+    // a script has no "which one", so `auto` and `always` both speak it.
+    if (speech.speakMode(process.env, loadConfig()) !== "off") {
+      speech.speak(clean, { delayMs: speech.chimeDelayMs(outcome, !noChime), volume: chimeVolume !== null ? chimeVolume : volume });
+    }
     return true;
   } catch (e) {
     return true; // a notifier must never fail the script that called it
@@ -1201,6 +1239,7 @@ function announce(text, { outcome = "success", volume = 0.4, chimeVolume = null,
 
 function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChime = false, genre, raw = "" } = {}) {
   const id = sessionId(payloadSession(parsePayload(raw)));
+  const active = listSessions().length; // this session included, until its file goes
   // A turn that ends while paused for the user - a denied tool that nothing
   // resumed after - still finished, so its session counts either way.
   const session = readSession(id);
@@ -1223,10 +1262,16 @@ function hookStop({ outcome = "success", volume = 0.4, chimeVolume = null, noChi
   if (!others) fs.rmSync(INTENSITY_FILE, { force: true });
   if (!(tracked || wasPlaying)) return false;
   notify(raw, outcome === "failure" ? "failed" : "finished");
-  if (noChime) return false;
+  const speakVolume = chimeVolume !== null ? chimeVolume : volume;
+  if (noChime) {
+    speakEvent(raw, outcome === "failure" ? "failure" : "success", active, { volume: speakVolume });
+    return false;
+  }
 
-  // Chime plays in this short-lived hook process.
+  // Chime plays in this short-lived hook process, to the end; the sentence
+  // starts after it, so it needs no delay of its own.
   new AudioPlayer().stop({ playChime: true, outcome, volume, chimeVolume, genre });
+  speakEvent(raw, outcome === "failure" ? "failure" : "success", active, { volume: speakVolume });
   return true;
 }
 
@@ -1278,6 +1323,11 @@ function hookWait(raw, { volume = 0.4, chimeVolume = null, noChime = false } = {
   const tool = payloadToolName(raw);
   notify(raw, tool ? `needs you (${tool})` : "needs you");
   if (!noChime) new AudioPlayer().stop({ playChime: true, outcome: "attention", volume, chimeVolume, detach: true });
+  speakEvent(raw, "attention", listSessions().length, {
+    chimed: !noChime && !playbackDisabled(),
+    volume: chimeVolume !== null ? chimeVolume : volume,
+    tool
+  });
   return true;
 }
 
@@ -1314,6 +1364,10 @@ function hookResume(raw, genre, volume, { reactive = false, follow = false, musi
     // loop to put one under, so the pulse plays once on its own. Detached: the
     // agent waits on this hook.
     if (!music && !noChime) new AudioPlayer().stop({ playChime: true, outcome: "stuck", volume, chimeVolume, detach: true });
+    speakEvent(raw, "stuck", listSessions().length, {
+      chimed: !music && !noChime && !playbackDisabled(),
+      volume: chimeVolume !== null ? chimeVolume : volume
+    });
   }
 
   // An empty key is a wait that named nothing (a Notification): the next tool
@@ -1671,6 +1725,7 @@ module.exports = {
   qwenHome,
   grokHome,
   announce,
+  announceEnabled,
   recentEvents,
   emitEvent,
   ANNOUNCE_OUTCOMES,

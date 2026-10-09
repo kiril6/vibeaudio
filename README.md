@@ -147,7 +147,7 @@ Want the music to follow what the agent is doing — calm while it reads, busies
 vibe --reactive --install-hooks
 ```
 
-Prefer a guided setup? Run `vibe` with nothing after it: a menu asks for your agent, genre and volume (press `p` to hear a genre first) and installs the hooks for you. Installing hooks doesn't start the agent: open it whenever you like, and the music plays from your first prompt. ("Just launch it" and "This session only" do start it.)
+Prefer a guided setup? Run `vibe` with nothing after it: a menu asks for your agent, genre and volume (press `p` to hear a genre first) and installs the hooks for you. The menu's last entry, **Alerts & extras**, flips the saved toggles (banners, spoken announcements, `vibe --announce`, music, a one-hour mute) without a flag to remember. Installing hooks doesn't start the agent: open it whenever you like, and the music plays from your first prompt. ("Just launch it" and "This session only" do start it.)
 
 Now run your agent normally, with no prefix. Music starts when you submit a prompt and stops with a chime when the agent finishes. [Details below.](#-agent-hooks-no-wrapper-needed)
 
@@ -315,6 +315,7 @@ Every session of an agent is tracked separately, by the session id in its hook p
 * **Every session gets its own chime.** A quick question that finishes while another agent is still busy chimes "done" and the music carries on underneath.
 
 * **Which one?** With three terminals going, a chime says something finished and leaves you alt-tabbing to find out what. `vibe --notify` adds a desktop banner — `api: finished`, `web: needs you (Bash)` — named after the project the session runs in. Off by default, since a banner is more intrusive than a sound; macOS (`osascript`) and Linux (`notify-send`, needs a notification daemon), nothing on Windows yet. A mute silences the banner too.
+* **Say it out loud.** `vibe --speak` adds a spoken line after the chime, in the system voice: *"api: done."*, *"web needs you: Bash."*, *"payments looks stuck."* It speaks only when **two or more sessions** are going, which is the one case where the chime can't tell you which one; `vibe --speak-always` speaks every time, `vibe --no-speak` turns it off. Off by default. The words are fixed (a project name and a state): it never reads the agent's output, and a tool is named only if it is a built-in one, not an MCP tool whose name someone else chose. Voices: macOS `say`, Linux `spd-say` (or `espeak-ng` / `espeak`), Windows `System.Speech`; with none present it stays silent and `vibe --doctor` says so. Sessions that finish together speak one after another, not over each other, and the same sentence twice within five seconds is said once. A mute silences it too. `vibe --announce` text is spoken as well when this is on.
 
 <details>
 <summary><b>The rest of how sessions share one stream</b></summary>
@@ -601,9 +602,11 @@ vibe --announce "deploy" --outcome attention     # the "needs you" chime
 gh run watch; vibe --announce "CI finished" --exit-code $?
 ```
 
-It plays the chime for the outcome, shows the `--notify` banner if you have it on, and appends an `announced` event (`source: "cli"`, the text and the outcome) to `~/.vibeaudio/events.jsonl`, so a light or dashboard built on `--events` reacts too. It never starts or stops music and never touches an agent session. A mute silences the sound and banner but not the event, like every event.
+It plays the chime for the outcome, shows the `--notify` banner and says the text aloud if you have those on, and appends an `announced` event (`source: "cli"`, the text and the outcome) to `~/.vibeaudio/events.jsonl`, so a light or dashboard built on `--events` reacts too. It never starts or stops music and never touches an agent session. A mute silences the sound and banner but not the event, like every event.
 
 It always exits 0, so it can't turn a pipeline red, and the text is only ever passed as an argument, never through a shell. Text is capped at 200 characters, and the same text announced again within five seconds is dropped, so a loop can't machine-gun your speakers. `--no-chime` keeps it to the banner and event.
+
+To switch it off for good, for a script you can't edit: `vibe --announcements off` (or `VIBE_ANNOUNCE=off` for one shell, or the **Alerts & extras** screen in the `vibe` menu). It then does nothing and still exits 0, without even writing the event. A mute is different: it silences the sound but keeps the event.
 
 ## 🖥️ Everything Else (Claude Desktop, VS Code… via MCP)
 
@@ -788,6 +791,8 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--status` | Show what's installed, running and detected, then exit | — |
 | `--doctor` | Check the setup; every problem comes with the command that fixes it. Exits 1 on a failure, so it scripts | — |
 | `--notify` / `--no-notify` | Also show a desktop banner naming the project when a turn finishes, fails or needs you. Saved to `config.json` | off |
+| `--speak` / `--speak-always` / `--no-speak` | Say which project finished, failed or needs you, after the chime: only with two or more sessions going (`--speak`), or every time (`--speak-always`). Saved to `config.json` | off |
+| `--announcements <on\|off>` | Turn `vibe --announce` on or off for good. Saved to `config.json` | on |
 | `--report [days]` | How long you waited on agents, and on which projects, from the local turn log | `7` days |
 | `--statusline` | The same state as one plain line for tmux or a shell prompt (`working ×2`, `waiting: api`); prints nothing when idle | — |
 | `--state` | What every agent on the machine is doing, as one line of JSON: `idle`, `working`, `stuck` or `waiting` | — |
@@ -820,6 +825,8 @@ export VIBE_SEED=7              # Same arrangement everywhere, ignoring the dire
 export VIBE_DISABLE=1           # Mute, without uninstalling anything
 export VIBE_MUSIC=off           # Signals only: chimes and banners, no music, for this shell
 export VIBE_NOTIFY=1            # Desktop banner naming the project, for this shell
+export VIBE_SPEAK=auto           # Spoken announcements (auto, always or off), for this shell
+export VIBE_ANNOUNCE=off         # Make vibe --announce do nothing, for this shell
 export VIBE_NO_HISTORY=1        # Do not log finished turns (what --report reads)
 export VIBE_NO_UPDATE_CHECK=1   # Never ask npm whether a newer version is out
 export VIBE_NO_FADE=1           # macOS: play with plain afplay, no fade in/out

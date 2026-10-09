@@ -56,7 +56,8 @@ const AI_TOOLS = [
   { name: "Antigravity CLI", cmd: ["agy"], check: "agy", hookTarget: "antigravity" },
   { name: "Aider", cmd: ["aider"], check: "aider" },
   { name: "Ollama (Llama 3)", cmd: ["ollama", "run", "llama3"], check: "ollama" },
-  { name: "Custom command...", cmd: null }
+  { name: "Custom command...", cmd: null },
+  { name: "⚙️  Alerts & extras...", cmd: null, settings: true }
 ];
 
 const GENRES = [
@@ -315,6 +316,64 @@ const REACTIVE = [
   { id: true, name: "Reactive", desc: "Intensity follows the tool in use - noticeable, by design" }
 ];
 
+const NEXT_SPEAK = { off: "auto", auto: "always", always: "off" };
+
+/**
+ * The saved toggles that have no flag a person would think to look for:
+ * banners, the spoken line, `vibe --announce`, music and the mute. One screen,
+ * not a question per setting in the setup flow, which runs every time a tool
+ * is picked. Enter flips the highlighted one and the list comes back with its
+ * new value; every change is saved at once and lands on the next prompt, like
+ * `vibe --genre`. A variable set in this shell outranks the saved value, so the
+ * row says so rather than letting the toggle look dead.
+ */
+async function promptSettings() {
+  const { loadConfig, saveConfig, muteState, setMuted, musicEnabled, DEFAULT_MUTE_MINUTES } = require("./player");
+  const hooks = require("./hooks");
+  const speech = require("./speech");
+
+  for (;;) {
+    const config = loadConfig();
+    const pinned = (name) => (process.env[name] !== undefined ? ` (${name} is set in this shell and wins)` : "");
+    const speak = speech.speakMode(process.env, config);
+    const items = [
+      { id: "notify", name: "Desktop banners", value: hooks.notifyEnabled(process.env, config) ? "on" : "off",
+        desc: `name the project when a turn finishes or needs you${pinned("VIBE_NOTIFY")}` },
+      { id: "speak", name: "Spoken announcements", value: speak,
+        desc: `a voice names the project after the chime: off, auto (two or more sessions) or always${pinned("VIBE_SPEAK")}${speak !== "off" && !speech.voiceAvailable() ? " - no voice found on this machine" : ""}` },
+      { id: "announce", name: "vibe --announce", value: hooks.announceEnabled(process.env, config) ? "on" : "off",
+        desc: `the chime for CI runs and scripts${pinned("VIBE_ANNOUNCE")}` },
+      { id: "music", name: "Music", value: musicEnabled() ? "on" : "off",
+        desc: `off keeps the chimes, banners and events, and drops the music${pinned("VIBE_MUSIC")}` },
+      { id: "mute", name: "Mute", value: muteState() !== null ? "on" : "off",
+        desc: `silence everything for ${DEFAULT_MUTE_MINUTES} minutes (vibe --unmute ends it)` },
+      { id: "done", name: "Done", value: "", desc: "" }
+    ];
+
+    const chosen = await selectMenu(
+      "Alerts & extras  \x1b[0m\x1b[90m(Enter flips the highlighted one)\x1b[0m",
+      items,
+      (item, num) => item.id === "done"
+        ? `${num}. ${item.name}`
+        : `${num}. ${item.name}: ${item.value === "off" ? "\x1b[33moff\x1b[0m" : `\x1b[32m${item.value}\x1b[0m`} \x1b[90m— ${item.desc}\x1b[0m`
+    );
+
+    if (chosen.id === "done") break;
+    if (chosen.id === "notify") saveConfig({ notify: chosen.value !== "on" });
+    else if (chosen.id === "speak") saveConfig({ speak: NEXT_SPEAK[chosen.value] });
+    else if (chosen.id === "announce") saveConfig({ announce: chosen.value !== "on" });
+    else if (chosen.id === "music") saveConfig({ music: chosen.value !== "on" });
+    else if (chosen.id === "mute") {
+      if (chosen.value === "on") setMuted(false);
+      else {
+        setMuted(true, DEFAULT_MUTE_MINUTES);
+        hooks.stopDaemon({ keepSessions: true }); // silence what is playing now, not just the next prompt
+      }
+    }
+  }
+  console.log("\n\x1b[32m✔ Saved.\x1b[0m Changes apply from your next prompt. Nothing was started.\n");
+}
+
 /**
  * `hooksInstalledFor` is asked about the tool the user picked, not about
  * Claude: the caller cannot know which tool that is until this menu runs, and
@@ -343,6 +402,11 @@ async function promptInteractive({ hooksInstalledFor = () => false } = {}) {
       return `${num}. ${item.name}${status}`;
     }
   );
+
+  if (selectedTool.settings) {
+    await promptSettings();
+    return { settings: true };
+  }
 
   let finalCmd = selectedTool.cmd;
   if (!finalCmd) {
@@ -408,4 +472,4 @@ async function promptInteractive({ hooksInstalledFor = () => false } = {}) {
   };
 }
 
-module.exports = { promptInteractive, tokenizeCommand, isInstalled, hookTargetOf, playPreview, stopPreview, AI_TOOLS };
+module.exports = { promptInteractive, promptSettings, tokenizeCommand, isInstalled, hookTargetOf, playPreview, stopPreview, AI_TOOLS };

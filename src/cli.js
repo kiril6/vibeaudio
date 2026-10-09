@@ -80,6 +80,9 @@ Procedural focus music while your AI coding tools think.
       --render [file]          Write this project's music to a .wav and exit (full scale, ignores --volume)
       --status                 Show what is installed, running and detected, then exit
       --notify | --no-notify   Also show a desktop banner naming the project when a turn finishes or needs you (off by default)
+      --speak | --no-speak     Also say which project finished, failed or needs you, after the chime - with two or more sessions going (off by default)
+      --speak-always           Like --speak, but every time, even with one session
+      --announcements <on|off> Turn vibe --announce on or off for good (a saved setting; on by default)
       --report [days]          How long you waited on agents, and where (default: 7 days)
       --state                  Print what every agent is doing as JSON: idle, working, stuck or waiting
       --announce <text>        Play the signals for something that is not an agent (CI, a deploy, a script), then exit
@@ -139,6 +142,8 @@ Procedural focus music while your AI coding tools think.
   VIBE_GRACE_MS=<ms>           Override the saved grace window, in ms
   VIBE_MUSIC=<on|off>          Override the saved music setting for this shell
   VIBE_NOTIFY=<on|off>         Override the saved desktop-banner setting for this shell
+  VIBE_SPEAK=<auto|always|off> Override the saved spoken-announcement setting for this shell
+  VIBE_ANNOUNCE=<on|off>       Turn vibe --announce off for this shell
   VIBE_SEED=<n>                Pin the arrangement instead of deriving it from the directory
   VIBE_DISABLE=1               Mute automatic playback without uninstalling anything
   VIBE_NO_UPDATE_CHECK=1       Never check npm for a newer version
@@ -176,6 +181,7 @@ const VALUE_FLAGS = new Set([
   "-cv", "--chime-volume",
   "--grace",
   "--music",
+  "--announcements",
   "--seed",
   "--tools",
   "--event",
@@ -227,6 +233,8 @@ function parseArgs(argv) {
   let eventsFlag = false;
   let doctorFlag = false;
   let notifyFlag = null;
+  let speakFlag = null;
+  let announcementsFlag = null;
   let reportDays = null;
   let stopFlag = false;
   let muteFlag = null;
@@ -428,6 +436,23 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--speak" || arg === "--speak-always" || arg === "--no-speak") {
+      speakFlag = arg === "--speak" ? "auto" : arg === "--speak-always" ? "always" : "off";
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--announcements") {
+      const value = args[i + 1].toLowerCase();
+      if (value !== "on" && value !== "off") {
+        console.error(`\x1b[31m[vibeaudio] --announcements takes on or off, not '${args[i + 1]}'.\x1b[0m`);
+        process.exit(1);
+      }
+      announcementsFlag = value === "on";
+      i += 2;
+      continue;
+    }
+
     if (arg === "--doctor") {
       doctorFlag = true;
       i += 1;
@@ -606,6 +631,8 @@ function parseArgs(argv) {
     events: eventsFlag,
     doctor: doctorFlag,
     notify: notifyFlag,
+    speak: speakFlag,
+    announcements: announcementsFlag,
     report: reportDays,
     stop: stopFlag,
     mute: muteFlag,
@@ -853,6 +880,10 @@ function printStatus() {
   console.log(`  volume    ${on(`${Math.round(volumeNow() * 100)}%`)}${source("VIBE_VOLUME", "volume")}`);
   console.log(`            ${off("change either with: vibe --genre <name> --volume <n>")}`);
   console.log(`  notify    ${hooks.notifyEnabled() ? on("on") : off("off")}${off("  desktop banner naming the project — vibe --notify / --no-notify")}`);
+  const speech = require("./speech");
+  const speakNow = speech.speakMode(process.env, loadConfig());
+  console.log(`  speak     ${speakNow === "off" ? off("off") : on(speakNow)}${off(speakNow === "off" ? "  a voice names the project after the chime — vibe --speak / --speak-always" : speakNow === "auto" ? "  only with two or more sessions — vibe --speak-always / --no-speak" : "  every time — vibe --no-speak")}${speakNow !== "off" && !speech.voiceAvailable() ? "  \x1b[33mno voice found on this machine\x1b[0m" : ""}`);
+  console.log(`  announce  ${hooks.announceEnabled() ? on("on") : "\x1b[33moff\x1b[0m"}${off(hooks.announceEnabled() ? "  vibe --announce <text> for scripts and CI — vibe --announcements off to disable" : "  vibe --announce does nothing — vibe --announcements on")}`);
 
   // Audio backend
   const backend = detect();
@@ -1059,6 +1090,15 @@ function doctorChecks() {
   if (playbackDisabled()) add("warn", "VIBE_DISABLE", `set to "${process.env.VIBE_DISABLE}" — automatic playback is off`, "unset VIBE_DISABLE");
   if (mute === null && !playbackDisabled()) add("ok", "Mute", "not muted");
   if (!musicEnabled()) add("ok", "Music", "off — chimes and banners only, by your setting (vibe --music on)");
+  {
+    const speech = require("./speech");
+    const mode = speech.speakMode(process.env, loadConfig());
+    if (mode !== "off") {
+      if (speech.voiceAvailable()) add("ok", "Spoken announcements", `${mode} — a voice is available`);
+      else add("warn", "Spoken announcements", `${mode}, but no voice was found, so nothing is said`,
+        process.platform === "linux" ? "install spd-say, espeak-ng or espeak" : "this system has no speech command on PATH");
+    }
+  }
 
   const pid = readDaemonPid(hooks.PID_FILE);
   if (pid === null) add("ok", "Background player", "not running");
@@ -1743,6 +1783,8 @@ async function run() {
     events: followEvents,
     doctor: showDoctor,
     notify: notifyChange,
+    speak: speakChange,
+    announcements: announcementsChange,
     report: reportDays,
     stop: shouldStop,
     mute: muteChange,
@@ -1834,6 +1876,25 @@ async function run() {
     console.log(notifyChange
       ? "\x1b[32m✔ Notifications on.\x1b[0m A banner names the project when a turn finishes, fails or needs you."
       : "\x1b[90mNotifications off.\x1b[0m");
+    return;
+  }
+
+  if (speakChange !== null) {
+    saveConfig({ speak: speakChange });
+    console.log(speakChange === "off"
+      ? "\x1b[90mSpoken announcements off.\x1b[0m"
+      : `\x1b[32m✔ Spoken announcements on${speakChange === "always" ? " (every time)" : " (when two or more sessions are going)"}.\x1b[0m After the chime, a voice says which project finished, failed or needs you.`);
+    if (speakChange !== "off" && !require("./speech").voiceAvailable()) {
+      console.log("  \x1b[33mNo voice found on this machine\x1b[0m, so nothing will be said. Linux needs spd-say, espeak-ng or espeak.");
+    }
+    return;
+  }
+
+  if (announcementsChange !== null) {
+    saveConfig({ announce: announcementsChange });
+    console.log(announcementsChange
+      ? "\x1b[32m✔ vibe --announce is on.\x1b[0m"
+      : "\x1b[90mvibe --announce is off: it now does nothing, and exits 0.\x1b[0m");
     return;
   }
 
@@ -1939,6 +2000,8 @@ async function run() {
     } catch (e) {
       process.exit(0);
     }
+
+    if (selection.settings) return; // the toggles were saved on the way out of that screen
 
     const chosenVol = selection.volume !== undefined ? selection.volume : volume;
     if (!applyMenuSelection(selection, chosenVol)) return;
