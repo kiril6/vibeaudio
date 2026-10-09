@@ -314,7 +314,7 @@ Every session of an agent is tracked separately, by the session id in its hook p
 * **The music plays while any session is working.** A second prompt doesn't restart it, and it stops only when the last working session finishes.
 * **Every session gets its own chime.** A quick question that finishes while another agent is still busy chimes "done" and the music carries on underneath.
 
-* **Which one?** With three terminals going, a chime says something finished and leaves you alt-tabbing to find out what. `vibe --notify` adds a desktop banner — `api: finished`, `web: needs you (Bash)` — named after the project the session runs in. Off by default, since a banner is more intrusive than a sound; macOS (`osascript`) and Linux (`notify-send`, needs a notification daemon), nothing on Windows yet. A mute silences the banner too.
+* **Which one?** With three terminals going, a chime says something finished and leaves you alt-tabbing to find out what. `vibe --notify` adds a desktop banner (`api: finished`, `web: needs you (Bash)`) and [`vibe --speak`](#-spoken-announcements-vibe---speak) adds a spoken line. Both are off by default. [Banner details below.](#-desktop-banners-vibe---notify)
 * **Say it out loud.** `vibe --speak` adds a spoken line after the chime (*"api: done."*) when two or more sessions are going. [Details below.](#-spoken-announcements-vibe---speak)
 
 <details>
@@ -333,6 +333,21 @@ Sessions with no id in their payload share a single slot, so they behave as one.
 > **The Claude Code desktop app is covered too**, not just the terminal — both read the same `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`). (The separate **Claude Desktop** chat app is a different product with no hooks; that one needs [MCP](#-everything-else-claude-desktop-vs-code-via-mcp).)
 
 > **One player is shared.** Prompt two agents at once and the last prompt owns the music. One person, one set of speakers — deliberate, not a limitation being worked around.
+
+### 🔔 Desktop banners: `vibe --notify`
+
+```bash
+vibe --notify       # on
+vibe --no-notify    # off again (the default)
+```
+
+A banner names the project when a turn **finishes**, **fails**, **needs you** (a permission dialog or a question) or **looks stuck**: `api: finished`, `web: needs you (Bash)`. It is saved, so it applies from your next prompt with nothing to reinstall. `vibe --status` shows it on the `notify` line, the **Alerts & extras** screen in the `vibe` menu toggles it, and `VIBE_NOTIFY=1` turns it on for one shell.
+
+- **Platforms.** macOS through `osascript`, Linux through `notify-send` (it needs a notification daemon, which most desktops have). **Windows has no banner yet**; `vibe --doctor` says so when `--notify` is on and nothing can show one. The macOS command runs without error, but how the banner looks on screen has not been checked, and the Linux path has not been run.
+- **Off by default**, because a banner is more intrusive than a sound.
+- **Safe by construction.** The project name reaches the notifier as an argument, never as part of a script, because a directory name is whatever its owner called it.
+- **Mute.** `--mute` and `VIBE_DISABLE` silence banners with everything else.
+- **Scripts.** With it on, `vibe --announce "deploy finished"` shows its text as a banner too.
 
 ### 🔊 Spoken announcements: `vibe --speak`
 

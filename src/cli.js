@@ -61,6 +61,7 @@ Procedural focus music while your AI coding tools think.
   vibe --preview jazz
   gh run watch; vibe --announce "CI finished" --exit-code $?   \x1b[90m# the chime for a CI run or a script\x1b[0m
   vibe --render                  \x1b[90m# save this repo's sound as a .wav to share\x1b[0m
+  vibe --notify                  \x1b[90m# a desktop banner naming the project when a turn finishes or needs you (macOS, Linux)\x1b[0m
   vibe --speak                   \x1b[90m# a voice names the project after the chime (--no-speak turns it off)\x1b[0m
   vibe                           \x1b[90m# menu: pick a tool and a sound (p auditions a genre); "Alerts & extras" flips banners, speech, announce, music, mute\x1b[0m
 
@@ -80,7 +81,7 @@ Procedural focus music while your AI coding tools think.
       --preview <genre>        Play one loop of a genre and exit
       --render [file]          Write this project's music to a .wav and exit (full scale, ignores --volume)
       --status                 Show what is installed, running and detected, then exit
-      --notify | --no-notify   Also show a desktop banner naming the project when a turn finishes or needs you (off by default)
+      --notify | --no-notify   Also show a desktop banner naming the project when a turn finishes, fails, needs you or looks stuck (macOS and Linux; off by default)
       --speak | --no-speak     Also say which project finished, failed or needs you, after the chime - with two or more sessions going (off by default)
       --speak-always           Like --speak, but every time, even with one session
       --announcements <on|off> Turn vibe --announce on or off for good (a saved setting; on by default)
@@ -1091,6 +1092,13 @@ function doctorChecks() {
   if (playbackDisabled()) add("warn", "VIBE_DISABLE", `set to "${process.env.VIBE_DISABLE}" — automatic playback is off`, "unset VIBE_DISABLE");
   if (mute === null && !playbackDisabled()) add("ok", "Mute", "not muted");
   if (!musicEnabled()) add("ok", "Music", "off — chimes and banners only, by your setting (vibe --music on)");
+  if (hooks.notifyEnabled()) {
+    if (process.platform === "darwin") add("ok", "Desktop banners", "on, through osascript");
+    else if (process.platform === "linux") {
+      if (require("./interactive").isInstalled("notify-send")) add("ok", "Desktop banners", "on, through notify-send");
+      else add("warn", "Desktop banners", "on, but notify-send was not found, so no banner appears", "install libnotify (notify-send) and a notification daemon");
+    } else add("warn", "Desktop banners", "on, but this platform has no banner backend yet, so none appears", "vibe --no-notify");
+  }
   {
     const speech = require("./speech");
     const mode = speech.speakMode(process.env, loadConfig());
@@ -1820,6 +1828,23 @@ async function run() {
     } catch (e) {
       // Settings problems are the user's to fix — report them, don't stack-trace.
       console.error(`\x1b[31m[vibeaudio] ${e.message}\x1b[0m`);
+      process.exit(1);
+    }
+  }
+
+  // These act on their own and then exit. With a command after them the command
+  // used to be dropped without a word and the exit code was 0, so
+  // `vibe --notify npm test && deploy` deployed without running the tests.
+  {
+    const own = muteChange !== null ? (muteChange ? "--mute" : "--unmute")
+      : notifyChange !== null ? (notifyChange ? "--notify" : "--no-notify")
+      : speakChange !== null ? (speakChange === "off" ? "--no-speak" : speakChange === "always" ? "--speak-always" : "--speak")
+      : announcementsChange !== null ? "--announcements"
+      : announceReq.text !== null ? "--announce"
+      : null;
+    if (own && cmdArgs.length > 0) {
+      console.error(`\x1b[31m[vibeaudio] ${own} does not wrap a command, so '${cmdArgs.join(" ")}' was not run.\x1b[0m ` +
+        (own === "--announce" ? `Put it after the command instead: ${cmdArgs.join(" ")}; vibe --announce "..." --exit-code $?` : `Run ${own} on its own, then the command.`));
       process.exit(1);
     }
   }

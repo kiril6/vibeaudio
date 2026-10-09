@@ -4421,6 +4421,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.ok(/VIBE_NOTIFY/.test(help) && /NO SOUND\?/.test(help) && /--doctor/.test(help) && /\/issues/.test(help) && /npm i -g vibeaudio/.test(help), "help covers update, notify, troubleshooting and where to ask");
       assert.ok(/INTEGRATIONS/.test(help) && /vibe --events/.test(help) && /announced/.test(help), "help points at the events stream and names its events");
       assert.ok(/vibe --speak\s+#/.test(help.replace(/\x1b\[[0-9;]*m/g, "")) && /Alerts & extras/.test(help) && /spoken too when --speak is on/.test(help), "help shows how to turn speech on, where the menu toggles are, and that --announce is spoken");
+      assert.ok(/--notify\s+#/.test(help.replace(/\x1b\[[0-9;]*m/g, "")) && /looks stuck \(macOS and Linux; off by default\)/.test(help), "help says what a banner is for and where it works");
 
       // A failed install is an error, not a launch without the hooks that were asked for.
       const gemini = hooks.TARGETS.gemini.file();
@@ -4574,6 +4575,24 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         assert.ok(fs.readFileSync(chimes, "utf8") === "", "VIBE_ANNOUNCE=off wins over the saved setting");
         assert.strictEqual(vibe(["--announcements", "maybe"]).status, 1);
         assert.strictEqual(vibe(["--announcements"]).status, 1, "a trailing --announcements is an error, not a wrapped command");
+
+        // j2. A setting flag followed by a command used to save the setting and drop the command, exit 0:
+        //     `vibe --notify npm test && deploy` deployed without running the tests.
+        const marker = path.join(dir, "ran.txt");
+        for (const flagArgs of [["--speak"], ["--speak-always"], ["--no-speak"], ["--notify"], ["--no-notify"], ["--mute"], ["--unmute"]]) {
+          const out = vibe([...flagArgs, process.execPath, "-e", `require('fs').writeFileSync(${JSON.stringify(marker)}, 'x')`]);
+          assert.strictEqual(out.status, 1, `${flagArgs[0]} with a command must fail, not exit 0`);
+          assert.ok(/was not run/.test(out.stderr), out.stderr);
+          assert.ok(!fs.existsSync(marker), "and the command must not have been run either");
+        }
+        assert.strictEqual(vibe(["--announce", "hi", "echo", "x"]).status, 1, "--announce with a command after it is an error, not a silent drop");
+        vibe(["--unmute"]);
+
+        // j3. The doctor says when banners are on and nothing can show one.
+        const banner = vibe(["--doctor"], { VIBE_NOTIFY: "1", PATH: dir }).stdout.replace(/\x1b\[[0-9;]*m/g, "");
+        if (process.platform === "darwin") assert.ok(/Desktop banners\s+on, through osascript/.test(banner), banner);
+        else assert.ok(/Desktop banners\s+on, but notify-send was not found/.test(banner), banner);
+        assert.ok(!/Desktop banners/.test(vibe(["--doctor"], { VIBE_NOTIFY: "", PATH: dir }).stdout), "and says nothing while banners are off");
 
         // k. --no-speak turns it off; the doctor says when there is no voice to use.
         vibe(["--no-speak"]);
