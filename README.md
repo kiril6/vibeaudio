@@ -6,6 +6,8 @@
 
 [![test](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml/badge.svg)](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml) [![npm](https://img.shields.io/npm/v/vibeaudio)](https://www.npmjs.com/package/vibeaudio) [![license](https://img.shields.io/npm/l/vibeaudio)](LICENSE) [![node](https://img.shields.io/node/v/vibeaudio)](https://nodejs.org) [![downloads/month](https://img.shields.io/npm/dm/vibeaudio)](https://npm-stat.com/charts.html?package=vibeaudio) [![M8ven Score](https://m8ven.ai/badge/mcp/kiril6/vibeaudio)](https://m8ven.ai/mcp/kiril6/vibeaudio?s=readme)
 
+<a href="https://www.producthunt.com/products/vibeaudio/reviews/new?utm_source=badge-product_review&utm_medium=badge&utm_source=badge-vibeaudio" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/product_review.svg?product_id=1317092&theme=light" alt="VibeAudio - Focus&#0032;music&#0032;while&#0032;your&#0032;AI&#0032;codes&#0046; | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+
 > **Procedural focus music while your AI coding tools think.**
 > Every project gets its own arrangement. Zero dependencies, zero audio files.
 > Works with Claude Code, Codex, Cursor, Grok, Gemini CLI, Copilot CLI, Qwen Code, Windsurf, Antigravity, Aider — and any terminal command.
