@@ -1,7 +1,7 @@
 # 🎧 VibeAudio
 
 <p align="center">
-  <img src="docs/og.png?v=2" alt="VibeAudio — Focus music while your AI codes" width="720">
+  <img src="docs/og.png?v=3" alt="VibeAudio — Focus music while your AI codes" width="720">
 </p>
 
 [![test](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml/badge.svg)](https://github.com/kiril6/vibeaudio/actions/workflows/test.yml) [![npm](https://img.shields.io/npm/v/vibeaudio)](https://www.npmjs.com/package/vibeaudio) [![license](https://img.shields.io/npm/l/vibeaudio)](LICENSE) [![node](https://img.shields.io/node/v/vibeaudio)](https://nodejs.org) [![downloads/month](https://img.shields.io/npm/dm/vibeaudio)](https://npm-stat.com/charts.html?package=vibeaudio) [![M8ven Score](https://m8ven.ai/badge/mcp/kiril6/vibeaudio)](https://m8ven.ai/mcp/kiril6/vibeaudio?s=readme)
@@ -496,6 +496,8 @@ plus where the time went by project and, for windows up to two weeks, by day. "Y
 
 </details>
 
+**Share it:** `vibe --report --card` (or `--report 30 --card`) saves the same totals as a square image to `~/.vibeaudio/card.png` (`--out <path>` writes it elsewhere). It shows your time with agents, turns, typical and longest turn, a bar per day, the agents VibeAudio hooks into, and where to get it. It carries totals only — never a project name — and is written locally, never uploaded: attach it to a post yourself. The PNG needs macOS; elsewhere you get the SVG, which any browser opens. One file, replaced on each run.
+
 ### The chime is in the music's key
 
 The success chime is the tonic chord of whatever key your genre sits in — C major for lofi, 8bit, jazz and piano, D minor for synthwave and electronic, D major for zen, A minor for drone — so it lands as the resolution of the piece rather than a bell over it. `rain`, `ocean` and `random` have no single key to match and keep the original C major chime.
@@ -834,6 +836,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--speak` / `--speak-always` / `--no-speak` | Say which project finished, failed or needs you, after the chime: only with two or more sessions going (`--speak`), or every time (`--speak-always`). Saved to `config.json` | off |
 | `--announcements <on\|off>` | Turn `vibe --announce` on or off for good. Saved to `config.json` | on |
 | `--report [days]` | How long you waited on agents, and on which projects, from the local turn log | `7` days |
+| `--card [--out <path>]` | With `--report`: the totals as a shareable image - PNG on macOS, SVG anywhere - saved to `~/.vibeaudio/card.png`, replaced each run | off |
 | `--statusline` | The same state as one plain line for tmux or a shell prompt (`working ×2`, `waiting: api`); prints nothing when idle | — |
 | `--state` | What every agent on the machine is doing, as one line of JSON: `idle`, `working`, `stuck` or `waiting` | — |
 | `--events` | Stream agent state changes as JSON lines, starting with the current state, until stopped | — |
@@ -1042,3 +1045,5 @@ Support development: <a href="https://ko-fi.com/K3K2X0ERJ"><img src="https://ko-
 
 ## 📄 License
 MIT © 2026
+
+VibeAudio is not affiliated with or endorsed by Claude Code, Codex, Cursor, Grok, Gemini CLI, GitHub Copilot CLI, Qwen Code, Windsurf, Antigravity or any other tool it works with. Their names are used only to say what it works with.

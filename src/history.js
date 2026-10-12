@@ -85,4 +85,49 @@ function returnTimes(turns) {
   return gaps;
 }
 
-module.exports = { HISTORY_FILE, RETURN_WINDOW_MS, recordTurn, readTurns, returnTimes };
+/** 95 -> "1m 35s", 4_000_000 -> "1h 06m". */
+function formatDuration(ms) {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+}
+
+/** A turn's working time: its length minus the stretches it spent blocked on you. */
+const working = (t) => t.ms - (t.blockedMs || 0);
+
+/**
+ * The headline numbers of a non-empty list of turns. `--report` and
+ * `--report --card` both read these, so the card can never disagree with the
+ * text it is a picture of.
+ */
+function summarize(turns) {
+  const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+  const sorted = turns.map((t) => t.ms).sort((a, b) => a - b);
+  return {
+    count: turns.length,
+    failed: turns.filter((t) => t.outcome === "failure").length,
+    waited: sum(turns.map(working)),
+    blocked: sum(turns.map((t) => t.blockedMs || 0)),
+    median: sorted[Math.floor(sorted.length / 2)],
+    longest: turns.reduce((a, b) => (b.ms > a.ms ? b : a))
+  };
+}
+
+/** Working time per calendar day for the last `days` days, oldest first. */
+function dayTotals(turns, days, now = Date.now()) {
+  const byDay = new Map();
+  for (const t of turns) {
+    const key = new Date(t.at).toLocaleDateString("en-CA");
+    byDay.set(key, (byDay.get(key) || 0) + working(t));
+  }
+  const out = [];
+  for (let d = days - 1; d >= 0; d--) {
+    const date = new Date(now - d * 86400000);
+    out.push({ date, ms: byDay.get(date.toLocaleDateString("en-CA")) || 0 });
+  }
+  return out;
+}
+
+module.exports = { HISTORY_FILE, RETURN_WINDOW_MS, recordTurn, readTurns, returnTimes, formatDuration, working, summarize, dayTotals };

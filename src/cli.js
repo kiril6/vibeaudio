@@ -86,6 +86,7 @@ Procedural focus music while your AI coding tools think.
       --speak-always           Like --speak, but every time, even with one session
       --announcements <on|off> Turn vibe --announce on or off for good (a saved setting; on by default)
       --report [days]          How long you waited on agents, and where (default: 7 days)
+      --card [--out <path>]    With --report: save the totals as an image (PNG on macOS, SVG anywhere) to ~/.vibeaudio/card.*, replaced each run
       --state                  Print what every agent is doing as JSON: idle, working, stuck or waiting
       --announce <text>        Play the signals for something that is not an agent (CI, a deploy, a script), then exit (spoken too when --speak is on)
       --outcome <o>            With --announce: success (default), failure or attention
@@ -190,7 +191,8 @@ const VALUE_FLAGS = new Set([
   "--announce",
   "--outcome",
   "--exit-code",
-  "--port"
+  "--port",
+  "--out"
 ]);
 
 function parseArgs(argv) {
@@ -238,6 +240,8 @@ function parseArgs(argv) {
   let speakFlag = null;
   let announcementsFlag = null;
   let reportDays = null;
+  let cardFlag = false;
+  let cardOut = null;
   let stopFlag = false;
   let muteFlag = null;
   let muteMinutes = null;
@@ -429,6 +433,18 @@ function parseArgs(argv) {
         reportDays = Math.min(Math.max(parseInt(args[i], 10), 1), 365);
         i += 1;
       }
+      continue;
+    }
+
+    if (arg === "--card") {
+      cardFlag = true;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--out") {
+      cardOut = args[i + 1];
+      i += 2;
       continue;
     }
 
@@ -636,6 +652,8 @@ function parseArgs(argv) {
     speak: speakFlag,
     announcements: announcementsFlag,
     report: reportDays,
+    card: cardFlag,
+    cardOut,
     stop: stopFlag,
     mute: muteFlag,
     muteMinutes,
@@ -1125,15 +1143,6 @@ function doctorChecks() {
   return checks;
 }
 
-/** 95 -> "1m 35s", 4_000_000 -> "1h 06m". */
-function formatDuration(ms) {
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
-  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
-}
-
 /**
  * The summary of ~/.vibeaudio/history.jsonl. "You waited" is the agent's own
  * working time - a turn's length minus the stretches it spent blocked on a
@@ -1143,7 +1152,7 @@ function formatDuration(ms) {
  * over RETURN_WINDOW_MS read as breaks and left out.
  */
 function printReport(days, now = Date.now()) {
-  const { readTurns, returnTimes } = require("./history");
+  const { readTurns, returnTimes, formatDuration, working, summarize, dayTotals } = require("./history");
   const turns = readTurns(days, now);
   const dim = (s) => `\x1b[90m${s}\x1b[0m`;
   const bold = (s) => `\x1b[1m${s}\x1b[0m`;
@@ -1157,14 +1166,7 @@ function printReport(days, now = Date.now()) {
     return;
   }
 
-  const working = (t) => t.ms - (t.blockedMs || 0);
-  const sum = (xs) => xs.reduce((a, b) => a + b, 0);
-  const sorted = turns.map((t) => t.ms).sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)];
-  const longest = turns.reduce((a, b) => (b.ms > a.ms ? b : a));
-  const failed = turns.filter((t) => t.outcome === "failure").length;
-  const waitedOnAgents = sum(turns.map(working));
-  const blocked = sum(turns.map((t) => t.blockedMs || 0));
+  const { failed, waited: waitedOnAgents, blocked, median, longest } = summarize(turns);
 
   // Two projects called `api` under different parents stay apart.
   const names = new Map();
@@ -1211,20 +1213,39 @@ function printReport(days, now = Date.now()) {
 
   if (days <= 14) {
     console.log(`\n${bold("By day")}`);
-    const byDay = new Map();
-    for (const t of turns) {
-      const key = new Date(t.at).toLocaleDateString("en-CA");
-      byDay.set(key, (byDay.get(key) || 0) + working(t));
-    }
-    const maxDay = Math.max(...byDay.values()) || 1;
-    for (let d = days - 1; d >= 0; d--) {
-      const date = new Date(now - d * 86400000);
-      const ms = byDay.get(date.toLocaleDateString("en-CA")) || 0;
+    const rows = dayTotals(turns, days, now);
+    const maxDay = Math.max(...rows.map((r) => r.ms)) || 1;
+    for (const { date, ms } of rows) {
       const name = `${date.toLocaleDateString("en-US", { weekday: "short" })} ${date.getDate()}`;
       console.log(`  ${name.padEnd(8)}${(ms ? formatDuration(ms) : "—").padStart(8)}  ${"█".repeat(ms ? Math.max(1, Math.round((ms / maxDay) * 14)) : 0)}`);
     }
   }
   console.log();
+}
+
+/** `--report --card`: the report as an image, written locally and never uploaded. */
+function printCard(days, out) {
+  const { readTurns } = require("./history");
+  const turns = readTurns(days, Date.now());
+  if (!turns.length) {
+    console.log(`\n  No turns recorded in the last ${days === 1 ? "day" : `${days} days`}, so there is nothing to draw yet.`);
+    console.log(`\x1b[90m  Turns are logged when your agent's hooks fire (vibe --install-hooks).\x1b[0m\n`);
+    return;
+  }
+  const { writeCard } = require("./card");
+  let written;
+  try {
+    written = writeCard(turns, days, { out });
+  } catch (e) {
+    console.error(`\x1b[31m[vibeaudio] Could not write the card: ${e.message}\x1b[0m`);
+    process.exit(1);
+  }
+  const { formatDuration, summarize } = require("./history");
+  const shown = written.pngPath || written.svgPath;
+  console.log(`\n  Card saved: \x1b[1m${shown}\x1b[0m`);
+  if (!written.pngPath) console.log(`\x1b[90m  PNG needs macOS; the SVG opens in any browser.\x1b[0m`);
+  console.log(`\x1b[90m  Totals only - no project names. It stays on this machine; attach it to a post yourself.\x1b[0m`);
+  console.log(`\n  ${formatDuration(summarize(turns).waited)} with my AI agents working, with focus music from VibeAudio: https://kiril6.github.io/vibeaudio  (npm i -g vibeaudio && vibe --install-hooks)\n`);
 }
 
 function printDoctor() {
@@ -1796,6 +1817,8 @@ async function run() {
     speak: speakChange,
     announcements: announcementsChange,
     report: reportDays,
+    card: cardFlag,
+    cardOut,
     stop: shouldStop,
     mute: muteChange,
     muteMinutes,
@@ -1841,6 +1864,7 @@ async function run() {
       : speakChange !== null ? (speakChange === "off" ? "--no-speak" : speakChange === "always" ? "--speak-always" : "--speak")
       : announcementsChange !== null ? "--announcements"
       : announceReq.text !== null ? "--announce"
+      : cardFlag ? "--card"
       : null;
     if (own && cmdArgs.length > 0) {
       console.error(`\x1b[31m[vibeaudio] ${own} does not wrap a command, so '${cmdArgs.join(" ")}' was not run.\x1b[0m ` +
@@ -1978,6 +2002,12 @@ async function run() {
     require("./hooks").followEvents();
     return;
   }
+
+  if (cardOut !== null && !cardFlag) {
+    console.error("\x1b[31m[vibeaudio] --out goes with --card.\x1b[0m");
+    process.exit(1);
+  }
+  if (cardFlag) return printCard(reportDays ?? 7, cardOut);
 
   if (reportDays !== null) {
     return printReport(reportDays);
