@@ -1388,6 +1388,19 @@ function hookResume(raw, genre, volume, { reactive = false, follow = false, musi
 }
 
 /**
+ * An unmute while a turn is in flight: a mute stopped the player, and nothing
+ * else would start one until the next prompt. Only for a session that is
+ * working (a waiting one is waiting on the user, and says so with silence), and
+ * never over a daemon already playing. Not reactive: that flag lives in the hook
+ * commands, so a reactive install is plain until its next tool-driven resume.
+ */
+function resumeAfterUnmute(genre, volume, { music = true, follow = false } = {}) {
+  if (!music || daemonRunning() || working(listSessions()).length === 0) return false;
+  spawnDaemon(genre, volume, false, follow);
+  return true;
+}
+
+/**
  * The agent's session is over (quit, /clear, logout). A turn cut off by it
  * never reaches Stop. Silent: nothing finished.
  *
@@ -1641,6 +1654,11 @@ function slashCommandFile() {
   return path.join(claudeConfigDir(), "commands", "vibe.md");
 }
 
+// The optional in-app mod (mods/vibe). Claude Code records installed plugins by name in this file.
+function modInstalled(file = path.join(claudeConfigDir(), "plugins", "installed_plugins.json")) {
+  try { return fs.readFileSync(file, "utf8").includes("vibeaudio-mod"); } catch { return false; }
+}
+
 function slashCommandText() {
   const cli = `${shellQuote(process.execPath)} ${shellQuote(CLI_ENTRY)}`;
   return `---
@@ -1720,6 +1738,7 @@ function uninstallHooks(file = null, { id = "claude" } = {}) {
 module.exports = {
   shellQuote,
   claudeConfigDir,
+  modInstalled,
   codexHome,
   geminiDir,
   qwenHome,
@@ -1742,6 +1761,7 @@ module.exports = {
   hookTool,
   hookWait,
   hookResume,
+  resumeAfterUnmute,
   isStuck,
   STUCK_WINDOW,
   agentState,

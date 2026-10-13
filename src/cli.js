@@ -777,6 +777,7 @@ function installHookTargets(ids, genre, volume, reactive, dryRun = false, typed 
       const slash = hooks.installSlashCommand({ dryRun });
       if (!slash.installed) console.log(`  \x1b[33m/vibe not installed: ${slash.reason} (${slash.file})\x1b[0m`);
       else console.log(`  ${"/vibe".padEnd(19)}→ ${dryRun ? "would write" : "control the music from inside Claude Code"} (${slash.file})`);
+      if (!dryRun && !hooks.modInstalled()) console.log(`  \x1b[2mOptional: /plugin marketplace add kiril6/vibeaudio, then /plugin install vibeaudio-mod@vibeaudio - instant /vibeaudio controls, a pane and a band above the prompt.\x1b[0m`);
     }
     // Codex will not run a hook it has not been told to trust, so saying
     // "done" without this would be reporting an install that isn't live yet.
@@ -1903,7 +1904,9 @@ async function run() {
 
     if (!muteChange) {
       setMuted(false);
-      console.log(`\x1b[32m🔊 Unmuted.\x1b[0m Music returns on your next prompt.\n`);
+      // A turn already running gets its music back now; only an idle machine waits for a prompt.
+      const resumed = require("./hooks").resumeAfterUnmute(genre, volume, { music, follow: typed.volume === undefined });
+      console.log(`\x1b[32m🔊 Unmuted.\x1b[0m ${resumed ? "Music is back." : "Music returns on your next prompt."}\n`);
       return;
     }
 

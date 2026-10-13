@@ -18,7 +18,7 @@ const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 100, scroll: { offset: 0, bodyRows: 4 }, view: {} },
 } as const
 
-type Setup = { files?: Record<string, string>; surfaces?: string[]; failRun?: boolean; strip?: boolean; state?: unknown; doctor?: string; cwd?: string; theme?: string }
+type Setup = { files?: Record<string, string>; surfaces?: string[]; failRun?: boolean; strip?: boolean; state?: unknown; doctor?: string; cwd?: string; theme?: string; usage?: unknown }
 
 // Answers everything the mod asks Claude Code for, and records what it did.
 async function boot($: any, on: any, opts: Setup = {}) {
@@ -46,6 +46,7 @@ async function boot($: any, on: any, opts: Setup = {}) {
   on('store.set', ($: any, e: any) => { saved.set(e.key, e.value); return { value: undefined } })
   on('config.list', () => ({ value: opts.theme ? [{ key: 'theme', value: opts.theme }] : [] }))
   on('session.id', () => ({ value: 'me' }))
+  on('session.usage', () => ({ value: opts.usage ?? { startedAt: 0, context: {}, rateLimits: [] } }))
   on('session.cwd', () => ({ value: opts.cwd ?? '/work' }))
   on('process.run', ($: any, e: any) => {
     if (e.argv.includes('--state')) return { value: { exitCode: 0, stdout: JSON.stringify(opts.state ?? { v: 1, status: 'idle', sessions: [] }), stderr: '' } }
@@ -202,18 +203,22 @@ test('the band shows the last 7 days from the history log', async ($, on) => {
   const line = (ago: number, ms: number) => JSON.stringify({ at: now - ago, ms, blockedMs: 0, outcome: 'success' })
   await boot($, on, { strip: true, files: { '.vibeaudio/history.jsonl': [line(1000, 60000), line(86400000, 120000), line(9 * 86400000, 999999)].join('\n') } })
   const ui = await $.ui.mount({ ...BAND })
-  expect(await ui.find({ type: 'Text', text: '7 days: 2 turns, 3m waited' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '7 days' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '2 turns' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '3m waited' })).toBeDefined()
 })
 
 test('the band buttons run the CLI, and the card button makes the card', async ($, on) => {
   const s = await boot($, on, { strip: true, files: { '.vibeaudio/config.json': JSON.stringify({ volume: 40 }) } })
   const ui = await $.ui.mount({ ...BAND })
   await ui.press({ key: 'strip-music' })
+  await ui.press({ key: 'strip-genre' })
   await ui.press({ key: 'strip-vol-down' })
   await ui.press({ key: 'strip-vol-up' })
   await ui.press({ key: 'strip-card' })
   expect(s.ran).toEqual([
     ['vibe', '--music', 'off'],
+    ['vibe', '--genre', 'synthwave'],
     ['vibe', '--volume', '30'],
     ['vibe', '--volume', '50'],
     ['vibe', '--report', '7', '--card'],
@@ -349,4 +354,35 @@ test('where nothing draws, doctor answers with the problems only', async ($, on)
   expect(r.text).toContain('Codex hook trust')
   expect(r.text).toContain('fix: start codex')
   expect(r.text).not.toContain('Audio player')
+})
+
+const USAGE = { startedAt: 0, context: { percent: 42.4 }, rateLimits: [{ kind: 'five_hour', percentUsed: 31 }, { kind: 'seven_day', percentUsed: 12 }] }
+
+test('the band shows context and rate limits only after usage is turned on', async ($, on) => {
+  await boot($, on, { strip: true, usage: USAGE })
+  const ui = await $.ui.mount({ ...BAND })
+  expect(await ui.find({ type: 'Text', text: /ctx/ })).toBeUndefined()
+  await run($, 'usage on')
+  expect(await ui.find({ type: 'Text', text: 'ctx 42%  5h 31%  7d 12%' })).toBeDefined()
+  await run($, 'usage off')
+  expect(await ui.find({ type: 'Text', text: /ctx/ })).toBeUndefined()
+})
+
+test('usage turns the figure warning-coloured near the limit and rejects other words', async ($, on) => {
+  const s = await boot($, on, { strip: true, usage: { startedAt: 0, context: { percent: 91 }, rateLimits: [] } })
+  const ui = await $.ui.mount({ ...BAND })
+  await run($, 'usage on')
+  const hot = await ui.find({ type: 'Text', text: 'ctx 91%' })
+  expect(hot.props.color).toBe('warning')
+  const r = await run($, 'usage maybe')
+  expect(r.text ?? s.toasts.join()).toContain('usage on|off')
+})
+
+test('help lists the commands and the "here" option', async ($, on) => {
+  const s = await boot($, on, {})
+  const r = await run($, 'help')
+  const out = (r.text ?? s.toasts.join()) as string
+  expect(out).toContain('Usage: /vibeaudio')
+  expect(out).toContain('here')
+  expect(s.ran).toEqual([])
 })
