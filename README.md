@@ -436,6 +436,8 @@ claude plugin install vibeaudio-mod@vibeaudio
 
 Then `/reload-plugins` or a new session; `/plugin` shows `1 mod active`.
 
+To update later, run `claude plugin marketplace update vibeaudio` and then `claude plugin update vibeaudio-mod@vibeaudio`, followed by `/reload-plugins`. The mod does not update when the `vibe` command does.
+
 ```text
 /vibeaudio               open the pane: mute, music, genre, volume, speech, banners, test signal
 /vibeaudio mute 30       silence for 30 minutes (unmute ends it)
