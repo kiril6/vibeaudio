@@ -18,7 +18,7 @@ const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 100, scroll: { offset: 0, bodyRows: 4 }, view: {} },
 } as const
 
-type Setup = { files?: Record<string, string>; surfaces?: string[]; failRun?: boolean; strip?: boolean; state?: unknown; doctor?: string; cwd?: string }
+type Setup = { files?: Record<string, string>; surfaces?: string[]; failRun?: boolean; strip?: boolean; state?: unknown; doctor?: string; cwd?: string; theme?: string }
 
 // Answers everything the mod asks Claude Code for, and records what it did.
 async function boot($: any, on: any, opts: Setup = {}) {
@@ -26,6 +26,8 @@ async function boot($: any, on: any, opts: Setup = {}) {
   const toasts: string[] = []
   const files = opts.files ?? {}
   mock.clock(on)
+  on('turn.start', () => ({ turnId: 't1' }))
+  on('turn.complete', () => ({ text: '' }))
   on('session.start', () => ({ cwd: '/work' }))
   on('command.register', () => ({ value: undefined }))
   on('env.get', () => ({ value: '/home/u' }))
@@ -37,10 +39,12 @@ async function boot($: any, on: any, opts: Setup = {}) {
   on('session.surfaces', () => ({ value: opts.surfaces ?? ['terminal'] }))
   on('ui.toast', ($: any, e: any) => { toasts.push(e.text); return { value: undefined } })
   on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('ui.render', () => ({ type: 'Text', props: {}, children: ['drawn by Claude Code'] }))
+  const seen: any[] = []
+  on('ui.render', ($: any, e: any) => { seen.push(e); return { type: 'Text', props: {}, children: ['drawn by Claude Code'] } })
   const saved = new Map<string, unknown>([['strip', opts.strip === true]])
   on('store.get', ($: any, e: any) => ({ value: saved.get(e.key) }))
   on('store.set', ($: any, e: any) => { saved.set(e.key, e.value); return { value: undefined } })
+  on('config.list', () => ({ value: opts.theme ? [{ key: 'theme', value: opts.theme }] : [] }))
   on('session.id', () => ({ value: 'me' }))
   on('session.cwd', () => ({ value: opts.cwd ?? '/work' }))
   on('process.run', ($: any, e: any) => {
@@ -50,7 +54,7 @@ async function boot($: any, on: any, opts: Setup = {}) {
     return opts.failRun ? { deny: 'spawn vibe ENOENT' } : { value: { exitCode: 0, stdout: '', stderr: '' } }
   })
   await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
-  return { ran, toasts, saved }
+  return { ran, toasts, saved, seen }
 }
 
 const run = ($: any, args: string) => $.command.run({ command: 'vibeaudio', args })
@@ -191,6 +195,93 @@ test('the strip names the other agents and not this one', async ($, on) => {
   })
   const ui = await $.ui.mount({ ...BAND })
   expect(await ui.find({ type: 'Text', text: 'api waiting, web working' })).toBeDefined()
+})
+
+test('the band shows the last 7 days from the history log', async ($, on) => {
+  const now = Date.now()
+  const line = (ago: number, ms: number) => JSON.stringify({ at: now - ago, ms, blockedMs: 0, outcome: 'success' })
+  await boot($, on, { strip: true, files: { '.vibeaudio/history.jsonl': [line(1000, 60000), line(86400000, 120000), line(9 * 86400000, 999999)].join('\n') } })
+  const ui = await $.ui.mount({ ...BAND })
+  expect(await ui.find({ type: 'Text', text: '7 days: 2 turns, 3m waited' })).toBeDefined()
+})
+
+test('the band buttons run the CLI, and the card button makes the card', async ($, on) => {
+  const s = await boot($, on, { strip: true, files: { '.vibeaudio/config.json': JSON.stringify({ volume: 40 }) } })
+  const ui = await $.ui.mount({ ...BAND })
+  await ui.press({ key: 'strip-music' })
+  await ui.press({ key: 'strip-vol-down' })
+  await ui.press({ key: 'strip-vol-up' })
+  await ui.press({ key: 'strip-card' })
+  expect(s.ran).toEqual([
+    ['vibe', '--music', 'off'],
+    ['vibe', '--volume', '30'],
+    ['vibe', '--volume', '50'],
+    ['vibe', '--report', '7', '--card'],
+  ])
+})
+
+test('the logo moves only while music plays', async ($, on) => {
+  await boot($, on, { strip: true })
+  const ui = await $.ui.mount({ ...BAND })
+  expect(await ui.find({ type: 'Text', text: '▃▇▅' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /playing/ })).toBeUndefined()
+  await $.turn.start({ turnId: 't1' })
+  expect(await ui.find({ type: 'Text', text: /playing/ })).toBeDefined()
+  await $.turn.complete({ turnId: 't1', answer: '' })
+  expect(await ui.find({ type: 'Text', text: /playing/ })).toBeUndefined()
+})
+
+test('the Desktop band draws the logo as an SVG', async ($, on) => {
+  await boot($, on, { strip: true, surfaces: ['desktop'] })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ type: 'Svg' })).toBeDefined()
+})
+
+test('the pane charts the week and drops the hotkey from Desktop labels', async ($, on) => {
+  const now = Date.now()
+  const line = (ago: number, ms: number) => JSON.stringify({ at: now - ago, ms, blockedMs: 0, outcome: 'success' })
+  await boot($, on, { surfaces: ['desktop'], files: { '.vibeaudio/history.jsonl': [line(1000, 60000), line(2 * 86400000, 30000)].join('\n') } })
+  await run($, '')
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /^[\u2581-\u2588\u00b7 ]+$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', label: 'Mute 1h' })).toBeDefined()
+})
+
+const SPINNER = {
+  plugin: 'vibeaudio-mod',
+  component: 'Spinner',
+  requestId: 'spin',
+  surface: 'terminal',
+  viewport: { columns: 100, rows: 30 },
+  props: { word: 'Thinking', message: null, suffix: '…', mode: 'thinking' },
+} as const
+
+test('with the strip on, the spinner says what is playing', async ($, on) => {
+  const s = await boot($, on, { strip: true, files: { '.vibeaudio/config.json': JSON.stringify({ genre: 'jazz' }) } })
+  await $.turn.start({ turnId: 't1' })
+  await $.ui.mount({ ...SPINNER })
+  expect(s.seen.filter((e) => e.component === 'Spinner').pop().props.suffix).toBe(' · ♪ jazz…')
+})
+
+test('with the strip off, the spinner is left alone', async ($, on) => {
+  const s = await boot($, on)
+  await $.turn.start({ turnId: 't1' })
+  await $.ui.mount({ ...SPINNER })
+  expect(s.seen.filter((e) => e.component === 'Spinner').pop().props.suffix).toBe('…')
+})
+
+test('the pane picks its colours from the theme', async ($, on) => {
+  await boot($, on, { theme: 'light', files: { '.vibeaudio/config.json': JSON.stringify({ genre: '8bit' }) } })
+  await run($, '')
+  const ui = await $.ui.mount({ ...PANE })
+  expect(await ui.find({ type: 'Text', text: '8BIT', color: '#17753f' })).toBeDefined()
+})
+
+test('an unknown theme gets the middle palette', async ($, on) => {
+  await boot($, on, { theme: 'auto', files: { '.vibeaudio/config.json': JSON.stringify({ genre: '8bit' }) } })
+  await run($, '')
+  const ui = await $.ui.mount({ ...PANE })
+  expect(await ui.find({ type: 'Text', text: '8BIT', color: '#1f9d55' })).toBeDefined()
 })
 
 test('strip needs on or off', async ($, on) => {
