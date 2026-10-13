@@ -155,20 +155,19 @@ function duration(ms) {
   return m < 60 ? m + 'm' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm'
 }
 
-// Context fill and rate-limit windows as [{ tag, pct }], or null when there are none.
-function usageParts() {
+// Context fill and rate-limit windows as one short string, and whether any is near its limit.
+function usageText() {
   if (!usage) return null
   const parts = []
-  if (usage.ctx !== undefined) parts.push({ tag: 'ctx', pct: Math.round(usage.ctx) })
+  if (usage.ctx !== undefined) parts.push('ctx ' + Math.round(usage.ctx) + '%')
   for (const l of usage.limits) {
     const tag = l.kind === 'five_hour' ? '5h' : l.kind === 'seven_day' ? '7d' : null
-    if (tag) parts.push({ tag, pct: Math.round(l.percentUsed) })
+    if (tag) parts.push(tag + ' ' + Math.round(l.percentUsed) + '%')
   }
-  return parts.length ? parts : null
+  if (!parts.length) return null
+  const peak = Math.max(usage.ctx || 0, ...usage.limits.map((l) => l.percentUsed))
+  return { text: parts.join('  '), hot: peak >= 80 }
 }
-
-// Green under 60%, amber from 60, red from 80: the bar says "slow down" before the number is read.
-const usageColor = (pct) => (pct >= 80 ? 'error' : pct >= 60 ? 'warning' : 'success')
 
 function takeUsage(u) {
   usage = { ctx: u.context && typeof u.context.percent === 'number' ? u.context.percent : undefined, limits: Array.isArray(u.rateLimits) ? u.rateLimits : [] }
@@ -471,10 +470,10 @@ export function register(on) {
   // The status line's own figures, pushed when they move.
   on('session.measure', async ($, e, next) => {
     if (usageOn) {
-      const before = JSON.stringify(usageParts())
+      const before = JSON.stringify(usageText())
       takeUsage(e)
       // A redraw restarts the logo's animation, so only a figure that changed gets one.
-      if (JSON.stringify(usageParts()) !== before) $.ui.invalidate('ui.render')
+      if (JSON.stringify(usageText()) !== before) $.ui.invalidate('ui.render')
     }
     return next(e)
   })
@@ -563,13 +562,13 @@ export function register(on) {
               Text({ children: [view.volume + '%'] }),
             ],
           }),
-          Text({ dimColor: true, children: [summary()] }),
+          Text({ dimColor: true, children: [summary().replace(view.genre + ' - ' + view.volume + '% - ', '')] }), // genre and volume are on the line above
           row([
             muted
               ? Button({ key: 'unmute', label: 'Unmute (m)', hotkey: 'm', onPress: run(['--unmute'], 'Unmuted') })
               : Button({ key: 'mute', label: 'Mute 1h (m)', hotkey: 'm', onPress: run(['--mute'], 'Muted for ' + DEFAULT_MUTE_MINUTES + ' min') }),
-            Button({ key: 'music', label: 'Music ' + (view.music ? 'off' : 'on') + ' (o)', hotkey: 'o', onPress: run(['--music', view.music ? 'off' : 'on', ...scopeArg], 'Music: ' + (view.music ? 'off' : 'on')) }),
             Button({ key: 'mute-short', label: 'Mute 15 min (f)', hotkey: 'f', onPress: run(['--mute', '15'], 'Muted for 15 min') }),
+            Button({ key: 'music', label: 'Music ' + (view.music ? 'off' : 'on') + ' (o)', hotkey: 'o', onPress: run(['--music', view.music ? 'off' : 'on', ...scopeArg], 'Music: ' + (view.music ? 'off' : 'on')) }),
             Button({ key: 'stop', label: 'Stop (z)', hotkey: 'z', onPress: async () => { await runLine($, 'stop') } }),
             Button({ key: 'test', label: 'Test (t)', hotkey: 't', onPress: async () => { await runLine($, 'test') } }),
           ]),
@@ -590,11 +589,10 @@ export function register(on) {
           ]),
         ]),
         panel(Box, Text, 'ALERTS', INK.cyan, [
-          Text({ dimColor: true, children: ['speech ' + view.speak + ' - banners ' + (view.notify ? 'on' : 'off') + ' - announce ' + (view.announce ? 'on' : 'off')] }),
           row([
-            Button({ key: 'speak', label: 'Speak: ' + nextSpeak + ' (s)', hotkey: 's', onPress: run([speakArg[nextSpeak]], 'Speak: ' + nextSpeak) }),
-            Button({ key: 'announce', label: 'Announce ' + (view.announce ? 'off' : 'on') + ' (a)', hotkey: 'a', onPress: run(['--announcements', view.announce ? 'off' : 'on'], 'Announcements: ' + (view.announce ? 'off' : 'on')) }),
-            Button({ key: 'notify', label: 'Banners ' + (view.notify ? 'off' : 'on') + ' (n)', hotkey: 'n', onPress: run([view.notify ? '--no-notify' : '--notify'], 'Banners: ' + (view.notify ? 'off' : 'on')) }),
+            Button({ key: 'speak', label: 'Speech: ' + view.speak + ' (s)', hotkey: 's', onPress: run([speakArg[nextSpeak]], 'Speak: ' + nextSpeak) }),
+            Button({ key: 'announce', label: 'Announce: ' + (view.announce ? 'on' : 'off') + ' (a)', hotkey: 'a', onPress: run(['--announcements', view.announce ? 'off' : 'on'], 'Announcements: ' + (view.announce ? 'off' : 'on')) }),
+            Button({ key: 'notify', label: 'Banners: ' + (view.notify ? 'on' : 'off') + ' (n)', hotkey: 'n', onPress: run([view.notify ? '--no-notify' : '--notify'], 'Banners: ' + (view.notify ? 'off' : 'on')) }),
           ]),
         ]),
         panel(Box, Text, 'SHARE', INK.amber, [
@@ -661,31 +659,25 @@ export function register(on) {
     }
     if (strip) {
       const live = playing()
-      const waiting = others.filter((o) => o.state === 'waiting' || o.state === 'stuck')
       const state = muted ? 'muted ' + (left === null ? 'until you unmute' : left + ' min left') : live ? 'playing' : view.music ? '' : 'music off'
       const line = '\u266a ' + view.genre + ' ' + view.volume + '%' + (state ? ' - ' + state : '')
       const week = stats ? ['7 days', stats.turns + (stats.turns === 1 ? ' turn' : ' turns'), ...(stats.turns ? [duration(stats.waited) + ' waited'] : [])] : ['no history yet']
       const btn = (key, label, argv, okText) => Button({ key, label, onPress: async () => { await change($, argv, okText) } })
       const buttons = [
-        muted ? btn('strip-unmute', '🔊', ['--unmute'], 'Unmuted') : btn('strip-mute', '🔇', ['--mute'], 'Muted for ' + DEFAULT_MUTE_MINUTES + ' min'),
-        btn('strip-music', '🎵 ' + (view.music ? 'off' : 'on'), ['--music', view.music ? 'off' : 'on', ...scopeArg], 'Music: ' + (view.music ? 'off' : 'on')),
-        btn('strip-genre', '🎼', ['--genre', nextGenre, ...scopeArg], 'Genre: ' + nextGenre),
+        muted ? btn('strip-unmute', '🔇', ['--unmute'], 'Unmuted') : btn('strip-mute', '🔊', ['--mute'], 'Muted for ' + DEFAULT_MUTE_MINUTES + ' min'),
+        btn('strip-music', '♪ ' + (view.music ? 'on' : 'off'), ['--music', view.music ? 'off' : 'on', ...scopeArg], 'Music: ' + (view.music ? 'off' : 'on')),
+        btn('strip-genre', '♫ ' + view.genre, ['--genre', nextGenre, ...scopeArg], 'Genre: ' + nextGenre),
         btn('strip-vol-down', '−', ['--volume', String(volDown), ...scopeArg], 'Volume: ' + volDown + '%'),
         btn('strip-vol-up', '+', ['--volume', String(volUp), ...scopeArg], 'Volume: ' + volUp + '%'),
-        Button({ key: 'strip-card', label: '📊', onPress: async () => { await runLine($, 'card') } }),
-        ...(cardFile ? [Button({ key: 'strip-card-open', label: '🖼', onPress: async () => { await openCard($) } })] : []),
+        Button({ key: 'strip-card', label: '▤ week', onPress: async () => { await runLine($, 'card') } }),
+        ...(cardFile ? [Button({ key: 'strip-card-open', label: '↗', onPress: async () => { await openCard($) } })] : []),
         Button({ key: 'strip-pane', label: '⚙', onPress: async () => { await runLine($, 'pane') } }),
       ]
-      const use = usageOn ? usageParts() : null
-      const useText = use ? [Box({ flexDirection: 'row', columnGap: 2, children: use.map((u) => Box({ flexDirection: 'row', columnGap: 1, children: [
-        Text({ dimColor: true, children: [u.tag] }),
-        Text({ color: usageColor(u.pct), children: ['\u2588'.repeat(Math.round(Math.min(100, u.pct) / 20)) + '\u2591'.repeat(5 - Math.round(Math.min(100, u.pct) / 20))] }),
-        Text({ ...(u.pct >= 80 ? { color: 'error', bold: true } : { dimColor: true }), children: [u.pct + '%'] }),
-      ] })) })] : []
-      const crowd = others.length ? [Text({ ...(waiting.length ? { color: 'warning' } : { dimColor: true }), children: [others.map((o) => o.name + ' ' + o.state).join(', ')] })] : []
+      const use = usageOn ? usageText() : null
+      const useText = use ? [Text({ ...(use.hot ? { color: 'warning' } : { dimColor: true }), children: [use.text] })] : []
       const head = Text({ ...(muted ? { color: 'warning' } : live ? { color: INK.genre[view.genre] || INK.pink } : { dimColor: true }), children: [line] })
       if (e.props.maxRows < 4) {
-        rows.push(Box({ flexDirection: 'row', columnGap: 2, children: [head, ...useText, ...buttons, ...crowd] }))
+        rows.push(Box({ flexDirection: 'row', columnGap: 2, children: [head, ...useText, ...buttons] }))
       } else {
         const logo = e.surface === 'terminal'
           ? Text({ color: INK.pink, bold: true, children: [logoText(live)] })
@@ -698,10 +690,14 @@ export function register(on) {
             logo,
             Box({
               flexDirection: 'column',
-              rowGap: e.surface === 'terminal' ? 0 : 1,
+              rowGap: 0,
               children: [
-                Box({ flexDirection: 'row', columnGap: 2, children: [Box({ flexDirection: 'row', children: [Text({ bold: true, children: ['VIBE'] }), Text({ color: INK.pink, bold: true, children: ['AUDIO'] })] }), head] }),
-                Box({ flexDirection: 'row', columnGap: 4, children: [Box({ flexDirection: 'row', columnGap: 2, children: week.map((w) => Text({ dimColor: true, children: [w] })) }), ...useText, ...crowd] }),
+                Box({ flexDirection: 'row', columnGap: 2, flexWrap: 'wrap', children: [
+                  Box({ flexDirection: 'row', children: [Text({ bold: true, children: ['VIBE'] }), Text({ color: INK.pink, bold: true, children: ['AUDIO'] })] }),
+                  head,
+                  Box({ flexDirection: 'row', columnGap: 2, children: week.map((w) => Text({ dimColor: true, children: [w] })) }),
+                  ...useText,
+                ] }),
                 Box({ flexDirection: 'row', columnGap: 2, flexWrap: 'wrap', children: buttons }),
               ],
             }),
