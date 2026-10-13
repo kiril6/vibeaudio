@@ -38,7 +38,7 @@ jobs:
           fi
           # The plugin manifests are versioned separately; a stale one means
           # `claude plugin update` ships nothing. `npm version` keeps them in step.
-          for manifest in .claude-plugin/plugin.json .codex-plugin/plugin.json; do
+          for manifest in .claude-plugin/plugin.json .codex-plugin/plugin.json mods/vibe/.claude-plugin/plugin.json; do
             plugin="$(node -p "require('./$manifest').version")"
             if [ "$plugin" != "$version" ]; then
               echo "::error::$manifest says $plugin but package.json says $version"
