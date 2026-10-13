@@ -18,7 +18,7 @@ const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 100, scroll: { offset: 0, bodyRows: 4 }, view: {} },
 } as const
 
-type Setup = { files?: Record<string, string>; surfaces?: string[]; failRun?: boolean }
+type Setup = { files?: Record<string, string>; surfaces?: string[]; failRun?: boolean; strip?: boolean; state?: unknown }
 
 // Answers everything the mod asks Claude Code for, and records what it did.
 async function boot($: any, on: any, opts: Setup = {}) {
@@ -38,12 +38,17 @@ async function boot($: any, on: any, opts: Setup = {}) {
   on('ui.toast', ($: any, e: any) => { toasts.push(e.text); return { value: undefined } })
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.render', () => ({ type: 'Text', props: {}, children: ['drawn by Claude Code'] }))
+  const saved = new Map<string, unknown>([['strip', opts.strip === true]])
+  on('store.get', ($: any, e: any) => ({ value: saved.get(e.key) }))
+  on('store.set', ($: any, e: any) => { saved.set(e.key, e.value); return { value: undefined } })
+  on('session.id', () => ({ value: 'me' }))
   on('process.run', ($: any, e: any) => {
+    if (e.argv.includes('--state')) return { value: { exitCode: 0, stdout: JSON.stringify(opts.state ?? { v: 1, status: 'idle', sessions: [] }), stderr: '' } }
     ran.push(e.argv)
     return opts.failRun ? { deny: 'spawn vibe ENOENT' } : { value: { exitCode: 0, stdout: '', stderr: '' } }
   })
   await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
-  return { ran, toasts }
+  return { ran, toasts, saved }
 }
 
 const run = ($: any, args: string) => $.command.run({ command: 'vibeaudio', args })
@@ -148,4 +153,46 @@ test('the same pane draws on the Desktop app', async ($, on) => {
   await run($, '')
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect(await ui.find({ key: 'mute' })).toBeDefined()
+})
+
+test('the strip is off by default: nothing is drawn when not muted', async ($, on) => {
+  await boot($, on)
+  const ui = await $.ui.mount({ ...BAND })
+  expect(await ui.find({ type: 'Text', text: /^♪/ })).toBeUndefined()
+})
+
+test('strip on is remembered, and the strip shows the sound and its buttons', async ($, on) => {
+  const s = await boot($, on, { files: { '.vibeaudio/config.json': JSON.stringify({ genre: 'jazz', volume: 30 }) } })
+  await run($, 'strip on')
+  expect(s.saved.get('strip')).toBe(true)
+  expect(s.toasts).toEqual(['Strip on'])
+  const ui = await $.ui.mount({ ...BAND })
+  expect(await ui.find({ type: 'Text', text: '♪ jazz 30%' })).toBeDefined()
+  await ui.press({ key: 'strip-mute' })
+  expect(s.ran).toEqual([['vibe', '--mute']])
+})
+
+test('the strip comes back on its own in the next session', async ($, on) => {
+  await boot($, on, { strip: true })
+  const ui = await $.ui.mount({ ...BAND })
+  expect(await ui.find({ type: 'Text', text: /^♪/ })).toBeDefined()
+})
+
+test('the strip names the other agents and not this one', async ($, on) => {
+  await boot($, on, {
+    strip: true,
+    state: { v: 1, status: 'waiting', sessions: [
+      { session: 'me', project: '/work/vibeaudio', state: 'working' },
+      { session: 'b', project: '/work/api', state: 'waiting' },
+      { session: 'c', project: 'C:\\work\\web', state: 'working' },
+    ] },
+  })
+  const ui = await $.ui.mount({ ...BAND })
+  expect(await ui.find({ type: 'Text', text: 'api waiting, web working' })).toBeDefined()
+})
+
+test('strip needs on or off', async ($, on) => {
+  const s = await boot($, on)
+  await run($, 'strip maybe')
+  expect(s.saved.get('strip')).toBe(false)
 })
