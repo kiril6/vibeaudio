@@ -12,15 +12,15 @@ const GENRES = ['lofi', 'synthwave', '8bit', 'electronic', 'jazz', 'zen', 'piano
 const DEFAULT_MUTE_MINUTES = 60
 const REFRESH_MS = 30000
 const NO_VIBE = 'could not run vibe - install it with: npm i -g vibeaudio'
-const HELP = 'Usage: /vibeaudio [mute [min] | unmute | genre <name> | volume <5-100> | music on|off | speak off|auto|always | notify on|off | card [days] | doctor | strip on|off | usage on|off | test | stop | status | help]'
+const HELP = 'Usage: /vibeaudio [mute [min] | unmute | genre <name> | volume <5-100> | music on|off | speak off|auto|always | notify on|off | announce on|off | preview | card [days] | doctor | band on|off | usage on|off | test | stop | status | help]'
 const HELP_HERE = 'Add "here" to save for this project only: /vibeaudio genre jazz here'
 
 // What the pane and the band draw, refreshed from the two files.
-let view = { genre: 'lofi', volume: 40, music: true, speak: 'off', notify: false, muteUntil: undefined, here: false }
+let view = { genre: 'lofi', volume: 40, music: true, speak: 'off', notify: false, announce: true, muteUntil: undefined, here: false }
 let note = ''
 let cardFile = null
 let cardIsPng = false
-// The optional strip above the prompt: off until asked, remembered in $.store.
+// The optional band above the prompt: off until asked, remembered in $.store.
 let strip = false
 let others = []
 const POLL_MS = 5000
@@ -106,6 +106,7 @@ async function refresh($) {
     here: ['genre', 'volume', 'music'].some((k) => mine[k] !== undefined),
     speak: speak === 'always' ? 'always' : ['1', 'true', 'on', 'yes', 'auto'].includes(speak) ? 'auto' : 'off',
     notify: ['1', 'true', 'on', 'yes'].includes(String(config.notify ?? '').trim().toLowerCase()),
+    announce: !['0', 'false', 'off', 'no'].includes(String(config.announce ?? '').trim().toLowerCase()),
     muteUntil: mute ? (mute.until ? Number(mute.until) : null) : undefined,
   }
   await readStats($)
@@ -154,19 +155,20 @@ function duration(ms) {
   return m < 60 ? m + 'm' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm'
 }
 
-// Context fill and rate-limit windows as one short string, and whether any is near its limit.
-function usageText() {
+// Context fill and rate-limit windows as [{ tag, pct }], or null when there are none.
+function usageParts() {
   if (!usage) return null
   const parts = []
-  if (usage.ctx !== undefined) parts.push('ctx ' + Math.round(usage.ctx) + '%')
+  if (usage.ctx !== undefined) parts.push({ tag: 'ctx', pct: Math.round(usage.ctx) })
   for (const l of usage.limits) {
     const tag = l.kind === 'five_hour' ? '5h' : l.kind === 'seven_day' ? '7d' : null
-    if (tag) parts.push(tag + ' ' + Math.round(l.percentUsed) + '%')
+    if (tag) parts.push({ tag, pct: Math.round(l.percentUsed) })
   }
-  if (!parts.length) return null
-  const peak = Math.max(usage.ctx || 0, ...usage.limits.map((l) => l.percentUsed))
-  return { text: parts.join('  '), hot: peak >= 80 }
+  return parts.length ? parts : null
 }
+
+// Green under 60%, amber from 60, red from 80: the bar says "slow down" before the number is read.
+const usageColor = (pct) => (pct >= 80 ? 'error' : pct >= 60 ? 'warning' : 'success')
 
 function takeUsage(u) {
   usage = { ctx: u.context && typeof u.context.percent === 'number' ? u.context.percent : undefined, limits: Array.isArray(u.rateLimits) ? u.rateLimits : [] }
@@ -280,7 +282,7 @@ async function openCard($) {
   return say($, 'Card is at ' + cardFile)
 }
 
-// Other agents on this machine, from `vibe --state`; only polled while the strip is on.
+// Other agents on this machine, from `vibe --state`; only polled while the band is on.
 async function pollOthers($) {
   if (!strip) return
   const r = await vibe($, ['--state'], 5000)
@@ -304,7 +306,8 @@ async function setUsage($, on) {
   await $.store.set('usage', on)
   usage = null
   await refresh($)
-  return say($, on ? 'Usage on the strip' : 'Usage off the strip')
+  $.ui.invalidate('ui.render') // refresh redraws only on a change in what it reads, and this flag is not one
+  return say($, on ? 'Usage on the band' : 'Usage off the band')
 }
 
 async function setStrip($, on) {
@@ -312,24 +315,43 @@ async function setStrip($, on) {
   await $.store.set('strip', on)
   others = []
   await refresh($)
+  $.ui.invalidate('ui.render')
   await pollOthers($)
-  return say($, on ? 'Strip on' : 'Strip off')
+  return say($, on ? 'Band on' : 'Band off')
 }
 
 // vibe --doctor exits 1 when it finds a problem, and its report is still the
 // answer, so the output is used whatever the exit code was.
+let doctorBusy = false
+
+// The check takes a few seconds, so the pane opens at once with a waiting line, and a second press while it runs does nothing.
 async function runDoctor($) {
-  const r = await vibe($, ['--doctor'], 30000)
-  const text = stripAnsi(r.out || '')
-  if (!text.trim()) return say($, r.message || 'doctor printed nothing')
-  doctor = text.split('\n').map((l) => l.replace(/\s+$/, '')).filter((l) => l.trim() !== '')
-  if (!(await draws($))) {
-    const interesting = doctor.filter((l) => !/^\s+[\u2714]/.test(l) && !/doctor\s*$/.test(l))
-    return { text: interesting.join('\n') }
+  if (doctorBusy) return {}
+  doctorBusy = true
+  try {
+    const pane = await draws($)
+    if (pane) {
+      doctor = ['Checking your setup...']
+      await $.ui.open({ id: DOCTOR, title: 'Doctor', focus: true, closeOnEscape: true })
+      $.ui.invalidate('ui.render')
+    }
+    const r = await vibe($, ['--doctor'], 30000)
+    const text = stripAnsi(r.out || '')
+    if (!text.trim()) {
+      doctor = [r.message || 'doctor printed nothing']
+      if (pane) $.ui.invalidate('ui.render')
+      return pane ? {} : say($, doctor[0])
+    }
+    doctor = text.split('\n').map((l) => l.replace(/\s+$/, '')).filter((l) => l.trim() !== '')
+    if (!pane) {
+      const interesting = doctor.filter((l) => !/^\s+[\u2714]/.test(l) && !/doctor\s*$/.test(l))
+      return { text: interesting.join('\n') }
+    }
+    $.ui.invalidate('ui.render')
+    return {}
+  } finally {
+    doctorBusy = false
   }
-  await $.ui.open({ id: DOCTOR, title: 'Doctor', focus: true, closeOnEscape: true })
-  $.ui.invalidate('ui.render')
-  return {}
 }
 
 function summary() {
@@ -366,7 +388,7 @@ async function runLine($, line) {
     case 'genre':
       if (!arg || !WORD.test(arg)) return say($, 'Genres: ' + GENRES.join(', ') + ', random')
       if (extra !== undefined && extra !== 'here') return say($, HELP_HERE)
-      return change($, ['--genre', arg.toLowerCase(), ...(extra ? ['--here'] : [])], 'Genre: ' + arg.toLowerCase() + (extra ? ' for this project' : ' (from your next prompt)'))
+      return change($, ['--genre', arg.toLowerCase(), ...(extra ? ['--here'] : [])], 'Genre: ' + arg.toLowerCase() + (extra ? ' for this project' : ''))
     case 'volume':
       if (!arg || !INT.test(arg)) return say($, 'Volume is 5-100')
       if (extra !== undefined && extra !== 'here') return say($, HELP_HERE)
@@ -377,6 +399,14 @@ async function runLine($, line) {
       return change($, ['--music', arg, ...(extra ? ['--here'] : [])], 'Music: ' + arg + (extra ? ' for this project' : ''))
     case 'doctor':
       return runDoctor($)
+    case 'announce':
+      if (arg !== 'on' && arg !== 'off') return say($, 'Usage: /vibeaudio announce on|off')
+      return change($, ['--announcements', arg], 'Announcements: ' + arg)
+    case 'preview': {
+      const g = GENRES.includes(view.genre) || view.genre === 'random' ? view.genre : 'lofi'
+      const r = await vibe($, ['--preview', g], 40000)
+      return say($, r.ok ? 'Previewed ' + g : r.message)
+    }
     case 'speak': {
       const flag = { off: '--no-speak', auto: '--speak', always: '--speak-always' }[arg]
       if (!flag) return say($, 'Usage: /vibeaudio speak off|auto|always')
@@ -388,8 +418,9 @@ async function runLine($, line) {
     case 'card':
       if (arg !== undefined && !INT.test(arg)) return say($, HELP)
       return makeCard($, arg === undefined ? 7 : Number(arg))
-    case 'strip':
-      if (arg !== 'on' && arg !== 'off') return say($, 'Usage: /vibeaudio strip on|off')
+    case 'band':
+    case 'strip': // the old name
+      if (arg !== 'on' && arg !== 'off') return say($, 'Usage: /vibeaudio band on|off')
       return setStrip($, arg === 'on')
     case 'usage':
       if (arg !== 'on' && arg !== 'off') return say($, 'Usage: /vibeaudio usage on|off')
@@ -414,7 +445,7 @@ export function register(on) {
       await $.command.register({
         name: 'vibeaudio',
         description: 'Control VibeAudio: mute, genre, volume, music, speech, share card',
-        argumentHint: '[mute | unmute | genre <name> | volume <n> | card | strip on|off | usage on|off | ...]',
+        argumentHint: '[mute | unmute | genre <name> | volume <n> | card | band on|off | usage on|off | announce on|off | preview | help ...]',
         immediate: true,
       })
     } catch (err) {
@@ -440,10 +471,10 @@ export function register(on) {
   // The status line's own figures, pushed when they move.
   on('session.measure', async ($, e, next) => {
     if (usageOn) {
-      const before = JSON.stringify(usageText())
+      const before = JSON.stringify(usageParts())
       takeUsage(e)
       // A redraw restarts the logo's animation, so only a figure that changed gets one.
-      if (JSON.stringify(usageText()) !== before) $.ui.invalidate('ui.render')
+      if (JSON.stringify(usageParts()) !== before) $.ui.invalidate('ui.render')
     }
     return next(e)
   })
@@ -460,7 +491,7 @@ export function register(on) {
     return next(e)
   })
 
-  // With the strip on, the spinner says what is playing while Claude works.
+  // With the band on, the spinner says what is playing while Claude works.
   on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
     if (!strip) return next(e)
     const tag = minutesLeft() !== undefined ? ' \u00b7 \u266a muted' : playing() ? ' \u00b7 \u266a ' + view.genre : ''
@@ -538,6 +569,8 @@ export function register(on) {
               ? Button({ key: 'unmute', label: 'Unmute (m)', hotkey: 'm', onPress: run(['--unmute'], 'Unmuted') })
               : Button({ key: 'mute', label: 'Mute 1h (m)', hotkey: 'm', onPress: run(['--mute'], 'Muted for ' + DEFAULT_MUTE_MINUTES + ' min') }),
             Button({ key: 'music', label: 'Music ' + (view.music ? 'off' : 'on') + ' (o)', hotkey: 'o', onPress: run(['--music', view.music ? 'off' : 'on', ...scopeArg], 'Music: ' + (view.music ? 'off' : 'on')) }),
+            Button({ key: 'mute-short', label: 'Mute 15 min (f)', hotkey: 'f', onPress: run(['--mute', '15'], 'Muted for 15 min') }),
+            Button({ key: 'stop', label: 'Stop (z)', hotkey: 'z', onPress: async () => { await runLine($, 'stop') } }),
             Button({ key: 'test', label: 'Test (t)', hotkey: 't', onPress: async () => { await runLine($, 'test') } }),
           ]),
         ]),
@@ -552,13 +585,15 @@ export function register(on) {
           row([
             Button({ key: 'vol-down', label: 'Volume - (d)', hotkey: 'd', onPress: run(['--volume', String(volDown), ...scopeArg], 'Volume: ' + volDown + '%') }),
             Button({ key: 'vol-up', label: 'Volume + (u)', hotkey: 'u', onPress: run(['--volume', String(volUp), ...scopeArg], 'Volume: ' + volUp + '%') }),
+            Button({ key: 'preview', label: 'Preview (p)', hotkey: 'p', onPress: async () => { await runLine($, 'preview') } }),
             Button({ key: 'scope', label: 'Saving: ' + (scopeHere ? 'this project' : 'everywhere') + ' (e)', hotkey: 'e', onPress: () => { scopeHere = !scopeHere; $.ui.invalidate('ui.render') } }),
           ]),
         ]),
         panel(Box, Text, 'ALERTS', INK.cyan, [
-          Text({ dimColor: true, children: ['speech ' + view.speak + ' - banners ' + (view.notify ? 'on' : 'off')] }),
+          Text({ dimColor: true, children: ['speech ' + view.speak + ' - banners ' + (view.notify ? 'on' : 'off') + ' - announce ' + (view.announce ? 'on' : 'off')] }),
           row([
             Button({ key: 'speak', label: 'Speak: ' + nextSpeak + ' (s)', hotkey: 's', onPress: run([speakArg[nextSpeak]], 'Speak: ' + nextSpeak) }),
+            Button({ key: 'announce', label: 'Announce ' + (view.announce ? 'off' : 'on') + ' (a)', hotkey: 'a', onPress: run(['--announcements', view.announce ? 'off' : 'on'], 'Announcements: ' + (view.announce ? 'off' : 'on')) }),
             Button({ key: 'notify', label: 'Banners ' + (view.notify ? 'off' : 'on') + ' (n)', hotkey: 'n', onPress: run([view.notify ? '--no-notify' : '--notify'], 'Banners: ' + (view.notify ? 'off' : 'on')) }),
           ]),
         ]),
@@ -572,7 +607,7 @@ export function register(on) {
           ...picture,
         ]),
         row([
-          Button({ key: 'strip', label: 'Strip ' + (strip ? 'off' : 'on') + ' (b)', hotkey: 'b', onPress: async () => { await setStrip($, !strip) } }),
+          Button({ key: 'strip', label: 'Band ' + (strip ? 'off' : 'on') + ' (b)', hotkey: 'b', onPress: async () => { await setStrip($, !strip) } }),
           Button({ key: 'usage', label: 'Usage ' + (usageOn ? 'off' : 'on') + ' (g)', hotkey: 'g', onPress: async () => { await setUsage($, !usageOn) } }),
           Button({ key: 'doctor', label: 'Doctor (x)', hotkey: 'x', onPress: async () => { await runDoctor($) } }),
         ]),
@@ -609,7 +644,7 @@ export function register(on) {
   })
 
   // The band above the prompt. Off by default: nothing is drawn unless you are
-  // muted (a forgotten mute looks like a broken tool) or you turned the strip
+  // muted (a forgotten mute looks like a broken tool) or you turned the band
   // on. Other mods share this band, so theirs is kept underneath.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const left = minutesLeft()
@@ -632,17 +667,21 @@ export function register(on) {
       const week = stats ? ['7 days', stats.turns + (stats.turns === 1 ? ' turn' : ' turns'), ...(stats.turns ? [duration(stats.waited) + ' waited'] : [])] : ['no history yet']
       const btn = (key, label, argv, okText) => Button({ key, label, onPress: async () => { await change($, argv, okText) } })
       const buttons = [
-        muted ? btn('strip-unmute', 'Unmute', ['--unmute'], 'Unmuted') : btn('strip-mute', 'Mute', ['--mute'], 'Muted for ' + DEFAULT_MUTE_MINUTES + ' min'),
-        btn('strip-music', 'Music ' + (view.music ? 'off' : 'on'), ['--music', view.music ? 'off' : 'on', ...scopeArg], 'Music: ' + (view.music ? 'off' : 'on')),
-        btn('strip-genre', 'Genre >', ['--genre', nextGenre, ...scopeArg], 'Genre: ' + nextGenre),
-        btn('strip-vol-down', 'Vol -', ['--volume', String(volDown), ...scopeArg], 'Volume: ' + volDown + '%'),
-        btn('strip-vol-up', 'Vol +', ['--volume', String(volUp), ...scopeArg], 'Volume: ' + volUp + '%'),
-        Button({ key: 'strip-card', label: 'Week card', onPress: async () => { await runLine($, 'card') } }),
-        ...(cardFile ? [Button({ key: 'strip-card-open', label: 'Open card', onPress: async () => { await openCard($) } })] : []),
-        Button({ key: 'strip-pane', label: 'Controls', onPress: async () => { await runLine($, 'pane') } }),
+        muted ? btn('strip-unmute', '🔊', ['--unmute'], 'Unmuted') : btn('strip-mute', '🔇', ['--mute'], 'Muted for ' + DEFAULT_MUTE_MINUTES + ' min'),
+        btn('strip-music', '🎵 ' + (view.music ? 'off' : 'on'), ['--music', view.music ? 'off' : 'on', ...scopeArg], 'Music: ' + (view.music ? 'off' : 'on')),
+        btn('strip-genre', '🎼', ['--genre', nextGenre, ...scopeArg], 'Genre: ' + nextGenre),
+        btn('strip-vol-down', '−', ['--volume', String(volDown), ...scopeArg], 'Volume: ' + volDown + '%'),
+        btn('strip-vol-up', '+', ['--volume', String(volUp), ...scopeArg], 'Volume: ' + volUp + '%'),
+        Button({ key: 'strip-card', label: '📊', onPress: async () => { await runLine($, 'card') } }),
+        ...(cardFile ? [Button({ key: 'strip-card-open', label: '🖼', onPress: async () => { await openCard($) } })] : []),
+        Button({ key: 'strip-pane', label: '⚙', onPress: async () => { await runLine($, 'pane') } }),
       ]
-      const use = usageOn ? usageText() : null
-      const useText = use ? [Text({ ...(use.hot ? { color: 'warning' } : { dimColor: true }), children: [use.text] })] : []
+      const use = usageOn ? usageParts() : null
+      const useText = use ? [Box({ flexDirection: 'row', columnGap: 2, children: use.map((u) => Box({ flexDirection: 'row', columnGap: 1, children: [
+        Text({ dimColor: true, children: [u.tag] }),
+        Text({ color: usageColor(u.pct), children: ['\u2588'.repeat(Math.round(Math.min(100, u.pct) / 20)) + '\u2591'.repeat(5 - Math.round(Math.min(100, u.pct) / 20))] }),
+        Text({ ...(u.pct >= 80 ? { color: 'error', bold: true } : { dimColor: true }), children: [u.pct + '%'] }),
+      ] })) })] : []
       const crowd = others.length ? [Text({ ...(waiting.length ? { color: 'warning' } : { dimColor: true }), children: [others.map((o) => o.name + ' ' + o.state).join(', ')] })] : []
       const head = Text({ ...(muted ? { color: 'warning' } : live ? { color: INK.genre[view.genre] || INK.pink } : { dimColor: true }), children: [line] })
       if (e.props.maxRows < 4) {
@@ -661,7 +700,7 @@ export function register(on) {
               flexDirection: 'column',
               rowGap: e.surface === 'terminal' ? 0 : 1,
               children: [
-                Box({ flexDirection: 'row', columnGap: 2, children: [Text({ bold: true, children: ['VibeAudio'] }), head] }),
+                Box({ flexDirection: 'row', columnGap: 2, children: [Box({ flexDirection: 'row', children: [Text({ bold: true, children: ['VIBE'] }), Text({ color: INK.pink, bold: true, children: ['AUDIO'] })] }), head] }),
                 Box({ flexDirection: 'row', columnGap: 4, children: [Box({ flexDirection: 'row', columnGap: 2, children: week.map((w) => Text({ dimColor: true, children: [w] })) }), ...useText, ...crowd] }),
                 Box({ flexDirection: 'row', columnGap: 2, flexWrap: 'wrap', children: buttons }),
               ],

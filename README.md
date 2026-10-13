@@ -423,7 +423,7 @@ Installing the Claude Code hooks also adds a `/vibe` command (`~/.claude/command
 /vibe volume 20       change volume, keeping your genre
 ```
 
-It asks Claude to run the matching `vibe` command, so Claude Code will ask permission for that command the first time. If you already have your own `vibe.md` there, VibeAudio leaves it alone and says so; `--uninstall-hooks` removes only its own.
+The optional [`/vibeaudio` mod](#vibeaudio-instant-controls-and-a-pane-claude-code-mod) does the same instantly with no turn; `/vibe` is the version that works everywhere. It asks Claude to run the matching `vibe` command, so Claude Code will ask permission for that command the first time. If you already have your own `vibe.md` there, VibeAudio leaves it alone and says so; `--uninstall-hooks` removes only its own.
 
 ### `/vibeaudio`: instant controls and a pane (Claude Code mod)
 
@@ -439,25 +439,25 @@ Then `/reload-plugins` or a new session; `/plugin` shows `1 mod active`.
 To update later, run `claude plugin marketplace update vibeaudio` and then `claude plugin update vibeaudio-mod@vibeaudio`, followed by `/reload-plugins`. The mod does not update when the `vibe` command does.
 
 ```text
-/vibeaudio               open the pane: mute, music, genre, volume, speech, banners, test signal
+/vibeaudio               open the pane: mute, stop, music, genre, preview, volume, speech, banners, announcements, test signal
 /vibeaudio mute 30       silence for 30 minutes (unmute ends it)
-/vibeaudio genre jazz    also: volume <n>, music on|off, speak off|auto|always, notify on|off, stop
+/vibeaudio genre jazz    also: volume <n>, music on|off, speak off|auto|always, notify on|off, announce on|off, preview, stop
 /vibeaudio genre zen here   genre, volume and music also take "here": save for this project only
 /vibeaudio card          make your week card; the pane shows it in terminals that draw images
-/vibeaudio strip on      an always-visible logo band above the prompt (off by default; strip off removes it)
-/vibeaudio usage on      add context fill and plan limits (ctx 42%  5h 31%) to the band (off by default; usage off removes it)
+/vibeaudio band on       an always-visible logo band above the prompt (off by default; band off removes it)
+/vibeaudio usage on      add context fill and plan limits (ctx ██░░░ 42%  5h █░░░░ 31%, green, amber from 60%, red from 80%) to the band (off by default; usage off removes it)
 /vibeaudio doctor        the setup check in a pane, each problem with its fix (vibe --doctor)
 /vibeaudio help          every command on one line, and the "here" option
 ```
 
-The pane is four cards under a logo header with a status pill (Playing, Ready, Muted or Music off): Now playing, Sound, Alerts and Share, which holds your last 7 days as a small chart and the week card buttons. Its colours come from the site and adapt to your Claude Code theme, light or dark. While you are muted, a line above the prompt says how many minutes are left, so a forgotten mute does not look like a broken tool. Nothing else is shown unless you turn the strip on.
+The pane is four cards under a logo header with a status pill (Playing, Ready, Muted or Music off): Now playing (mute for 15 minutes or an hour, stop the music, send a test signal), Sound (genre, volume, **Preview** plays one loop of the chosen genre, and where to save), Alerts (speech, banners, `vibe --announce`) and Share, which holds your last 7 days as a small chart and the week card buttons. Its colours come from the site and adapt to your Claude Code theme, light or dark. While you are muted, a line above the prompt says how many minutes are left, so a forgotten mute does not look like a broken tool. Nothing else is shown unless you turn the strip on.
 
-The optional **strip** (`/vibeaudio strip on`, remembered across sessions) puts the VibeAudio logo above the prompt, three level bars that move while music is playing (an SVG on the Desktop app, text bars in the terminal). Next to it: the genre and volume, your last 7 days as the week card counts them (turns and time waited, read from `~/.vibeaudio/history.jsonl`), and what your other agents are doing (`api waiting, web working`, in yellow when one needs you). The buttons are **Mute**/**Unmute**, **Music**, **Genre >** (the next genre), **Vol -**, **Vol +**, **Week card** (makes the share card, then **Open card**) and **Controls**. In a short window it shrinks to one line. It runs `vibe --state` every 5 seconds and redraws the text bars twice a second only in the terminal, while it is on and music is playing; on the Desktop app the SVG animates itself, so only the level bars inside the headphones move. Tab to it with Ctrl+X then Tab. With `/vibeaudio usage on` it also shows how full the context window is and, on a Claude plan, your 5-hour and 7-day limits, turning the warning colour at 80%; it reads the same figures Claude Code's status line has, and nothing else. While Claude works, the spinner also says what is playing (`· ♪ jazz…`, or `· ♪ muted`).
+The optional **band** (`/vibeaudio band on`, remembered across sessions) puts the VibeAudio logo above the prompt, three level bars that move while music is playing (an SVG on the Desktop app, text bars in the terminal). Next to it: the genre and volume, your last 7 days as the week card counts them (turns and time waited, read from `~/.vibeaudio/history.jsonl`), and what your other agents are doing (`api waiting, web working`, in yellow when one needs you). The buttons are icons to save room: 🔇/🔊 mute and unmute, 🎵 music on or off, 🎼 the next genre, − and + for volume, 📊 the week card (then 🖼 to open it) and ⚙ for the controls pane. In a short window it shrinks to one line. It runs `vibe --state` every 5 seconds and redraws the text bars twice a second only in the terminal, while it is on and music is playing; on the Desktop app the SVG animates itself, so only the level bars inside the headphones move. Tab to it with Ctrl+X then Tab. With `/vibeaudio usage on` it also shows how full the context window is and, on a Claude plan, your 5-hour and 7-day limits, turning the warning colour at 80%; it reads the same figures Claude Code's status line has, and nothing else. While Claude works, the spinner also says what is playing (`· ♪ jazz…`, or `· ♪ muted`).
 
 - **Per project.** The pane's **Saving** button switches genre, volume and music between everywhere and this project, and the pane notes when this folder has its own settings (`vibe --genre zen --here`, found from a subfolder the way the CLI does). There is no way to remove a project's settings yet, in the mod or the CLI.
-- **It changes nothing itself.** Every action runs the `vibe` command with a fixed argument list (no shell), so settings stay in `~/.vibeaudio/config.json` and the pane cannot disagree with the CLI. The one thing it keeps for itself is whether the strip is on, in Claude Code's own store for the mod. It needs `vibe` on your `PATH` (`npm i -g vibeaudio`) and **Claude Code 2.1.287 or later** (Desktop app 2.1.286). It draws in the terminal and the Desktop app; in the VS Code panel and `claude -p` the same commands answer in text. It makes no network request.
+- **It changes nothing itself.** Every action runs the `vibe` command with a fixed argument list (no shell), so settings stay in `~/.vibeaudio/config.json` and the pane cannot disagree with the CLI. The one thing it keeps for itself is whether the band is on, in Claude Code's own store for the mod. It needs `vibe` on your `PATH` (`npm i -g vibeaudio`) and **Claude Code 2.1.287 or later** (Desktop app 2.1.286). It draws in the terminal and the Desktop app; in the VS Code panel and `claude -p` the same commands answer in text. It makes no network request.
 - **A mod is code, not configuration.** It runs inside Claude Code with your permissions and is not sandboxed, which is why `--install-hooks` never installs it for you; it prints the two commands until Claude Code lists the mod as installed. Read it first: it is [`mods/vibe/hooks/register.js`](mods/vibe/hooks/register.js), and `claude plugin validate mods/vibe` lists every call it makes (it reads three files in `~/.vibeaudio/` (`config.json`, `muted`, `history.jsonl`), your Claude Code theme, the session's usage figures (only with `usage on`), runs `vibe`, and draws).
-- **`/vibe` stays.** It works on every Claude Code version and surface; the mod is the faster path where it loads. Remove the mod with `claude plugin uninstall vibeaudio-mod@vibeaudio`.
+- **`/vibe` stays, as the fallback.** It is a prompt, so it costs a turn, but it works on every Claude Code version and surface, including where the mod does not load (older than 2.1.287, or a surface that skips mods). Use `/vibeaudio` where the mod loads and `/vibe` everywhere else; both change the same settings in `~/.vibeaudio/config.json`. The `vibe` and `vibeaudio` commands in your shell are the same program. Remove the mod with `claude plugin uninstall vibeaudio-mod@vibeaudio`.
 
 ### Changing the sound later
 
@@ -486,7 +486,7 @@ vibe --reactive --install-hooks     # on
 vibe --install-hooks                # off again
 ```
 
-Music already playing keeps the old genre until the next prompt swaps the daemon — `vibe --stop` cuts it short. A new **volume** is the exception: the music playing now eases to it within a second.
+A new **genre** (saved everywhere, not with `--here`) replaces the music playing right now while a turn is running, and so does `--music off` or `on`. A new **volume** eases in within a second. `vibe --stop` ends the music and the running turns.
 
 Removing them is one command:
 
