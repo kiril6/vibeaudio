@@ -2507,6 +2507,12 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.strictEqual(hooks.installSlashCommand({ file: slash }).installed, false, "a user's vibe.md must not be overwritten");
       assert.strictEqual(hooks.uninstallSlashCommand({ file: slash }), false, "nor deleted");
       assert.strictEqual(fs.readFileSync(slash, "utf8"), "my own vibe command");
+
+      // The mod hint: shown until Claude Code lists the plugin as installed.
+      const plugins = path.join(dir, "installed_plugins.json");
+      assert.strictEqual(hooks.modInstalled(plugins), false, "no plugins file: not installed");
+      fs.writeFileSync(plugins, JSON.stringify({ plugins: { "vibeaudio-mod@vibeaudio": [{}] } }));
+      assert.strictEqual(hooks.modInstalled(plugins), true);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -3537,7 +3543,12 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.strictEqual(cli("--mute").status, 0);
       assert.strictEqual(state().sessions.length, 2, "a mute silences the music, not the turns");
       assert.strictEqual(events().length, before, "and ends nothing");
-      cli("--unmute");
+      // An unmute with a turn still running brings the music back at once, over a player the mute stopped.
+      const pidFile = path.join(home, ".vibeaudio", "daemon.pid");
+      assert.ok(!fs.existsSync(pidFile) || !(() => { try { process.kill(Number(fs.readFileSync(pidFile, "utf8")), 0); return true; } catch (e) { return false; } })(), "the mute stopped the player");
+      const unmuted = cli("--unmute");
+      assert.ok(/Music is back/.test(unmuted.stdout), "--unmute says the music is back when a turn is running");
+      assert.ok(fs.existsSync(pidFile), "and a player was started for it");
       assert.strictEqual(cli("--stop").status, 0);
       const ended = events().slice(before);
       assert.deepStrictEqual(ended.map((e) => [e.event, e.reason]).sort(), [["ended", "stop"], ["ended", "stop"]], "--stop ends every session it drops");
