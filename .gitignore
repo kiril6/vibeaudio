@@ -14,3 +14,7 @@ dist/
 
 # Promo video sources + intermediates (final cut ships from docs/video/)
 promo/
+
+# Claude Code writes type declarations here while a mod loads in a session
+mods/**/.claude-plugin/types/
+mods/**/tsconfig.json

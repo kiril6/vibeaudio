@@ -425,6 +425,30 @@ Installing the Claude Code hooks also adds a `/vibe` command (`~/.claude/command
 
 It asks Claude to run the matching `vibe` command, so Claude Code will ask permission for that command the first time. If you already have your own `vibe.md` there, VibeAudio leaves it alone and says so; `--uninstall-hooks` removes only its own.
 
+### `/vibeaudio`: instant controls and a pane (Claude Code mod)
+
+`/vibe` is a prompt, so Claude has to read it, run a command and answer: it costs a turn and a few tokens, and it waits for the current turn to end. The optional **VibeAudio mod** runs inside Claude Code instead, so `/vibeaudio mute` takes effect at once, even while Claude is working, and costs no tokens.
+
+```text
+claude plugin marketplace add kiril6/vibeaudio
+claude plugin install vibeaudio-mod@vibeaudio
+```
+
+Then `/reload-plugins` or a new session; `/plugin` shows `1 mod active`.
+
+```text
+/vibeaudio               open the pane: mute, music, genre, volume, speech, banners, test signal
+/vibeaudio mute 30       silence for 30 minutes (unmute ends it)
+/vibeaudio genre jazz    also: volume <n>, music on|off, speak off|auto|always, notify on|off, stop
+/vibeaudio card          make your week card; the pane shows it in terminals that draw images
+```
+
+While you are muted, a line above the prompt says how many minutes are left, so a forgotten mute does not look like a broken tool. Nothing is shown otherwise.
+
+- **It changes nothing itself.** Every action runs the `vibe` command with a fixed argument list (no shell), so settings stay in `~/.vibeaudio/config.json` and the pane cannot disagree with the CLI. It needs `vibe` on your `PATH` (`npm i -g vibeaudio`) and **Claude Code 2.1.287 or later** (Desktop app 2.1.286). It draws in the terminal and the Desktop app; in the VS Code panel and `claude -p` the same commands answer in text. It makes no network request.
+- **A mod is code, not configuration.** It runs inside Claude Code with your permissions and is not sandboxed, which is why `--install-hooks` never installs it for you. Read it first: it is [`mods/vibe/hooks/register.js`](mods/vibe/hooks/register.js), and `claude plugin validate mods/vibe` lists every call it makes (it reads two files in `~/.vibeaudio/`, runs `vibe`, and draws).
+- **`/vibe` stays.** It works on every Claude Code version and surface; the mod is the faster path where it loads. Remove the mod with `claude plugin uninstall vibeaudio-mod@vibeaudio`.
+
 ### Changing the sound later
 
 One command, and it reaches everything:

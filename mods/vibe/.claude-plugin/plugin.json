@@ -1,0 +1,9 @@
+{
+  "name": "vibeaudio-mod",
+  "version": "0.20.1",
+  "description": "Control VibeAudio from inside Claude Code: /vibeaudio opens a pane (mute, genre, volume, music, speech, banners, the share card) and a band shows while you are muted. Needs Claude Code 2.1.287+ and the vibe CLI.",
+  "author": { "name": "Kiril Delovski" },
+  "homepage": "https://kiril6.github.io/vibeaudio/",
+  "license": "MIT",
+  "keywords": ["music", "focus", "audio", "vibeaudio", "mod"]
+}

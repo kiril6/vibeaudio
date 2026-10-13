@@ -1,0 +1,4 @@
+{
+  "description": "VibeAudio controls: the /vibeaudio command, its pane, and the muted band",
+  "modules": ["./register.js"]
+}
