@@ -148,7 +148,7 @@ test('the pane draws the saved settings and its buttons run the CLI', async ($, 
   const s = await boot($, on, { files: { '.vibeaudio/config.json': JSON.stringify({ genre: 'jazz', volume: 30 }) } })
   await run($, '')
   const ui = await $.ui.mount({ ...PANE })
-  expect(await ui.find({ type: 'Text', text: /^jazz - 30% - music on - sound on$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^music on - sound on$/ })).toBeDefined()
   await ui.press({ key: 'mute' })
   await ui.press({ key: 'vol-up' })
   await ui.press({ key: 'speak' })
@@ -185,7 +185,7 @@ test('the band comes back on its own in the next session', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: /^♪/ })).toBeDefined()
 })
 
-test('the band names the other agents and not this one', async ($, on) => {
+test('the band does not list other agents', async ($, on) => {
   await boot($, on, {
     strip: true,
     state: { v: 1, status: 'waiting', sessions: [
@@ -195,7 +195,7 @@ test('the band names the other agents and not this one', async ($, on) => {
     ] },
   })
   const ui = await $.ui.mount({ ...BAND })
-  expect(await ui.find({ type: 'Text', text: 'api waiting, web working' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /api|web/ })).toBeUndefined()
 })
 
 test('the band shows the last 7 days from the history log', async ($, on) => {
@@ -326,7 +326,7 @@ test('a folder\'s own settings are what the pane shows, found from a subfolder',
   })
   await run($, '')
   const ui = await $.ui.mount({ ...PANE })
-  expect(await ui.find({ type: 'Text', text: 'zen - 25% - music on - sound on - this project' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'music on - sound on - this project' })).toBeDefined()
 })
 
 test('the pane saves for the project when asked to', async ($, on) => {
@@ -363,20 +363,17 @@ test('the band shows context and rate limits only after usage is turned on', asy
   const ui = await $.ui.mount({ ...BAND })
   expect(await ui.find({ type: 'Text', text: /ctx/ })).toBeUndefined()
   await run($, 'usage on')
-  expect(await ui.find({ type: 'Text', text: '42%' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '31%' })).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: '██░░░' })).props.color).toBe('success')
+  expect(await ui.find({ type: 'Text', text: 'ctx 42%  5h 31%  7d 12%' })).toBeDefined()
   await run($, 'usage off')
   expect(await ui.find({ type: 'Text', text: /ctx/ })).toBeUndefined()
 })
 
-test('usage turns the bar and figure red near the limit and rejects other words', async ($, on) => {
+test('usage turns the figure warning-coloured near the limit and rejects other words', async ($, on) => {
   const s = await boot($, on, { strip: true, usage: { startedAt: 0, context: { percent: 91 }, rateLimits: [] } })
   const ui = await $.ui.mount({ ...BAND })
   await run($, 'usage on')
-  const hot = await ui.find({ type: 'Text', text: '91%' })
-  expect(hot.props.color).toBe('error')
-  expect((await ui.find({ type: 'Text', text: '█████' })).props.color).toBe('error')
+  const hot = await ui.find({ type: 'Text', text: 'ctx 91%' })
+  expect(hot.props.color).toBe('warning')
   const r = await run($, 'usage maybe')
   expect(r.text ?? s.toasts.join()).toContain('usage on|off')
 })
