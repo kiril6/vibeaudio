@@ -1359,7 +1359,7 @@ function detectAiTools(hooked = new Set()) {
  * natural way to phrase the request did something else entirely, and the
  * README had to warn about it. It saves the default instead.
  */
-function saveDefaults(typed, hereOnly = false) {
+function saveDefaults(typed, hereOnly = false, live = null) {
   const patch = {};
   if (typed.genre !== undefined) patch.genre = typed.genre;
   if (typed.volume !== undefined) patch.volume = Math.round(typed.volume * 100);
@@ -1386,11 +1386,17 @@ function saveDefaults(typed, hereOnly = false) {
 
   // Music already in the air is the one thing this does not reach, and
   // silence about it reads as the setting having done nothing at all.
-  const playing = require("./hooks").daemonPlaying();
-  if (playing && patch.genre && playing.genre && playing.genre !== patch.genre) {
+  const hooks = require("./hooks");
+  const playing = hooks.daemonPlaying();
+  // A project's own settings do not say what the music in the air should be, so --here leaves it be.
+  const retuned = live && !hereOnly && (patch.genre !== undefined || patch.music !== undefined)
+    && hooks.applyLiveMusic(live.genre, live.volume, { music: live.music, follow: live.follow });
+  if (retuned) {
+    console.log(`  \x1b[90mThe music playing now changed with it.\x1b[0m`);
+  } else if (playing && patch.genre && playing.genre && playing.genre !== patch.genre) {
     console.log(`  \x1b[90m${playing.genre} is still playing — vibe --stop cuts it short.\x1b[0m`);
   }
-  if (playing && patch.music === false) {
+  if (!retuned && playing && patch.music === false) {
     console.log(`  \x1b[90m${playing.genre || "The music"} is still playing — vibe --stop cuts it short.\x1b[0m`);
   }
   if (patch.music === false) {
@@ -2031,7 +2037,7 @@ async function run() {
 
   // Settings typed with no command to run: save them, don't open the launcher.
   if (cmdArgs.length === 0 && Object.keys(typed).length > 0) {
-    return saveDefaults(typed, hereOnly);
+    return saveDefaults(typed, hereOnly, { genre, volume, music, follow: typed.volume === undefined });
   }
 
   if (hereOnly) {

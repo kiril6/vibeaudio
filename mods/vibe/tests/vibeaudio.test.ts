@@ -162,30 +162,30 @@ test('the same pane draws on the Desktop app', async ($, on) => {
   expect(await ui.find({ key: 'mute' })).toBeDefined()
 })
 
-test('the strip is off by default: nothing is drawn when not muted', async ($, on) => {
+test('the band is off by default: nothing is drawn when not muted', async ($, on) => {
   await boot($, on)
   const ui = await $.ui.mount({ ...BAND })
   expect(await ui.find({ type: 'Text', text: /^♪/ })).toBeUndefined()
 })
 
-test('strip on is remembered, and the strip shows the sound and its buttons', async ($, on) => {
+test('band on is remembered, and the band shows the sound and its buttons', async ($, on) => {
   const s = await boot($, on, { files: { '.vibeaudio/config.json': JSON.stringify({ genre: 'jazz', volume: 30 }) } })
-  await run($, 'strip on')
+  await run($, 'band on')
   expect(s.saved.get('strip')).toBe(true)
-  expect(s.toasts).toEqual(['Strip on'])
+  expect(s.toasts).toEqual(['Band on'])
   const ui = await $.ui.mount({ ...BAND })
   expect(await ui.find({ type: 'Text', text: '♪ jazz 30%' })).toBeDefined()
   await ui.press({ key: 'strip-mute' })
   expect(s.ran).toEqual([['vibe', '--mute']])
 })
 
-test('the strip comes back on its own in the next session', async ($, on) => {
+test('the band comes back on its own in the next session', async ($, on) => {
   await boot($, on, { strip: true })
   const ui = await $.ui.mount({ ...BAND })
   expect(await ui.find({ type: 'Text', text: /^♪/ })).toBeDefined()
 })
 
-test('the strip names the other agents and not this one', async ($, on) => {
+test('the band names the other agents and not this one', async ($, on) => {
   await boot($, on, {
     strip: true,
     state: { v: 1, status: 'waiting', sessions: [
@@ -261,14 +261,14 @@ const SPINNER = {
   props: { word: 'Thinking', message: null, suffix: '…', mode: 'thinking' },
 } as const
 
-test('with the strip on, the spinner says what is playing', async ($, on) => {
+test('with the band on, the spinner says what is playing', async ($, on) => {
   const s = await boot($, on, { strip: true, files: { '.vibeaudio/config.json': JSON.stringify({ genre: 'jazz' }) } })
   await $.turn.start({ turnId: 't1' })
   await $.ui.mount({ ...SPINNER })
   expect(s.seen.filter((e) => e.component === 'Spinner').pop().props.suffix).toBe(' · ♪ jazz…')
 })
 
-test('with the strip off, the spinner is left alone', async ($, on) => {
+test('with the band off, the spinner is left alone', async ($, on) => {
   const s = await boot($, on)
   await $.turn.start({ turnId: 't1' })
   await $.ui.mount({ ...SPINNER })
@@ -289,9 +289,9 @@ test('an unknown theme gets the middle palette', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: '8BIT', color: '#1f9d55' })).toBeDefined()
 })
 
-test('strip needs on or off', async ($, on) => {
+test('band needs on or off', async ($, on) => {
   const s = await boot($, on)
-  await run($, 'strip maybe')
+  await run($, 'band maybe')
   expect(s.saved.get('strip')).toBe(false)
 })
 
@@ -363,17 +363,20 @@ test('the band shows context and rate limits only after usage is turned on', asy
   const ui = await $.ui.mount({ ...BAND })
   expect(await ui.find({ type: 'Text', text: /ctx/ })).toBeUndefined()
   await run($, 'usage on')
-  expect(await ui.find({ type: 'Text', text: 'ctx 42%  5h 31%  7d 12%' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '42%' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '31%' })).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: '██░░░' })).props.color).toBe('success')
   await run($, 'usage off')
   expect(await ui.find({ type: 'Text', text: /ctx/ })).toBeUndefined()
 })
 
-test('usage turns the figure warning-coloured near the limit and rejects other words', async ($, on) => {
+test('usage turns the bar and figure red near the limit and rejects other words', async ($, on) => {
   const s = await boot($, on, { strip: true, usage: { startedAt: 0, context: { percent: 91 }, rateLimits: [] } })
   const ui = await $.ui.mount({ ...BAND })
   await run($, 'usage on')
-  const hot = await ui.find({ type: 'Text', text: 'ctx 91%' })
-  expect(hot.props.color).toBe('warning')
+  const hot = await ui.find({ type: 'Text', text: '91%' })
+  expect(hot.props.color).toBe('error')
+  expect((await ui.find({ type: 'Text', text: '█████' })).props.color).toBe('error')
   const r = await run($, 'usage maybe')
   expect(r.text ?? s.toasts.join()).toContain('usage on|off')
 })
@@ -385,4 +388,33 @@ test('help lists the commands and the "here" option', async ($, on) => {
   expect(out).toContain('Usage: /vibeaudio')
   expect(out).toContain('here')
   expect(s.ran).toEqual([])
+})
+
+test('the pane redraws at the first press of Band and Usage', async ($, on) => {
+  await boot($, on, { strip: true })
+  await run($, '')
+  const ui = await $.ui.mount({ ...PANE })
+  expect(await ui.find({ type: 'Button', label: 'Band off' })).toBeDefined()
+  await ui.press({ key: 'strip' })
+  expect(await ui.find({ type: 'Button', label: 'Band on' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', label: 'Usage on' })).toBeDefined()
+  await ui.press({ key: 'usage' })
+  expect(await ui.find({ type: 'Button', label: 'Usage off' })).toBeDefined()
+})
+
+test('the pane has Stop, Preview, Announce and a 15 minute mute, each one CLI call', async ($, on) => {
+  const s = await boot($, on, { files: { '.vibeaudio/config.json': JSON.stringify({ genre: 'zen' }) } })
+  await run($, '')
+  const ui = await $.ui.mount({ ...PANE })
+  await ui.press({ key: 'mute-short' })
+  await ui.press({ key: 'stop' })
+  await ui.press({ key: 'preview' })
+  await ui.press({ key: 'announce' })
+  expect(s.ran).toEqual([
+    ['vibe', '--mute', '15'],
+    ['vibe', '--stop'],
+    ['vibe', '--preview', 'zen'],
+    ['vibe', '--announcements', 'off'],
+  ])
+  expect((await run($, 'announce maybe')).text ?? s.toasts.join()).toContain('announce on|off')
 })

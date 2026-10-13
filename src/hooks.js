@@ -1401,6 +1401,20 @@ function resumeAfterUnmute(genre, volume, { music = true, follow = false } = {})
 }
 
 /**
+ * A saved genre or music switch reaches music already playing now, not at the
+ * next prompt: whoever pressed the button is listening. The player is replaced
+ * (or just stopped for music off) while the sessions stay, so chimes, events and
+ * --report carry on. Returns whether anything changed.
+ */
+function applyLiveMusic(genre, volume, { music = true, follow = false } = {}) {
+  const was = daemonRunning();
+  if (was) stopDaemon({ keepSessions: true });
+  const start = music && !playbackDisabled() && working(listSessions()).length > 0;
+  if (start) spawnDaemon(genre, volume, false, follow);
+  return was || start;
+}
+
+/**
  * The agent's session is over (quit, /clear, logout). A turn cut off by it
  * never reaches Stop. Silent: nothing finished.
  *
@@ -1762,6 +1776,7 @@ module.exports = {
   hookWait,
   hookResume,
   resumeAfterUnmute,
+  applyLiveMusic,
   isStuck,
   STUCK_WINDOW,
   agentState,

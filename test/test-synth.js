@@ -3549,6 +3549,25 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       const unmuted = cli("--unmute");
       assert.ok(/Music is back/.test(unmuted.stdout), "--unmute says the music is back when a turn is running");
       assert.ok(fs.existsSync(pidFile), "and a player was started for it");
+      // A saved genre or music-off reaches the music already playing, not the next prompt; the turns stay.
+      // Playback is not disabled here, so a fake backend stands in for the speakers.
+      const bin = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-live-"));
+      fs.writeFileSync(path.join(bin, "afplay"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      fs.writeFileSync(path.join(bin, "which"), `#!/bin/sh\n[ -x "${bin}/$1" ] && echo "${bin}/$1" || exit 1\n`, { mode: 0o755 });
+      const liveEnv = { ...env, PATH: `${bin}:/bin:/usr/bin`, VIBE_DISABLE: "", VIBE_NO_FADE: "1" };
+      const live = (...args) => spawnSync(process.execPath, [CLI, ...args], { env: liveEnv, encoding: "utf8", timeout: 10000 });
+      const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return false; } };
+      const pid1 = Number(fs.readFileSync(pidFile, "utf8"));
+      assert.ok(/changed with it/.test(live("--genre", "zen").stdout), "a genre change says it reached the music");
+      const pid2 = Number(fs.readFileSync(pidFile, "utf8"));
+      assert.notStrictEqual(pid2, pid1, "a new genre replaces the player");
+      assert.ok(alive(pid2), "and the replacement plays");
+      live("--music", "off");
+      await until("music off stops the player", () => !alive(pid2));
+      assert.strictEqual(state().sessions.length, 2, "music off stops the sound, not the turns");
+      live("--music", "on");
+      assert.ok(alive(Number(fs.readFileSync(pidFile, "utf8"))), "music on starts it again for a running turn");
+      fs.rmSync(bin, { recursive: true, force: true });
       assert.strictEqual(cli("--stop").status, 0);
       const ended = events().slice(before);
       assert.deepStrictEqual(ended.map((e) => [e.event, e.reason]).sort(), [["ended", "stop"], ["ended", "stop"]], "--stop ends every session it drops");
