@@ -18,7 +18,7 @@ const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 100, scroll: { offset: 0, bodyRows: 4 }, view: {} },
 } as const
 
-type Setup = { files?: Record<string, string>; surfaces?: string[]; failRun?: boolean; strip?: boolean; state?: unknown }
+type Setup = { files?: Record<string, string>; surfaces?: string[]; failRun?: boolean; strip?: boolean; state?: unknown; doctor?: string; cwd?: string }
 
 // Answers everything the mod asks Claude Code for, and records what it did.
 async function boot($: any, on: any, opts: Setup = {}) {
@@ -42,9 +42,11 @@ async function boot($: any, on: any, opts: Setup = {}) {
   on('store.get', ($: any, e: any) => ({ value: saved.get(e.key) }))
   on('store.set', ($: any, e: any) => { saved.set(e.key, e.value); return { value: undefined } })
   on('session.id', () => ({ value: 'me' }))
+  on('session.cwd', () => ({ value: opts.cwd ?? '/work' }))
   on('process.run', ($: any, e: any) => {
     if (e.argv.includes('--state')) return { value: { exitCode: 0, stdout: JSON.stringify(opts.state ?? { v: 1, status: 'idle', sessions: [] }), stderr: '' } }
     ran.push(e.argv)
+    if (e.argv.includes('--doctor')) return { value: { exitCode: 1, stdout: opts.doctor ?? '', stderr: '' } }
     return opts.failRun ? { deny: 'spawn vibe ENOENT' } : { value: { exitCode: 0, stdout: '', stderr: '' } }
   })
   await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
@@ -195,4 +197,65 @@ test('strip needs on or off', async ($, on) => {
   const s = await boot($, on)
   await run($, 'strip maybe')
   expect(s.saved.get('strip')).toBe(false)
+})
+
+const DOCTOR_PANE = { ...PANE, requestId: 'vibeaudio-doctor' }
+const REPORT = [
+  '\u001b[1m\u001b[36mVibeAudio\u001b[0m v0.21.0 doctor',
+  '',
+  '  \u001b[32m\u2714\u001b[0m Audio player              \u001b[90mafplay\u001b[0m',
+  '  \u001b[33m!\u001b[0m Codex hook trust          \u001b[90m6 hooks not yet approved\u001b[0m',
+  '      fix: start codex and approve each VibeAudio hook once',
+  '',
+  '\u001b[32mNo problems\u001b[0m, 1 to look at.',
+].join('\n')
+
+test('here saves for this project only', async ($, on) => {
+  const s = await boot($, on)
+  await run($, 'genre zen here')
+  await run($, 'volume 20 here')
+  await run($, 'music off here')
+  await run($, 'genre zen everywhere')
+  expect(s.ran).toEqual([
+    ['vibe', '--genre', 'zen', '--here'],
+    ['vibe', '--volume', '20', '--here'],
+    ['vibe', '--music', 'off', '--here'],
+  ])
+})
+
+test('a folder\'s own settings are what the pane shows, found from a subfolder', async ($, on) => {
+  await boot($, on, {
+    cwd: '/work/app/src',
+    files: { '.vibeaudio/config.json': JSON.stringify({ genre: 'ocean', volume: 25, projects: { '/work/app': { genre: 'zen' } } }) },
+  })
+  await run($, '')
+  const ui = await $.ui.mount({ ...PANE })
+  expect(await ui.find({ type: 'Text', text: 'zen - 25% - music on - sound on - this project' })).toBeDefined()
+})
+
+test('the pane saves for the project when asked to', async ($, on) => {
+  const s = await boot($, on)
+  await run($, '')
+  const ui = await $.ui.mount({ ...PANE })
+  await ui.press({ key: 'scope' })
+  await ui.press({ key: 'vol-up' })
+  expect(s.ran).toEqual([['vibe', '--volume', '50', '--here']])
+})
+
+test('doctor shows the report even though vibe exits 1 on a problem', async ($, on) => {
+  const s = await boot($, on, { doctor: REPORT })
+  const r = await run($, 'doctor')
+  expect(s.ran).toEqual([['vibe', '--doctor']])
+  expect(r.text).toBeUndefined()
+  const ui = await $.ui.mount({ ...DOCTOR_PANE })
+  expect(await ui.find({ type: 'Text', text: /Codex hook trust/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /fix: start codex/ })).toBeDefined()
+})
+
+test('where nothing draws, doctor answers with the problems only', async ($, on) => {
+  await boot($, on, { surfaces: [], doctor: REPORT })
+  const r = await run($, 'doctor')
+  expect(r.text).toContain('Codex hook trust')
+  expect(r.text).toContain('fix: start codex')
+  expect(r.text).not.toContain('Audio player')
 })
