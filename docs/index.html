@@ -615,6 +615,26 @@ footer a{ color:var(--ink-dim); }
   <p style="margin-top:14px;font-size:12px;color:var(--ink-faint)">Not affiliated with or endorsed by the tools named.</p>
 </section>
 
+<section class="wrap" id="band-video">
+  <span class="eyebrow">new in v0.25.1 · claude code</span>
+  <h2 style="font-size:30px;max-width:32ch;">The band and the pane.</h2>
+  <p style="color:var(--ink-dim);max-width:60ch;margin-top:10px;">The optional <a href="https://github.com/kiril6/vibeaudio#vibeaudio-instant-controls-and-a-pane-claude-code-mod" style="color:inherit"><code>/vibeaudio</code> mod</a> puts your music above the prompt in Claude Code: switch genre, change the volume or mute in one click, even mid-turn, with no model turn and no tokens.</p>
+  <div class="vframe">
+    <div class="vframe-bar" aria-hidden="true"><span></span><span></span><span></span><em>VibeAudio <i class="vt"><b>&middot;</b> The band and the pane</i> <b>&middot;</b> 0:43</em></div>
+    <div class="vframe-stage">
+      <video playsinline preload="none" poster="video/band-poster.jpg" aria-label="VibeAudio band and pane in Claude Code, 43 seconds with sound">
+        <source src="video/vibeaudio-band.mp4" type="video/mp4">
+      </video>
+      <button class="vplay" type="button" aria-label="Play the 43-second band and pane demo with sound">
+        <span class="vplay-ring"></span><span class="vplay-ring r2"></span>
+        <span class="vplay-btn"><svg viewBox="0 0 24 24" width="38" height="38" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l11-6.8a1 1 0 0 0 0-1.72l-11-6.8A1 1 0 0 0 8 5.2z" fill="currentColor"/></svg></span>
+        <span class="vplay-label">Play with sound</span>
+      </button>
+      <i class="vc tl"></i><i class="vc tr"></i><i class="vc bl"></i><i class="vc br"></i>
+    </div>
+  </div>
+</section>
+
 <section class="wrap">
   <span class="eyebrow">features</span>
   <h2 style="font-size:30px;">The details that keep it out of the way.</h2>
@@ -1247,10 +1267,17 @@ fetch("https://registry.npmjs.org/vibeaudio/latest")
 </script>
 <script>
 (() => {
-  const f = document.getElementById("vframe"), v = document.getElementById("promo"), b = document.getElementById("vplay");
-  if (!f || !v || !b) return;
-  b.addEventListener("click", () => { v.controls = true; f.classList.add("playing"); v.play().catch(() => { f.classList.remove("playing"); v.controls = false; }); });
-  v.addEventListener("ended", () => { v.controls = false; f.classList.remove("playing"); v.currentTime = 0; });
+  const vids = [];
+  document.querySelectorAll(".vframe").forEach((f) => {
+    const v = f.querySelector("video"), b = f.querySelector(".vplay");
+    if (!v || !b) return;
+    vids.push(v);
+    b.addEventListener("click", () => {
+      vids.forEach((o) => { if (o !== v) o.pause(); }); // one soundtrack at a time
+      v.controls = true; f.classList.add("playing"); v.play().catch(() => { f.classList.remove("playing"); v.controls = false; });
+    });
+    v.addEventListener("ended", () => { v.controls = false; f.classList.remove("playing"); v.currentTime = 0; });
+  });
 })();
 </script>
 </body>
