@@ -289,6 +289,24 @@ test('an unknown theme gets the middle palette', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: '8BIT', color: '#1f9d55' })).toBeDefined()
 })
 
+test('the status chip is a dark block only on a dark theme', async ($, on) => {
+  const until = Date.now() + 4 * 60000
+  await boot($, on, { theme: 'light', files: { '.vibeaudio/muted': JSON.stringify({ since: 'x', until }) } })
+  await run($, '')
+  const ui = await $.ui.mount({ ...PANE })
+  const light = await ui.find({ type: 'Text', text: /^MUTED \d+ MIN$/ })
+  expect(light.props.color).toBe('#96590a')
+  expect(light.props.backgroundColor).toBeUndefined()
+})
+
+test('a dark theme keeps the dark status chip', async ($, on) => {
+  const until = Date.now() + 4 * 60000
+  await boot($, on, { theme: 'dark', files: { '.vibeaudio/muted': JSON.stringify({ since: 'x', until }) } })
+  await run($, '')
+  const ui = await $.ui.mount({ ...PANE })
+  expect(await ui.find({ type: 'Text', text: /MUTED/, color: '#ffb454', backgroundColor: '#140c22' })).toBeDefined()
+})
+
 test('band needs on or off', async ($, on) => {
   const s = await boot($, on)
   await run($, 'band maybe')

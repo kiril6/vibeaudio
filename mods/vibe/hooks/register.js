@@ -49,7 +49,8 @@ const PALETTES = {
   mid: { pink: '#e6007e', cyan: '#0e91ad', purple: '#9b4de8', amber: '#bf7a00', genre: { lofi: '#bf7a00', synthwave: '#e6007e', '8bit': '#1f9d55', electronic: '#0e91ad', jazz: '#e0541b', zen: '#12a37f', piano: '#3b82d6', drone: '#a05be0', rain: '#2e86de', ocean: '#14a898' } },
   light: { pink: '#c4006a', cyan: '#00728a', purple: '#7a2fd0', amber: '#96590a', genre: { lofi: '#96590a', synthwave: '#c4006a', '8bit': '#17753f', electronic: '#00728a', jazz: '#b8400f', zen: '#0d7a5f', piano: '#1f5fb0', drone: '#7e3fc0', rain: '#1c64b8', ocean: '#0d7f73' } },
 }
-// The status chip is dark on every theme, so its text always uses the neon set.
+// The status chip: a dark block with neon text on a dark theme. On a light or auto theme
+// it is plain bold text in the theme's ink, since a dark block on white looked heavy.
 const CHIP = { bg: '#140c22', ...PALETTES.dark }
 let INK = PALETTES.mid
 
@@ -526,9 +527,10 @@ export function register(on) {
     const logo = e.surface === 'terminal'
       ? Text({ color: INK.pink, bold: true, children: [logoText(live)] })
       : Svg({ source: logoSvg(live), alt: 'VibeAudio', width: 48, height: 42, isInteractive: live })
+    const ink = INK === PALETTES.dark ? CHIP : INK
     const pill = muted
-      ? { text: ' MUTED ' + (left === null ? '' : left + ' MIN '), color: CHIP.amber }
-      : live ? { text: ' PLAYING ', color: CHIP.cyan } : view.music ? { text: ' READY ', color: '#b3a3d6' } : { text: ' MUSIC OFF ', color: '#b3a3d6' }
+      ? { text: ' MUTED ' + (left === null ? '' : left + ' MIN '), color: ink.amber }
+      : live ? { text: ' PLAYING ', color: ink.cyan } : view.music ? { text: ' READY ', color: INK === PALETTES.dark ? '#b3a3d6' : undefined } : { text: ' MUSIC OFF ', color: INK === PALETTES.dark ? '#b3a3d6' : undefined }
     const week = stats ? stats.turns + (stats.turns === 1 ? ' turn' : ' turns') + (stats.turns ? ', ' + duration(stats.waited) + ' waited' : '') : 'no history yet'
     const filled = Math.round(view.volume / 10)
 
@@ -549,7 +551,9 @@ export function register(on) {
                 Text({ dimColor: true, children: ['Focus music while your AI codes'] }),
               ],
             }),
-            Text({ color: pill.color, bold: true, backgroundColor: CHIP.bg, children: [pill.text] }),
+            INK === PALETTES.dark
+              ? Text({ color: pill.color, bold: true, backgroundColor: CHIP.bg, children: [pill.text] })
+              : Text({ ...(pill.color ? { color: pill.color } : { dimColor: true }), bold: true, children: [pill.text.trim()] }),
           ],
         }),
         panel(Box, Text, 'NOW PLAYING', accent, [
