@@ -429,6 +429,12 @@ The optional [`/vibeaudio` mod](#vibeaudio-instant-controls-and-a-pane-claude-co
 
 `/vibe` is a prompt, so Claude has to read it, run a command and answer: it costs a turn and a few tokens, and it waits for the current turn to end. The optional **VibeAudio mod** runs inside Claude Code instead, so `/vibeaudio mute` takes effect at once, even while Claude is working, and costs no tokens.
 
+<p align="center">
+  <a href="https://kiril6.github.io/vibeaudio/#band-video"><img src="docs/video/band-poster.jpg" alt="The VibeAudio band above the Claude Code prompt" width="49%"></a>
+  <a href="https://kiril6.github.io/vibeaudio/#band-video"><img src="docs/video/pane.jpg" alt="The VibeAudio pane: now playing, sound, alerts and share" width="49%"></a>
+  <br><sub>▶ <a href="https://kiril6.github.io/vibeaudio/#band-video">Watch the 43-second demo</a> of the band and the pane (frames from the demo video, with sound on the site).</sub>
+</p>
+
 ```text
 claude plugin marketplace add kiril6/vibeaudio
 claude plugin install vibeaudio-mod@vibeaudio
