@@ -160,7 +160,7 @@ vibe npm test
 vibe claude -p "explain this repo"
 ```
 
-**Lost?** `vibe --help` lists every flag, and `vibe --status` reads your live setup back to you — what's installed, what's playing, and which agents it found. If something seems broken, `vibe --doctor` checks it and prints the fix for each problem.
+**Lost?** `vibe --help` lists every flag, and `vibe --status` reads your live setup back to you — what's installed, what's playing, and which agents it found. Its first line says why the music is silent or playing right now (`silent: muted for 42 more min (vibe --unmute)`, `playing: lofi @ 40%, 2 sessions working (api, web)`). If something seems broken, `vibe --doctor` checks it and prints the fix for each problem.
 
 > **Which one you want:** the wrapper plays music for as long as the wrapped process lives. That's exactly right for a command that exits when its work is done — and wrong for an interactive REPL like `claude`, where the process stays alive while you read and type, so the music never stops. Hooks know when the agent is actually thinking; the wrapper can only time the process.
 
@@ -870,7 +870,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--no-hud` | Disable terminal window/tab title animation | `false` |
 | `--preview <genre>` | Play one loop of a genre and exit | — |
 | `--render [file]` | Write this project's music to a `.wav` and exit (full scale, ignores `--volume`) | `vibeaudio-<genre>.wav` |
-| `--status` | Show what's installed, running and detected, then exit | — |
+| `--status` | Say why the music is silent or playing, then show what's installed, running and detected, and exit | — |
 | `--doctor` | Check the setup; every problem comes with the command that fixes it. Exits 1 on a failure, so it scripts | — |
 | `--notify` / `--no-notify` | Also show a desktop banner naming the project when a turn finishes, fails or needs you. Saved to `config.json` | off |
 | `--speak` / `--speak-always` / `--no-speak` | Say which project finished, failed or needs you, after the chime: only with two or more sessions going (`--speak`), or every time (`--speak-always`). Saved to `config.json` | off |
@@ -940,6 +940,8 @@ The expiry is deliberate too. A call is a bounded thing; a mute you forget about
 ---
 
 ## 🔧 Troubleshooting
+
+**Start with `vibe --status`.** Its first line answers "why is it silent?" or "why is it still playing?" in one sentence, with the command that changes it: a mute and how long it has left, `VIBE_DISABLE` in your shell, no audio player, music turned off (globally, for this project, or by `VIBE_MUSIC`), a session waiting on you, or simply no agent working right now.
 
 **No sound at all**
 Check that a player exists for your platform (see [Requirements](#-requirements)). VibeAudio prints a notice to stderr when it can't find one. On Linux: `sudo apt install pulseaudio-utils` (or `ffmpeg` / `alsa-utils`).

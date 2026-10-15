@@ -805,6 +805,50 @@ function formatStatusline({ status, sessions }) {
   return `${status}${project}${active.length > 1 ? ` ×${active.length}` : ""}`;
 }
 
+/**
+ * "Why is it silent?" / "why is it still playing?" as one line, the first of
+ * --status (#76). Pure over what --status gathers (`musicFacts()` in cli.js),
+ * so the order is the test: what silences everything (VIBE_DISABLE, a mute)
+ * outranks what silences only the music, and a running player outranks every
+ * reason it might not be running. Each silent line names the command that
+ * changes it. `mute` is the minutes left, Infinity for an open-ended mute,
+ * null when not muted; `musicSource` is "env", "project" or "" (saved or default).
+ */
+function explainMusic({ disabledByEnv, mute, backend, daemon, genre, volume, music, musicSource, sessions }) {
+  const names = (list) => {
+    const all = [...new Set(list.map((s) => (s.project ? projectName(s.project) : null)).filter(Boolean))];
+    return all.length > 3 ? `${all.slice(0, 3).join(", ")} +${all.length - 3}` : all.join(", ");
+  };
+  const counted = (list, word) => {
+    const n = names(list);
+    return `${list.length} session${list.length === 1 ? "" : "s"} ${word}${n ? ` (${n})` : ""}`;
+  };
+  const silent = (text) => ({ playing: false, text: `silent: ${text}` });
+  const working = sessions.filter((s) => s.state !== "waiting");
+  const waiting = sessions.filter((s) => s.state === "waiting");
+
+  if (disabledByEnv) return silent("VIBE_DISABLE is set in this shell (unset it to hear music)");
+  if (mute != null) return silent(`muted ${mute === Infinity ? "until you unmute" : `for ${mute} more min`} (vibe --unmute)`);
+  if (!backend) return silent("no audio player found on this machine (vibe --doctor)");
+  if (daemon) {
+    const stuck = sessions.filter((s) => s.state === "stuck");
+    const level = volume === null ? "" : ` @ ${volume}%`;
+    return {
+      playing: true,
+      text: `playing: ${daemon.genre || genre}${level}, ${working.length ? counted(working, "working") : "finishing a turn"}` +
+        `${stuck.length ? `; heartbeat on, ${names(stuck) || "a session"} keeps failing` : ""}`
+    };
+  }
+  if (waiting.length && !working.length) return silent(`${counted(waiting, "waiting on you")}; music resumes when you answer`);
+  if (!music) {
+    // The fix has to beat whatever turned it off: a saved global does not outrank an export or --here.
+    const [where, fix] = { env: [" by VIBE_MUSIC in this shell", "unset VIBE_MUSIC"], project: [" for this project", "vibe --music on --here"] }[musicSource] || ["", "vibe --music on"];
+    return silent(`music is off${where}; chimes still play (${fix})`);
+  }
+  if (working.length) return silent(`${counted(working, "working")} but the player is not running (vibe --doctor)`);
+  return silent("no agent is working; music starts with your next prompt");
+}
+
 const EVENTS_MAX_BYTES = 256 * 1024;
 
 /**
@@ -1781,6 +1825,7 @@ module.exports = {
   STUCK_WINDOW,
   agentState,
   formatStatusline,
+  explainMusic,
   followEvents,
   EVENTS_FILE,
   hookEnd,
