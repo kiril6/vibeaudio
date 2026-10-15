@@ -41,6 +41,9 @@ const HOOK_ACTIONS = [
 ];
 
 function printHelp() {
+  // Both callers process.exit() next. On macOS a piped stdout is async, so Node 18/20
+  // dropped everything past the 8 KB pipe buffer (CI on #77). Blocking writes flush first.
+  process.stdout._handle?.setBlocking?.(true);
   console.log(`
 \x1b[1m\x1b[36mVibeAudio\x1b[0m v${pkg.version}
 Procedural focus music while your AI coding tools think.
