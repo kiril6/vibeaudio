@@ -41,6 +41,9 @@ const HOOK_ACTIONS = [
 ];
 
 function printHelp() {
+  // Both callers process.exit() next. On macOS a piped stdout is async, so Node 18/20
+  // dropped everything past the 8 KB pipe buffer (CI on #77). Blocking writes flush first.
+  process.stdout._handle?.setBlocking?.(true);
   console.log(`
 \x1b[1m\x1b[36mVibeAudio\x1b[0m v${pkg.version}
 Procedural focus music while your AI coding tools think.
@@ -80,7 +83,8 @@ Procedural focus music while your AI coding tools think.
       --no-hud                 Disable terminal window/tab title animation
       --preview <genre>        Play one loop of a genre and exit
       --render [file]          Write this project's music to a .wav and exit (full scale, ignores --volume)
-      --status                 Show what is installed, running and detected, then exit
+      --status                 Say why the music is silent or playing, then show what is
+                               installed, running and detected, and exit
       --notify | --no-notify   Also show a desktop banner naming the project when a turn finishes, fails, needs you or looks stuck (macOS and Linux; off by default)
       --speak | --no-speak     Also say which project finished, failed or needs you, after the chime - with two or more sessions going (off by default)
       --speak-always           Like --speak, but every time, even with one session
@@ -869,21 +873,37 @@ function uninstallHookTargets() {
  * do". Every line is read from live state rather than assumed, because the
  * usual cause of confusion is a mismatch between config and what is running.
  */
+// What hooks.explainMusic() needs, read once: the same sources the sections of
+// --status read, so the one-line answer cannot disagree with them.
+function musicFacts() {
+  const hooks = require("./hooks");
+  const { muteState, playbackDisabled, detectPlayer: detect } = require("./player");
+  const mute = muteState();
+  const daemon = hooks.daemonPlaying();
+  return {
+    disabledByEnv: mute === null && playbackDisabled(),
+    mute: mute === null ? null : mute.until ? Math.max(1, Math.round((mute.until - Date.now()) / 60000)) : Infinity,
+    backend: Boolean(detect()),
+    daemon,
+    genre: genreNow(),
+    volume: daemon ? (daemon.follows ? Math.round(volumeNow() * 100) : daemon.volume) : null,
+    music: musicEnabled(),
+    musicSource: process.env.VIBE_MUSIC ? "env" : projectSettings(loadConfig()).music !== undefined ? "project" : "",
+    sessions: hooks.agentState().sessions
+  };
+}
+
 function printStatus() {
   const hooks = require("./hooks");
-  const { playbackDisabled, detectPlayer: detect, CACHE_ROOT } = require("./player");
+  const { detectPlayer: detect, CACHE_ROOT } = require("./player");
   const on = (s) => `\x1b[32m${s}\x1b[0m`;
   const off = (s) => `\x1b[90m${s}\x1b[0m`;
 
   console.log(`\n\x1b[1m\x1b[36mVibeAudio\x1b[0m v${pkg.version}\n`);
 
-  const { muteState, muteRemainingText } = require("./player");
-  const mute = muteState();
-  if (mute !== null) {
-    console.log(`\x1b[33m🔇 Muted ${muteRemainingText(mute)}\x1b[0m \x1b[90m(since ${mute.since})\x1b[0m\n`);
-  } else if (playbackDisabled()) {
-    console.log(`\x1b[33m⏸ Muted by VIBE_DISABLE=${process.env.VIBE_DISABLE}\x1b[0m — automatic playback is off (--preview still works).\n`);
-  }
+  // The answer first (#76): everything below is the detail behind it.
+  const now = hooks.explainMusic(musicFacts());
+  console.log(`\x1b[1mNow\x1b[0m  ${now.playing ? on(now.text) : `\x1b[33m${now.text}\x1b[0m`}\n`);
 
   // What will actually play, and which of the three possible sources decided
   // it - the usual confusion is a saved default quietly beaten by an export.
