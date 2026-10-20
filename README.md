@@ -878,6 +878,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--report [days]` | How long you waited on agents, and on which projects, from the local turn log | `7` days |
 | `--card [--out <path>]` | With `--report`: the totals as a shareable image - PNG on macOS, SVG anywhere - saved to `~/.vibeaudio/card.png`, replaced each run | off |
 | `--statusline` | The same state as one plain line for tmux or a shell prompt (`working ×2`, `waiting: api`); prints nothing when idle | — |
+| `--why` | Why the music is playing or silent, as one plain line (the first line of `--status`) | — |
 | `--state` | What every agent on the machine is doing, as one line of JSON: `idle`, `working`, `stuck` or `waiting` | — |
 | `--events` | Stream agent state changes as JSON lines, starting with the current state, until stopped | — |
 | `--dashboard` | Serve a read-only live view of every agent on this machine at `http://127.0.0.1:4747`, and open it. `--port <n>` and `--no-open` adjust it | — |

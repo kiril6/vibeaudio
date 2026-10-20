@@ -23,6 +23,7 @@ let cardIsPng = false
 // The optional band above the prompt: off until asked, remembered in $.store.
 let strip = false
 let others = []
+let why = '' // `vibe --why`: the CLI's one-line answer to why it is playing or silent
 const POLL_MS = 5000
 const FRAME_MS = 600
 // This session's turn (turn.start / turn.complete), the last 7 days from
@@ -112,6 +113,7 @@ async function refresh($) {
   }
   await readStats($)
   await readTheme($)
+  await readWhy($)
   if (usageOn) {
     try { takeUsage(await $.session.usage()) } catch (err) { usage = null }
   }
@@ -283,8 +285,19 @@ async function openCard($) {
 }
 
 // Other agents on this machine, from `vibe --state`; only polled while the band is on.
+// The CLI's own words (explainMusic), so the pane and band cannot disagree with --status.
+async function readWhy($) {
+  const r = await vibe($, ['--why'], 5000)
+  const next = r.ok ? firstLine(r.out) : ''
+  if (next !== why) {
+    why = next
+    $.ui.invalidate('ui.render')
+  }
+}
+
 async function pollOthers($) {
   if (!strip) return
+  await readWhy($)
   const r = await vibe($, ['--state'], 5000)
   let next = []
   try {
@@ -567,6 +580,7 @@ export function register(on) {
             ],
           }),
           Text({ dimColor: true, children: [summary().replace(view.genre + ' - ' + view.volume + '% - ', '')] }), // genre and volume are on the line above
+          ...(why ? [Text({ children: [why] })] : []),
           row([
             muted
               ? Button({ key: 'unmute', label: 'Unmute (m)', hotkey: 'm', onPress: run(['--unmute'], 'Unmuted') })
@@ -703,6 +717,7 @@ export function register(on) {
                   ...useText,
                 ] }),
                 Box({ flexDirection: 'row', columnGap: 2, flexWrap: 'wrap', children: buttons }),
+                ...(why ? [Text({ dimColor: true, children: [why] })] : []),
               ],
             }),
           ],
