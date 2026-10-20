@@ -266,7 +266,7 @@ const TARGETS = {
     seed: () => ({}),
     // Codex records a trusted_hash per hook in config.toml and asks before
     // running one it has not seen, so the install is not live until approved.
-    note: "Codex asks you to trust each new hook the first time it fires — approve each one once."
+    note: "Codex asks you to trust each new hook once — in the desktop app via Review hooks in the composer (Allow all), in the CLI the first time each fires."
   },
   cursor: {
     name: "Cursor",
