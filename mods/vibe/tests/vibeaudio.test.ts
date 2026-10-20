@@ -18,7 +18,7 @@ const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 100, scroll: { offset: 0, bodyRows: 4 }, view: {} },
 } as const
 
-type Setup = { files?: Record<string, string>; surfaces?: string[]; failRun?: boolean; strip?: boolean; state?: unknown; doctor?: string; cwd?: string; theme?: string; usage?: unknown }
+type Setup = { files?: Record<string, string>; surfaces?: string[]; failRun?: boolean; strip?: boolean; state?: unknown; doctor?: string; cwd?: string; theme?: string; usage?: unknown; why?: string }
 
 // Answers everything the mod asks Claude Code for, and records what it did.
 async function boot($: any, on: any, opts: Setup = {}) {
@@ -50,6 +50,7 @@ async function boot($: any, on: any, opts: Setup = {}) {
   on('session.cwd', () => ({ value: opts.cwd ?? '/work' }))
   on('process.run', ($: any, e: any) => {
     if (e.argv.includes('--state')) return { value: { exitCode: 0, stdout: JSON.stringify(opts.state ?? { v: 1, status: 'idle', sessions: [] }), stderr: '' } }
+    if (e.argv.includes('--why')) return { value: { exitCode: 0, stdout: (opts.why ?? '') + '\n', stderr: '' } }
     ran.push(e.argv)
     if (e.argv.includes('--doctor')) return { value: { exitCode: 1, stdout: opts.doctor ?? '', stderr: '' } }
     return opts.failRun ? { deny: 'spawn vibe ENOENT' } : { value: { exitCode: 0, stdout: '', stderr: '' } }
@@ -177,6 +178,17 @@ test('band on is remembered, and the band shows the sound and its buttons', asyn
   expect(await ui.find({ type: 'Text', text: '♪ jazz 30%' })).toBeDefined()
   await ui.press({ key: 'strip-mute' })
   expect(s.ran).toEqual([['vibe', '--mute']])
+})
+
+test('the pane and the band say why, in the CLI\'s own words', async ($, on) => {
+  const why = 'silent: music is off for this project; chimes still play (vibe --music on --here)'
+  const s = await boot($, on, { why, strip: true })
+  await run($, '')
+  const pane = await $.ui.mount({ ...PANE })
+  expect(await pane.find({ type: 'Text', text: why })).toBeDefined()
+  const band = await $.ui.mount({ ...BAND })
+  expect(await band.find({ type: 'Text', text: why })).toBeDefined()
+  expect(s.ran).toEqual([]) // reading it is not a change
 })
 
 test('the band comes back on its own in the next session', async ($, on) => {

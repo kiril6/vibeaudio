@@ -3800,6 +3800,16 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.ok(!/\x1b/.test(statusline().stdout), "plain text: tmux and Starship do their own styling");
       spawnSync(process.execPath, [CLI, "--stop"], { env, timeout: 10000 });
       assert.strictEqual(statusline().stdout, "");
+
+      // --why (#60): --status's first line, plain, for the mod.
+      assert.strictEqual(parseArgs(["node", "vibe", "--why"]).why, true);
+      assert.strictEqual(parseArgs(["node", "vibe", "npm", "--why"]).why, false, "after the command it is the child's flag");
+      const why = spawnSync(process.execPath, [CLI, "--why"], { env: { ...env, VIBE_DISABLE: "" }, encoding: "utf8", timeout: 10000 });
+      const status = spawnSync(process.execPath, [CLI, "--status"], { env: { ...env, VIBE_DISABLE: "" }, encoding: "utf8", timeout: 10000 });
+      assert.strictEqual(why.status, 0);
+      assert.ok(/^(playing|silent): [^\n]+\n$/.test(why.stdout) && !/\x1b/.test(why.stdout), "one plain line");
+      assert.ok(status.stdout.replace(/\x1b\[[0-9;]*m/g, "").includes(`Now  ${why.stdout.trim()}`), "the same words --status opens with");
+      assert.ok(/VIBE_DISABLE is set/.test(spawnSync(process.execPath, [CLI, "--why"], { env, encoding: "utf8", timeout: 10000 }).stdout), "the reasons follow explainMusic's order");
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }

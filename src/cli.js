@@ -99,6 +99,7 @@ Procedural focus music while your AI coding tools think.
       --port <n>               With --dashboard: the port (default ${require("./dashboard").DEFAULT_PORT}, else a free one)
       --no-open                With --dashboard: do not open the browser
       --statusline             Print that as one plain line for tmux or a prompt; prints nothing when idle
+      --why                    One plain line: why the music is playing or silent (the first line of --status)
       --events                 Stream agent state changes as JSON lines, until stopped
       --doctor                 Check the setup; each problem comes with its fix (exit 1 if any)
       --stop                   Stop the background player, then exit
@@ -238,6 +239,7 @@ function parseArgs(argv) {
   let statusFlag = false;
   let stateFlag = false;
   let statuslineFlag = false;
+  let whyFlag = false;
   let eventsFlag = false;
   let doctorFlag = false;
   let notifyFlag = null;
@@ -418,6 +420,12 @@ function parseArgs(argv) {
 
     if (arg === "--statusline") {
       statuslineFlag = true;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--why") {
+      whyFlag = true;
       i += 1;
       continue;
     }
@@ -649,6 +657,7 @@ function parseArgs(argv) {
     status: statusFlag,
     state: stateFlag,
     statusline: statuslineFlag,
+    why: whyFlag,
     music,
     events: eventsFlag,
     doctor: doctorFlag,
@@ -1837,6 +1846,7 @@ async function run() {
     status: showStatus,
     state: showState,
     statusline: showStatusline,
+    why: showWhy,
     music,
     events: followEvents,
     doctor: showDoctor,
@@ -2008,6 +2018,13 @@ async function run() {
     const hooks = require("./hooks");
     const line = hooks.formatStatusline(hooks.agentState());
     if (line) console.log(line);
+    return;
+  }
+
+  // --status's first line without the rest, plain: for the mod's pane and band (#60), a prompt segment, a script.
+  if (showWhy) {
+    const hooks = require("./hooks");
+    console.log(hooks.explainMusic(musicFacts()).text);
     return;
   }
 
