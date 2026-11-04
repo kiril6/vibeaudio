@@ -2208,6 +2208,14 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ session_id: "s1", tool_name: "run_shell_command" }));
         assert.ok(playing(), "a wait that named no tool resumes on whichever tool finishes");
 
+        // Copilot's ask_user: the Notification is camelCase (`sessionId`, seen
+        // live), unlike its snake_case Stop. Unread, the wait hit the `anon`
+        // slot and the music played on under the question.
+        cli(["--hook-wait"], JSON.stringify({ sessionId: "s1", notificationType: "elicitation_dialog", title: "Information requested" }));
+        assert.ok(!playing(), "Copilot's camelCase elicitation_dialog must pause the music");
+        cli(["--hook-resume", "--genre", "zen", "--volume", "5"], JSON.stringify({ session_id: "s1", tool_name: "ask_user" }));
+        assert.ok(playing(), "and its tool result resumes it");
+
         // An API error never reaches Stop; StopFailure is the only end.
         fs.writeFileSync(log, "");
         cli(["--hook-stop"], JSON.stringify({ session_id: "s1", hook_event_name: "StopFailure", error: "rate_limit" }));
