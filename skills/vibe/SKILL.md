@@ -5,9 +5,12 @@ argument-hint: "[status | mute [minutes] | unmute | stop | genre <name> | volume
 disable-model-invocation: true
 ---
 Control VibeAudio, the focus music that plays while you work, for the user.
-Arguments: `$ARGUMENTS`
+Arguments: `$ARGUMENTS` (if that is not filled in, as in Codex: the words after
+the skill's name in the user's message).
+If `${CLAUDE_PLUGIN_ROOT}` below is not filled in either, it is the folder two
+levels above this SKILL.md.
 
-Run the one matching command with the Bash tool, then report the result in a
+Run the one matching command in the shell (the Bash tool), then report the result in a
 single short sentence. Do nothing else.
 
 - no arguments, or `status`: `node "${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js" --status`

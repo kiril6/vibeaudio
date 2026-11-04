@@ -2516,6 +2516,44 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.strictEqual(hooks.uninstallSlashCommand({ file: slash }), false, "nor deleted");
       assert.strictEqual(fs.readFileSync(slash, "utf8"), "my own vibe command");
 
+      // $vibe for Codex (#27): a skill folder with implicit invocation off, the
+      // same rules as /vibe, and a folder holding anything else is left behind.
+      const skillDir = path.join(dir, "codex", "skills", "vibe");
+      const skillFile = path.join(skillDir, "SKILL.md");
+      assert.strictEqual(hooks.installCodexSkill({ dir: skillDir, dryRun: true }).installed, true);
+      assert.ok(!fs.existsSync(skillDir), "a dry run must not write the skill");
+      assert.strictEqual(hooks.installCodexSkill({ dir: skillDir }).installed, true);
+      const skill = fs.readFileSync(skillFile, "utf8");
+      assert.ok(skill.startsWith("---\nname: vibe\n") && /--mute/.test(skill) && skill.includes(path.join(__dirname, "..", "bin", "vibeaudio.js")),
+        "$vibe must be a skill that runs this CLI");
+      assert.ok(!skill.includes("$ARGUMENTS"), "Codex substitutes no $ARGUMENTS, so the skill must not rely on it");
+      assert.ok(/allow_implicit_invocation: false/.test(fs.readFileSync(path.join(skillDir, "agents", "openai.yaml"), "utf8")),
+        "the model must not invoke $vibe on its own");
+      assert.strictEqual(hooks.uninstallCodexSkill({ dir: skillDir }), true);
+      assert.ok(!fs.existsSync(skillDir), "uninstall removes the folder it made");
+      fs.mkdirSync(skillDir, { recursive: true });
+      fs.writeFileSync(skillFile, "my own vibe skill");
+      assert.strictEqual(hooks.installCodexSkill({ dir: skillDir }).installed, false, "a user's vibe skill must not be overwritten");
+      assert.strictEqual(hooks.uninstallCodexSkill({ dir: skillDir }), false, "nor deleted");
+      assert.strictEqual(fs.readFileSync(skillFile, "utf8"), "my own vibe skill");
+      fs.rmSync(skillFile);
+      hooks.installCodexSkill({ dir: skillDir });
+      fs.writeFileSync(path.join(skillDir, "notes.md"), "mine");
+      assert.strictEqual(hooks.uninstallCodexSkill({ dir: skillDir }), true);
+      assert.deepStrictEqual(fs.readdirSync(skillDir), ["notes.md"], "only our files go; the user's stay");
+
+      // Through the flags: the Codex install writes it, uninstall takes it away.
+      const codexHomeDir = path.join(dir, "home2");
+      fs.mkdirSync(codexHomeDir);
+      const cenv = { ...process.env, HOME: codexHomeDir, USERPROFILE: codexHomeDir };
+      const homeSkill = path.join(codexHomeDir, ".codex", "skills", "vibe", "SKILL.md");
+      const inst = spawnSync(process.execPath, [CLI, "--install-hooks", "--tools", "codex"], { env: cenv, encoding: "utf8", timeout: 20000 });
+      assert.strictEqual(inst.status, 0, `codex install failed: ${inst.stderr}`);
+      assert.ok(fs.existsSync(homeSkill) && /\$vibe/.test(inst.stdout), "the Codex install must write $vibe and say so");
+      const uninst = spawnSync(process.execPath, [CLI, "--uninstall-hooks"], { env: cenv, encoding: "utf8", timeout: 20000 });
+      assert.strictEqual(uninst.status, 0, `uninstall failed: ${uninst.stderr}`);
+      assert.ok(!fs.existsSync(homeSkill), "--uninstall-hooks must remove $vibe");
+
       // The mod hint: shown until Claude Code lists the plugin as installed.
       const plugins = path.join(dir, "installed_plugins.json");
       assert.strictEqual(hooks.modInstalled(plugins), false, "no plugins file: not installed");

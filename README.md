@@ -304,7 +304,7 @@ Where an agent reports more than start and stop, VibeAudio listens for that too 
 | **Cursor and Antigravity say how a turn ended** | Cursor's stop event reports whether the turn completed, aborted or errored, and Antigravity's gives a termination reason, so an error plays the failure chime. Claude Code and Qwen Code send a separate `StopFailure` for an API error. The others send no verdict, so a turn there always ends on the success chime — VibeAudio won't invent a failure the agent never claimed. |
 | <a id="antigravity-hooks"></a>**Antigravity never gets a pre-tool hook** | Its pre-tool hook has to approve or deny every tool call — one that answers nothing blocks the tool — so VibeAudio installs none, and `--reactive` does nothing there. It has no prompt event either: the start event fires before every model call, and VibeAudio starts the music on the first one of each prompt only. Its hooks live in `~/.gemini/config/hooks.json` under a name of their own, so your other named hooks there are never touched. Verified with the `agy` CLI; the desktop app reads the same file by Antigravity's own docs but hasn't been checked live. |
 | **Upgraded, and a new feature isn't there?** | Hooks are written into your agent's config once, at install time, and an upgrade doesn't touch them. When a new version listens for more events (0.13.1 added Codex's `Interrupt` and `SessionEnd`), `vibe --doctor` and `vibe --status` name what's missing, and `vibe --install-hooks` adds it. |
-| **Moved your config folder?** | VibeAudio follows `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `COPILOT_HOME`, `GEMINI_CLI_HOME`, `QWEN_HOME` and `GROK_HOME` the way each agent does, so hooks (and `/vibe`) go where your agent actually reads them. Cursor and Windsurf have no such variable that we could confirm. Set the variable in the shell you run `vibe --install-hooks` from. |
+| **Moved your config folder?** | VibeAudio follows `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `COPILOT_HOME`, `GEMINI_CLI_HOME`, `QWEN_HOME` and `GROK_HOME` the way each agent does, so hooks (and `/vibe`, `$vibe`) go where your agent actually reads them. Cursor and Windsurf have no such variable that we could confirm. Set the variable in the shell you run `vibe --install-hooks` from. |
 | **Grok and Copilot CLI get a file of their own** | Each reads every `*.json` in its `hooks/` directory, so VibeAudio writes `vibeaudio.json` rather than merging into anyone else's — which makes uninstalling it a delete, and leaves no backup file behind. Copilot's honours `COPILOT_HOME`. |
 
 </details>
@@ -401,7 +401,7 @@ codex plugin add vibeaudio@vibeaudio
 
 Codex asks you to approve the plugin's hooks once, as it does for any hook. Update with `codex plugin marketplace upgrade vibeaudio`; remove with `codex plugin remove vibeaudio@vibeaudio`.
 
-The plugin needs Node 18+ on your `PATH` (the hooks run `node`). In Claude Code it also adds `/vibeaudio:vibe`, the plugin's spelling of [`/vibe`](#vibe-inside-claude-code). Update with `claude plugin update vibeaudio@vibeaudio`; remove with `claude plugin uninstall vibeaudio@vibeaudio` (music already playing stops on its own within 15 minutes, or run `/vibeaudio:vibe stop` first).
+The plugin needs Node 18+ on your `PATH` (the hooks run `node`). In Claude Code it also adds `/vibeaudio:vibe`, the plugin's spelling of [`/vibe`](#vibe-inside-claude-code), and in Codex `$vibeaudio:vibe`. Update with `claude plugin update vibeaudio@vibeaudio`; remove with `claude plugin uninstall vibeaudio@vibeaudio` (music already playing stops on its own within 15 minutes, or run `/vibeaudio:vibe stop` first).
 
 <details>
 <summary><b>Plugin details & coexistence with npm</b> — settings file, coexistence, and limitations</summary>
@@ -426,6 +426,8 @@ Installing the Claude Code hooks also adds a `/vibe` command (`~/.claude/command
 ```
 
 The optional [`/vibeaudio` mod](#vibeaudio-instant-controls-and-a-pane-claude-code-mod) does the same instantly with no turn; `/vibe` is the version that works everywhere. It asks Claude to run the matching `vibe` command, so Claude Code will ask permission for that command the first time. If you already have your own `vibe.md` there, VibeAudio leaves it alone and says so; `--uninstall-hooks` removes only its own.
+
+**In Codex it is `$vibe`.** Installing the Codex hooks also adds a `vibe` skill (`~/.codex/skills/vibe/`, or under `$CODEX_HOME`), with the same words: `$vibe mute 30`, `$vibe status`, `$vibe genre jazz`. Codex only runs it when you type it, never on its own, and a `vibe` skill of your own is left alone. Installed as a Codex plugin, the same skill is `$vibeaudio:vibe`.
 
 ### `/vibeaudio`: instant controls and a pane (Claude Code mod)
 

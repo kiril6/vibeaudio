@@ -1718,10 +1718,11 @@ function modInstalled(file = path.join(claudeConfigDir(), "plugins", "installed_
   try { return fs.readFileSync(file, "utf8").includes("vibeaudio-mod"); } catch { return false; }
 }
 
+const CONTROL_DESCRIPTION = "Control VibeAudio - status, mute, unmute, stop, or change genre or volume";
+
 function slashCommandText() {
-  const cli = `${shellQuote(process.execPath)} ${shellQuote(CLI_ENTRY)}`;
   return `---
-description: Control VibeAudio - status, mute, unmute, stop, or change genre or volume
+description: ${CONTROL_DESCRIPTION}
 argument-hint: "[status | mute [minutes] | unmute | stop | genre <name> | volume <5-100>]"
 ---
 ${SLASH_MARK}
@@ -1731,7 +1732,67 @@ Arguments: \`$ARGUMENTS\`
 Run the one matching command with the Bash tool, then report the result in a
 single short sentence. Do nothing else.
 
-- no arguments, or \`status\`: \`${cli} --status\`
+${controlCommands()}`;
+}
+
+/**
+ * `$vibe` inside Codex (#27): the same commands as /vibe, as a user skill next
+ * to Codex's hooks.json. Codex injects SKILL.md verbatim and substitutes no
+ * `$ARGUMENTS`, so the body names where the arguments are instead. Unknown
+ * front matter keys are accepted; what keeps the model from muting on its own
+ * is `allow_implicit_invocation: false` in agents/openai.yaml, Codex's key.
+ */
+const CODEX_SKILL_MARK = "<!-- vibeaudio:codex-skill -->";
+const CODEX_SKILL_POLICY = "policy:\n  allow_implicit_invocation: false\n";
+
+function codexSkillDir() {
+  return path.join(codexHome(), "skills", "vibe");
+}
+
+function codexSkillText() {
+  return `---
+name: vibe
+description: ${CONTROL_DESCRIPTION}
+---
+${CODEX_SKILL_MARK}
+Control VibeAudio, the focus music that plays while you work, for the user.
+The arguments are the words after \`$vibe\` in the user's message.
+
+Run the one matching command in the shell, then report the result in a
+single short sentence. Do nothing else.
+
+${controlCommands()}`;
+}
+
+function installCodexSkill({ dir = codexSkillDir(), dryRun = false } = {}) {
+  const file = path.join(dir, "SKILL.md");
+  if (fs.existsSync(file) && !fs.readFileSync(file, "utf8").includes(CODEX_SKILL_MARK)) {
+    return { file, installed: false, reason: "a vibe skill that is not ours is already there" };
+  }
+  if (!dryRun) {
+    fs.mkdirSync(path.join(dir, "agents"), { recursive: true });
+    fs.writeFileSync(file, codexSkillText());
+    fs.writeFileSync(path.join(dir, "agents", "openai.yaml"), CODEX_SKILL_POLICY);
+  }
+  return { file, installed: true };
+}
+
+// Removes our two files, then the folders only if nothing else was put in them.
+function uninstallCodexSkill({ dir = codexSkillDir() } = {}) {
+  const file = path.join(dir, "SKILL.md");
+  if (!fs.existsSync(file) || !fs.readFileSync(file, "utf8").includes(CODEX_SKILL_MARK)) return false;
+  fs.rmSync(file, { force: true });
+  const policy = path.join(dir, "agents", "openai.yaml");
+  try { if (fs.readFileSync(policy, "utf8") === CODEX_SKILL_POLICY) fs.rmSync(policy); } catch {}
+  for (const d of [path.join(dir, "agents"), dir]) {
+    try { fs.rmdirSync(d); } catch {}
+  }
+  return true;
+}
+
+function controlCommands() {
+  const cli = `${shellQuote(process.execPath)} ${shellQuote(CLI_ENTRY)}`;
+  return `- no arguments, or \`status\`: \`${cli} --status\`
 - \`mute\` or \`mute <minutes>\`: \`${cli} --mute <minutes>\`
 - \`unmute\`: \`${cli} --unmute\`
 - \`stop\`: \`${cli} --stop\`
@@ -1851,6 +1912,8 @@ module.exports = {
   hooksOf,
   installSlashCommand,
   uninstallSlashCommand,
+  installCodexSkill,
+  uninstallCodexSkill,
   VIBE_HOOK_FLAG,
   TARGETS,
   targetFile,
