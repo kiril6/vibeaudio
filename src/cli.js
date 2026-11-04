@@ -792,10 +792,11 @@ function installHookTargets(ids, genre, volume, reactive, dryRun = false, typed 
       else console.log(`  ${"/vibe".padEnd(19)}→ ${dryRun ? "would write" : "control the music from inside Claude Code"} (${slash.file})`);
       if (!dryRun && !hooks.modInstalled()) console.log(`  \x1b[2mOptional: /plugin marketplace add kiril6/vibeaudio, then /plugin install vibeaudio-mod@vibeaudio - instant /vibeaudio controls, a pane and a band above the prompt.\x1b[0m`);
     }
-    if (id === "codex") {
-      const skill = hooks.installCodexSkill({ dryRun });
-      if (!skill.installed) console.log(`  \x1b[33m$vibe not installed: ${skill.reason} (${skill.file})\x1b[0m`);
-      else console.log(`  ${"$vibe".padEnd(19)}→ ${dryRun ? "would write" : "control the music from inside Codex"} (${skill.file})`);
+    if (hooks.AGENT_SKILLS[id]) {
+      const skillName = hooks.AGENT_SKILLS[id].name;
+      const skill = hooks.installAgentSkill(id, { dryRun });
+      if (!skill.installed) console.log(`  \x1b[33m${skillName} not installed: ${skill.reason} (${skill.file})\x1b[0m`);
+      else console.log(`  ${skillName.padEnd(19)}→ ${dryRun ? "would write" : `control the music from inside ${name}`} (${skill.file})`);
     }
     // Codex will not run a hook it has not been told to trust, so saying
     // "done" without this would be reporting an install that isn't live yet.
@@ -872,7 +873,9 @@ function uninstallHookTargets() {
   }
 
   if (hooks.uninstallSlashCommand()) console.log(`\x1b[32m✔ Removed the /vibe command from Claude Code\x1b[0m`);
-  if (hooks.uninstallCodexSkill()) console.log(`\x1b[32m✔ Removed the $vibe skill from Codex\x1b[0m`);
+  for (const [id, { name }] of Object.entries(hooks.AGENT_SKILLS)) {
+    if (hooks.uninstallAgentSkill(id)) console.log(`\x1b[32m✔ Removed the ${name} skill from ${hooks.TARGETS[id].name}\x1b[0m`);
+  }
   if (total === 0) console.log(`\x1b[90mNo VibeAudio hooks were installed.\x1b[0m`);
 
   // Nothing will ever send a stop event once the hooks are gone, so a daemon

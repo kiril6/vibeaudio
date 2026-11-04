@@ -1736,27 +1736,44 @@ ${controlCommands()}`;
 }
 
 /**
- * `$vibe` inside Codex (#27): the same commands as /vibe, as a user skill next
- * to Codex's hooks.json. Codex injects SKILL.md verbatim and substitutes no
- * `$ARGUMENTS`, so the body names where the arguments are instead. Unknown
- * front matter keys are accepted; what keeps the model from muting on its own
- * is `allow_implicit_invocation: false` in agents/openai.yaml, Codex's key.
+ * The same commands as /vibe, as a user skill for the agents whose in-session
+ * commands are skills. Neither substitutes `$ARGUMENTS` (Codex injects
+ * SKILL.md verbatim; Antigravity expands it as a slash command), so the body
+ * names where the arguments are instead. What keeps the model from muting on
+ * its own is each agent's own switch: `allow_implicit_invocation: false` in
+ * Codex's agents/openai.yaml, `disable-model-invocation` in Antigravity's
+ * front matter.
+ *
+ * `$vibe` in Codex (#27), next to its hooks.json; `/vibe` in Antigravity
+ * (#28), in its global customization root `~/.gemini/config/skills`.
  */
-const CODEX_SKILL_MARK = "<!-- vibeaudio:codex-skill -->";
+const SKILL_MARK = "<!-- vibeaudio:skill -->";
 const CODEX_SKILL_POLICY = "policy:\n  allow_implicit_invocation: false\n";
 
-function codexSkillDir() {
-  return path.join(codexHome(), "skills", "vibe");
-}
+const AGENT_SKILLS = {
+  codex: {
+    name: "$vibe",
+    dir: () => path.join(codexHome(), "skills", "vibe"),
+    frontMatter: "",
+    extra: { [path.join("agents", "openai.yaml")]: CODEX_SKILL_POLICY },
+  },
+  antigravity: {
+    name: "/vibe",
+    dir: () => path.join(os.homedir(), ".gemini", "config", "skills", "vibe"),
+    frontMatter: "disable-model-invocation: true\n",
+    extra: {},
+  },
+};
 
-function codexSkillText() {
+function agentSkillText(id) {
+  const s = AGENT_SKILLS[id];
   return `---
 name: vibe
 description: ${CONTROL_DESCRIPTION}
----
-${CODEX_SKILL_MARK}
+${s.frontMatter}---
+${SKILL_MARK}
 Control VibeAudio, the focus music that plays while you work, for the user.
-The arguments are the words after \`$vibe\` in the user's message.
+The arguments are the words after \`${s.name}\` in the user's message.
 
 Run the one matching command in the shell, then report the result in a
 single short sentence. Do nothing else.
@@ -1764,27 +1781,39 @@ single short sentence. Do nothing else.
 ${controlCommands()}`;
 }
 
-function installCodexSkill({ dir = codexSkillDir(), dryRun = false } = {}) {
+// A SKILL.md without our mark is the user's own and is neither replaced nor removed.
+function ourSkill(file) {
+  return fs.existsSync(file) && fs.readFileSync(file, "utf8").includes(SKILL_MARK);
+}
+
+function installAgentSkill(id, { dir = AGENT_SKILLS[id].dir(), dryRun = false } = {}) {
   const file = path.join(dir, "SKILL.md");
-  if (fs.existsSync(file) && !fs.readFileSync(file, "utf8").includes(CODEX_SKILL_MARK)) {
+  if (fs.existsSync(file) && !ourSkill(file)) {
     return { file, installed: false, reason: "a vibe skill that is not ours is already there" };
   }
   if (!dryRun) {
-    fs.mkdirSync(path.join(dir, "agents"), { recursive: true });
-    fs.writeFileSync(file, codexSkillText());
-    fs.writeFileSync(path.join(dir, "agents", "openai.yaml"), CODEX_SKILL_POLICY);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(file, agentSkillText(id));
+    for (const [rel, text] of Object.entries(AGENT_SKILLS[id].extra)) {
+      fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+      fs.writeFileSync(path.join(dir, rel), text);
+    }
   }
   return { file, installed: true };
 }
 
-// Removes our two files, then the folders only if nothing else was put in them.
-function uninstallCodexSkill({ dir = codexSkillDir() } = {}) {
+// Removes our files, then the folders only if nothing else was put in them.
+function uninstallAgentSkill(id, { dir = AGENT_SKILLS[id].dir() } = {}) {
   const file = path.join(dir, "SKILL.md");
-  if (!fs.existsSync(file) || !fs.readFileSync(file, "utf8").includes(CODEX_SKILL_MARK)) return false;
+  if (!ourSkill(file)) return false;
   fs.rmSync(file, { force: true });
-  const policy = path.join(dir, "agents", "openai.yaml");
-  try { if (fs.readFileSync(policy, "utf8") === CODEX_SKILL_POLICY) fs.rmSync(policy); } catch {}
-  for (const d of [path.join(dir, "agents"), dir]) {
+  const dirs = new Set();
+  for (const [rel, text] of Object.entries(AGENT_SKILLS[id].extra)) {
+    const f = path.join(dir, rel);
+    try { if (fs.readFileSync(f, "utf8") === text) fs.rmSync(f); } catch {}
+    dirs.add(path.dirname(f));
+  }
+  for (const d of [...dirs, dir]) {
     try { fs.rmdirSync(d); } catch {}
   }
   return true;
@@ -1912,8 +1941,9 @@ module.exports = {
   hooksOf,
   installSlashCommand,
   uninstallSlashCommand,
-  installCodexSkill,
-  uninstallCodexSkill,
+  AGENT_SKILLS,
+  installAgentSkill,
+  uninstallAgentSkill,
   VIBE_HOOK_FLAG,
   TARGETS,
   targetFile,

@@ -2520,27 +2520,39 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       // same rules as /vibe, and a folder holding anything else is left behind.
       const skillDir = path.join(dir, "codex", "skills", "vibe");
       const skillFile = path.join(skillDir, "SKILL.md");
-      assert.strictEqual(hooks.installCodexSkill({ dir: skillDir, dryRun: true }).installed, true);
+      assert.strictEqual(hooks.installAgentSkill("codex", { dir: skillDir, dryRun: true }).installed, true);
       assert.ok(!fs.existsSync(skillDir), "a dry run must not write the skill");
-      assert.strictEqual(hooks.installCodexSkill({ dir: skillDir }).installed, true);
+      assert.strictEqual(hooks.installAgentSkill("codex", { dir: skillDir }).installed, true);
       const skill = fs.readFileSync(skillFile, "utf8");
       assert.ok(skill.startsWith("---\nname: vibe\n") && /--mute/.test(skill) && skill.includes(path.join(__dirname, "..", "bin", "vibeaudio.js")),
         "$vibe must be a skill that runs this CLI");
       assert.ok(!skill.includes("$ARGUMENTS"), "Codex substitutes no $ARGUMENTS, so the skill must not rely on it");
       assert.ok(/allow_implicit_invocation: false/.test(fs.readFileSync(path.join(skillDir, "agents", "openai.yaml"), "utf8")),
         "the model must not invoke $vibe on its own");
-      assert.strictEqual(hooks.uninstallCodexSkill({ dir: skillDir }), true);
+      assert.strictEqual(hooks.uninstallAgentSkill("codex", { dir: skillDir }), true);
       assert.ok(!fs.existsSync(skillDir), "uninstall removes the folder it made");
       fs.mkdirSync(skillDir, { recursive: true });
       fs.writeFileSync(skillFile, "my own vibe skill");
-      assert.strictEqual(hooks.installCodexSkill({ dir: skillDir }).installed, false, "a user's vibe skill must not be overwritten");
-      assert.strictEqual(hooks.uninstallCodexSkill({ dir: skillDir }), false, "nor deleted");
+      assert.strictEqual(hooks.installAgentSkill("codex", { dir: skillDir }).installed, false, "a user's vibe skill must not be overwritten");
+      assert.strictEqual(hooks.uninstallAgentSkill("codex", { dir: skillDir }), false, "nor deleted");
       assert.strictEqual(fs.readFileSync(skillFile, "utf8"), "my own vibe skill");
       fs.rmSync(skillFile);
-      hooks.installCodexSkill({ dir: skillDir });
+      hooks.installAgentSkill("codex", { dir: skillDir });
       fs.writeFileSync(path.join(skillDir, "notes.md"), "mine");
-      assert.strictEqual(hooks.uninstallCodexSkill({ dir: skillDir }), true);
+      assert.strictEqual(hooks.uninstallAgentSkill("codex", { dir: skillDir }), true);
       assert.deepStrictEqual(fs.readdirSync(skillDir), ["notes.md"], "only our files go; the user's stay");
+
+      // /vibe for Antigravity (#28): same skill, its own switch in the front
+      // matter, no extra files.
+      const agyDir = path.join(dir, "agy", "skills", "vibe");
+      assert.strictEqual(hooks.installAgentSkill("antigravity", { dir: agyDir }).installed, true);
+      const agySkill = fs.readFileSync(path.join(agyDir, "SKILL.md"), "utf8");
+      assert.ok(/^disable-model-invocation: true$/m.test(agySkill.split("\n---\n")[0]),
+        "the model must not invoke /vibe on its own in Antigravity");
+      assert.ok(agySkill.includes("after `/vibe`") && !agySkill.includes("$ARGUMENTS") && /--mute/.test(agySkill));
+      assert.deepStrictEqual(fs.readdirSync(agyDir), ["SKILL.md"]);
+      assert.strictEqual(hooks.uninstallAgentSkill("antigravity", { dir: agyDir }), true);
+      assert.ok(!fs.existsSync(agyDir));
 
       // Through the flags: the Codex install writes it, uninstall takes it away.
       const codexHomeDir = path.join(dir, "home2");
@@ -2553,6 +2565,12 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       const uninst = spawnSync(process.execPath, [CLI, "--uninstall-hooks"], { env: cenv, encoding: "utf8", timeout: 20000 });
       assert.strictEqual(uninst.status, 0, `uninstall failed: ${uninst.stderr}`);
       assert.ok(!fs.existsSync(homeSkill), "--uninstall-hooks must remove $vibe");
+      const agyHome = path.join(codexHomeDir, ".gemini", "config", "skills", "vibe", "SKILL.md");
+      const ainst = spawnSync(process.execPath, [CLI, "--install-hooks", "--tools", "antigravity"], { env: cenv, encoding: "utf8", timeout: 20000 });
+      assert.strictEqual(ainst.status, 0, `antigravity install failed: ${ainst.stderr}`);
+      assert.ok(fs.existsSync(agyHome) && /\/vibe .*Antigravity/.test(ainst.stdout), "the Antigravity install must write /vibe and say so");
+      spawnSync(process.execPath, [CLI, "--uninstall-hooks"], { env: cenv, encoding: "utf8", timeout: 20000 });
+      assert.ok(!fs.existsSync(agyHome), "--uninstall-hooks must remove Antigravity's /vibe");
 
       // The mod hint: shown until Claude Code lists the plugin as installed.
       const plugins = path.join(dir, "installed_plugins.json");

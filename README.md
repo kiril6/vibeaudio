@@ -429,6 +429,8 @@ The optional [`/vibeaudio` mod](#vibeaudio-instant-controls-and-a-pane-claude-co
 
 **In Codex it is `$vibe`.** Installing the Codex hooks also adds a `vibe` skill (`~/.codex/skills/vibe/`, or under `$CODEX_HOME`), with the same words: `$vibe mute 30`, `$vibe status`, `$vibe genre jazz`. Codex only runs it when you type it, never on its own, and a `vibe` skill of your own is left alone. Installed as a Codex plugin, the same skill is `$vibeaudio:vibe`.
 
+**In Antigravity it is `/vibe` again.** Installing the Antigravity hooks also adds a `vibe` skill (`~/.gemini/config/skills/vibe/`), with the same words: `/vibe mute 30`, `/vibe status`. Antigravity asks permission for the command it runs, and the model never picks the skill on its own.
+
 ### `/vibeaudio`: instant controls and a pane (Claude Code mod)
 
 `/vibe` is a prompt, so Claude has to read it, run a command and answer: it costs a turn and a few tokens, and it waits for the current turn to end. The optional **VibeAudio mod** runs inside Claude Code instead, so `/vibeaudio mute` takes effect at once, even while Claude is working, and costs no tokens.
