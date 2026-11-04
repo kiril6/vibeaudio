@@ -109,7 +109,8 @@ function payloadToolName(raw) {
 
 // Windsurf calls the conversation `trajectory_id`; Antigravity, `conversationId`.
 function payloadSession(payload) {
-  return payload.session_id || payload.trajectory_id || payload.conversationId;
+  // Copilot's Notification payload is camelCase (`sessionId`) while its other events are snake_case (seen live, ask_user).
+  return payload.session_id || payload.trajectory_id || payload.conversationId || payload.sessionId;
 }
 
 /** The project a hook fired in: `cwd` for most agents, Antigravity's first workspace. */
