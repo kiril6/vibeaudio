@@ -427,9 +427,16 @@ Installing the Claude Code hooks also adds a `/vibe` command (`~/.claude/command
 
 The optional [`/vibeaudio` mod](#vibeaudio-instant-controls-and-a-pane-claude-code-mod) does the same instantly with no turn; `/vibe` is the version that works everywhere. It asks Claude to run the matching `vibe` command, so Claude Code will ask permission for that command the first time. If you already have your own `vibe.md` there, VibeAudio leaves it alone and says so; `--uninstall-hooks` removes only its own.
 
-**In Codex it is `$vibe`.** Installing the Codex hooks also adds a `vibe` skill (`~/.codex/skills/vibe/`, or under `$CODEX_HOME`), with the same words: `$vibe mute 30`, `$vibe status`, `$vibe genre jazz`. Codex only runs it when you type it, never on its own, and a `vibe` skill of your own is left alone. Installed as a Codex plugin, the same skill is `$vibeaudio:vibe`.
+**Other agents.** Installing an agent's hooks also adds its own spelling of the same command, with the same words (`mute 30`, `status`, `genre jazz`). A command or skill of yours named `vibe` is never overwritten or removed, and `vibe --uninstall-hooks` removes only ours.
 
-**In Antigravity it is `/vibe` again.** Installing the Antigravity hooks also adds a `vibe` skill (`~/.gemini/config/skills/vibe/`), with the same words: `/vibe mute 30`, `/vibe status`. Antigravity asks permission for the command it runs, and the model never picks the skill on its own.
+| Agent | You type | File written |
+| :-- | :-- | :-- |
+| Claude Code | `/vibe` | `~/.claude/commands/vibe.md` (or `$CLAUDE_CONFIG_DIR`) |
+| Codex | `$vibe` | `~/.codex/skills/vibe/` (or `$CODEX_HOME`); never runs on its own. As a plugin: `$vibeaudio:vibe` |
+| Antigravity | `/vibe` | `~/.gemini/config/skills/vibe/`; the model never picks it on its own; asks permission for the command it runs |
+| Gemini CLI | `/vibe` | `~/.gemini/commands/vibe.toml` (or under `$GEMINI_CLI_HOME`) |
+| Qwen Code | `/vibe` | `~/.qwen/commands/vibe.toml` (or `$QWEN_HOME`) |
+| Copilot CLI, Cursor, Grok, Windsurf | none yet | no user-command system confirmed |
 
 ### `/vibeaudio`: instant controls and a pane (Claude Code mod)
 

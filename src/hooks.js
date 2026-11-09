@@ -1750,23 +1750,60 @@ ${controlCommands()}`;
 const SKILL_MARK = "<!-- vibeaudio:skill -->";
 const CODEX_SKILL_POLICY = "policy:\n  allow_implicit_invocation: false\n";
 
+// Gemini CLI and Qwen Code (#28) take a TOML command, not a skill folder. They
+// substitute `{{args}}` themselves, so the body can name the arguments exactly.
+const TOML_MARK = "# vibeaudio:skill";
+
+function tomlCommandText() {
+  const body = `Control VibeAudio, the focus music that plays while you work, for the user.
+Arguments: {{args}}
+
+Run the one matching command in the shell, then report the result in a
+single short sentence. Do nothing else.
+
+${controlCommands()}`;
+  const escaped = body.replace(/\\/g, "\\\\").replace(/"""/g, '""\\"');
+  return `${TOML_MARK}\ndescription = ${JSON.stringify(CONTROL_DESCRIPTION)}\nprompt = """\n${escaped}"""\n`;
+}
+
 const AGENT_SKILLS = {
   codex: {
     name: "$vibe",
     dir: () => path.join(codexHome(), "skills", "vibe"),
+    file: "SKILL.md",
+    mark: SKILL_MARK,
     frontMatter: "",
     extra: { [path.join("agents", "openai.yaml")]: CODEX_SKILL_POLICY },
   },
   antigravity: {
     name: "/vibe",
     dir: () => path.join(os.homedir(), ".gemini", "config", "skills", "vibe"),
+    file: "SKILL.md",
+    mark: SKILL_MARK,
     frontMatter: "disable-model-invocation: true\n",
+    extra: {},
+  },
+  gemini: {
+    name: "/vibe",
+    dir: () => path.join(geminiDir(), "commands"),
+    file: "vibe.toml",
+    mark: TOML_MARK,
+    text: tomlCommandText,
+    extra: {},
+  },
+  qwen: {
+    name: "/vibe",
+    dir: () => path.join(qwenHome(), "commands"),
+    file: "vibe.toml",
+    mark: TOML_MARK,
+    text: tomlCommandText,
     extra: {},
   },
 };
 
 function agentSkillText(id) {
   const s = AGENT_SKILLS[id];
+  if (s.text) return s.text();
   return `---
 name: vibe
 description: ${CONTROL_DESCRIPTION}
@@ -1782,13 +1819,13 @@ ${controlCommands()}`;
 }
 
 // A SKILL.md without our mark is the user's own and is neither replaced nor removed.
-function ourSkill(file) {
-  return fs.existsSync(file) && fs.readFileSync(file, "utf8").includes(SKILL_MARK);
+function ourSkill(file, mark) {
+  return fs.existsSync(file) && fs.readFileSync(file, "utf8").includes(mark);
 }
 
 function installAgentSkill(id, { dir = AGENT_SKILLS[id].dir(), dryRun = false } = {}) {
-  const file = path.join(dir, "SKILL.md");
-  if (fs.existsSync(file) && !ourSkill(file)) {
+  const file = path.join(dir, AGENT_SKILLS[id].file);
+  if (fs.existsSync(file) && !ourSkill(file, AGENT_SKILLS[id].mark)) {
     return { file, installed: false, reason: "a vibe skill that is not ours is already there" };
   }
   if (!dryRun) {
@@ -1804,8 +1841,8 @@ function installAgentSkill(id, { dir = AGENT_SKILLS[id].dir(), dryRun = false } 
 
 // Removes our files, then the folders only if nothing else was put in them.
 function uninstallAgentSkill(id, { dir = AGENT_SKILLS[id].dir() } = {}) {
-  const file = path.join(dir, "SKILL.md");
-  if (!ourSkill(file)) return false;
+  const file = path.join(dir, AGENT_SKILLS[id].file);
+  if (!ourSkill(file, AGENT_SKILLS[id].mark)) return false;
   fs.rmSync(file, { force: true });
   const dirs = new Set();
   for (const [rel, text] of Object.entries(AGENT_SKILLS[id].extra)) {

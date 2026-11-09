@@ -2554,6 +2554,24 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.strictEqual(hooks.uninstallAgentSkill("antigravity", { dir: agyDir }), true);
       assert.ok(!fs.existsSync(agyDir));
 
+      // /vibe for Gemini CLI and Qwen Code (#28): a TOML command, `{{args}}`
+      // substituted by the agent, marked as ours, a user's own vibe.toml kept.
+      for (const id of ["gemini", "qwen"]) {
+        const cmdDir = path.join(dir, id, "commands");
+        const tomlFile = path.join(cmdDir, "vibe.toml");
+        assert.strictEqual(hooks.installAgentSkill(id, { dir: cmdDir }).installed, true);
+        const toml = fs.readFileSync(tomlFile, "utf8");
+        assert.ok(/^description = ".+"$/m.test(toml) && /^prompt = """\n/m.test(toml) && toml.includes("{{args}}") && /--mute/.test(toml)
+          && toml.includes(path.join(__dirname, "..", "bin", "vibeaudio.js")), `${id}: /vibe must be a TOML command that runs this CLI`);
+        assert.ok(!/!\{|@\{/.test(toml), `${id}: no shell or file injection syntax in the prompt`);
+        assert.strictEqual(hooks.uninstallAgentSkill(id, { dir: cmdDir }), true);
+        assert.ok(!fs.existsSync(tomlFile) && !fs.existsSync(cmdDir), `${id}: uninstall removes the folder it made`);
+        fs.mkdirSync(cmdDir, { recursive: true });
+        fs.writeFileSync(tomlFile, "mine");
+        assert.strictEqual(hooks.installAgentSkill(id, { dir: cmdDir }).installed, false, `${id}: a user's vibe.toml must not be overwritten`);
+        assert.strictEqual(hooks.uninstallAgentSkill(id, { dir: cmdDir }), false, `${id}: nor deleted`);
+      }
+
       // Through the flags: the Codex install writes it, uninstall takes it away.
       const codexHomeDir = path.join(dir, "home2");
       fs.mkdirSync(codexHomeDir);
