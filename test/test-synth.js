@@ -2562,7 +2562,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
         assert.strictEqual(hooks.installAgentSkill(id, { dir: cmdDir }).installed, true);
         const toml = fs.readFileSync(tomlFile, "utf8");
         assert.ok(/^description = ".+"$/m.test(toml) && /^prompt = """\n/m.test(toml) && toml.includes("{{args}}") && /--mute/.test(toml)
-          && toml.includes(path.join(__dirname, "..", "bin", "vibeaudio.js")), `${id}: /vibe must be a TOML command that runs this CLI`);
+          && toml.includes(path.join(__dirname, "..", "bin", "vibeaudio.js").replace(/\\/g, "\\\\")), `${id}: /vibe must be a TOML command that runs this CLI`); // TOML doubles a Windows path's backslashes
         assert.ok(!/!\{|@\{/.test(toml), `${id}: no shell or file injection syntax in the prompt`);
         assert.strictEqual(hooks.uninstallAgentSkill(id, { dir: cmdDir }), true);
         assert.ok(!fs.existsSync(tomlFile) && !fs.existsSync(cmdDir), `${id}: uninstall removes the folder it made`);
