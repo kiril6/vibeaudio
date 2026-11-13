@@ -24,6 +24,7 @@ const { generateJazzLoop } = require("./synth/jazz");
 const { generateSuccessChime, generateFailureChime, generateAttentionChime, generateStuckChime, DEFAULT_CHIME_KEY, SUCCESS_CHIME_NOTES } = require("./synth/chime");
 const { hashString } = require("./synth/generator");
 const { addTension } = require("./synth/tension");
+const chimefile = require("./chimefile");
 const pkg = require("../package.json");
 
 // VIBE_CACHE_DIR is internal: the suite points it at a temp directory, so it
@@ -700,8 +701,54 @@ function chimeKeyFor(genre) {
   return key && SUCCESS_CHIME_NOTES[key] ? key : DEFAULT_CHIME_KEY;
 }
 
+/**
+ * The file the user chose for `kind` ("success" or "failure"), or null for the
+ * built-in chime (#29). Attention and stuck are not replaceable: they carry a
+ * meaning - "come back, I'm blocked" - chosen to sound unlike both outcomes.
+ * Same precedence as every setting: env beats this directory's saved value
+ * beats the global one.
+ */
+function customChimeSetting(kind, env = process.env, config = loadConfig(), cwd = process.cwd()) {
+  if (!chimefile.KINDS.includes(kind)) return null;
+  const project = projectSettings(config, cwd).chimes;
+  const raw = env[`VIBE_CHIME_${kind.toUpperCase()}`]
+    ?? (project && typeof project === "object" ? project[kind] : undefined)
+    ?? (config.chimes && typeof config.chimes === "object" ? config.chimes[kind] : undefined);
+  if (typeof raw !== "string" || !raw.trim() || raw.trim().toLowerCase() === "default") return null;
+  return raw.trim();
+}
+
+/**
+ * Cache path of the user's chime, normalised to the canonical header and keyed
+ * on path, mtime and size, so editing the file renders a new copy. null means
+ * "use the built-in": unset, unusable, or unreadable - never silence.
+ */
+function getCustomChimePath(kind, gain = 1) {
+  const setting = customChimeSetting(kind);
+  if (!setting) return null;
+  const file = chimefile.expandChimePath(setting);
+  if (!file) return null;
+  let stat;
+  try {
+    stat = fs.statSync(file);
+  } catch (e) {
+    return null;
+  }
+  const id = hashString(`${file}|${stat.mtimeMs}|${stat.size}`).toString(16);
+  const filePath = path.join(CACHE_DIR, `chime_custom_${kind}_${id}${gainSuffix(gain)}.wav`);
+  if (!fs.existsSync(filePath)) {
+    const read = chimefile.readChimeWav(file);
+    if (read.error) return null;
+    ensureCacheDir();
+    writeCacheFileAtomic(filePath, applyGain(read.wav, gain));
+  }
+  return filePath;
+}
+
 function getChimePath(outcome = "success", gain = 1, key = DEFAULT_CHIME_KEY) {
   ensureCacheDir();
+  const custom = getCustomChimePath(outcome === "error" ? "failure" : outcome, gain);
+  if (custom) return custom;
   // Own keys only: `CHIMES["constructor"]` is truthy, and used to reach the
   // generator call below as a function that is not one of ours.
   const kind = outcome === "error" ? "failure" : Object.hasOwn(CHIMES, outcome) ? outcome : "success";
@@ -964,7 +1011,9 @@ class AudioPlayer {
             .on("error", () => {})
             .unref();
         } else {
-          spawnSync(backend.cmd, backend.args(chimeFile, clamped), { stdio: "ignore", timeout: 2500, killSignal: "SIGKILL" });
+          // A custom chime may run longer than the built-in ones; its length is capped by chimefile.
+          const timeout = Math.max(2500, (wavDurationMs(chimeFile) || 0) + 500);
+          spawnSync(backend.cmd, backend.args(chimeFile, clamped), { stdio: "ignore", timeout, killSignal: "SIGKILL" });
         }
       } catch (e) {
         // Ignore timeout
@@ -981,6 +1030,7 @@ module.exports = {
   pruneSeedDirs,
   writeCacheFileAtomic,
   getChimePath,
+  customChimeSetting,
   chimeKeyFor,
   GENRE_KEYS,
   clearCache,
