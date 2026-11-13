@@ -89,7 +89,7 @@ Procedural focus music while your AI coding tools think.
       --notify | --no-notify   Also show a desktop banner naming the project when a turn finishes, fails, needs you or looks stuck (macOS and Linux; off by default)
       --speak | --no-speak     Also say which project finished, failed or needs you, after the chime - with two or more sessions going (off by default)
       --speak-always           Like --speak, but every time, even with one session
-      --success-chime <file>   Play your own sound when a turn finishes (also --failure-chime; WAV, 16-bit PCM, up to 3 s; 'default' restores the built-in; add --here for this project)
+      --success-chime <file>   Play your own sound when a turn finishes (also --failure-chime, and --attention-chime for "needs you"; WAV, 16-bit PCM, up to 3 s; 'default' restores the built-in; add --here for this project)
       --announcements <on|off> Turn vibe --announce on or off for good (a saved setting; on by default)
       --report [days]          How long you waited on agents, and where (default: 7 days)
       --card [--out <path>]    With --report: save the totals as an image (PNG on macOS, SVG anywhere) to ~/.vibeaudio/card.*, replaced each run
@@ -149,7 +149,7 @@ Procedural focus music while your AI coding tools think.
   VIBE_GENRE=<name>            Override the saved genre for this shell
   VIBE_VOLUME=<5-100>          Override the saved volume for this shell
   VIBE_CHIME_VOLUME=<5-100>    Override the saved chime volume for this shell
-  VIBE_CHIME_SUCCESS=<file>    Your own done sound for this shell (VIBE_CHIME_FAILURE for failed)
+  VIBE_CHIME_SUCCESS=<file>    Your own done sound for this shell (VIBE_CHIME_FAILURE, VIBE_CHIME_ATTENTION)
   VIBE_GRACE_MS=<ms>           Override the saved grace window, in ms
   VIBE_MUSIC=<on|off>          Override the saved music setting for this shell
   VIBE_NOTIFY=<on|off>         Override the saved desktop-banner setting for this shell
@@ -207,7 +207,7 @@ const VALUE_FLAGS = new Set([
   "-cv", "--chime-volume",
   "--grace",
   "--music",
-  "--success-chime", "--failure-chime",
+  "--success-chime", "--failure-chime", "--attention-chime",
   "--announcements",
   "--seed",
   "--tools",
@@ -398,8 +398,8 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (arg === "--success-chime" || arg === "--failure-chime") {
-      const kind = arg === "--success-chime" ? "success" : "failure";
+    if (arg === "--success-chime" || arg === "--failure-chime" || arg === "--attention-chime") {
+      const kind = arg.slice(2, -"-chime".length);
       const value = args[i + 1].trim();
       // A relative path would mean a different file in every project, so it is refused, not guessed.
       if (value.toLowerCase() !== "default" && !chimefile.expandChimePath(value)) {

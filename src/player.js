@@ -702,11 +702,10 @@ function chimeKeyFor(genre) {
 }
 
 /**
- * The file the user chose for `kind` ("success" or "failure"), or null for the
- * built-in chime (#29). Attention and stuck are not replaceable: they carry a
- * meaning - "come back, I'm blocked" - chosen to sound unlike both outcomes.
- * Same precedence as every setting: env beats this directory's saved value
- * beats the global one.
+ * The file the user chose for `kind` ("success", "failure" or "attention"), or
+ * null for the built-in chime (#29). Stuck is not replaceable: it is a
+ * heartbeat laid on the music, not a chime. Same precedence as every setting:
+ * env beats this directory's saved value beats the global one.
  */
 function customChimeSetting(kind, env = process.env, config = loadConfig(), cwd = process.cwd()) {
   if (!chimefile.KINDS.includes(kind)) return null;
@@ -743,6 +742,12 @@ function getCustomChimePath(kind, gain = 1) {
     writeCacheFileAtomic(filePath, applyGain(read.wav, gain));
   }
   return filePath;
+}
+
+/** How long the user's chime for `kind` plays, or null when the built-in one does. */
+function customChimeMs(kind) {
+  const file = getCustomChimePath(kind);
+  return file ? wavDurationMs(file) : null;
 }
 
 function getChimePath(outcome = "success", gain = 1, key = DEFAULT_CHIME_KEY) {
@@ -1031,6 +1036,7 @@ module.exports = {
   writeCacheFileAtomic,
   getChimePath,
   customChimeSetting,
+  customChimeMs,
   chimeKeyFor,
   GENRE_KEYS,
   clearCache,

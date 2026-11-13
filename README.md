@@ -45,7 +45,7 @@ It is built as **calm technology**, in the sense of Mark Weiser and John Seely B
 * 🎛️ **Music that follows the work** ([reactive mode](#reactive-mode-opt-in), opt-in). Calm while the agent reads, fuller while it edits, busiest when it runs commands or hands work to sub-agents — you can hear *what* it's doing, not just for how long.
 * 🌅 **It fades, it doesn't cut.** On macOS the music eases in and out instead of starting and stopping mid-note, and `vibe --volume` reaches music that is already playing within a second.
 * 🔔 **Outcome-aware chimes.** Ascending on success, a soft descending minor chord on failure, and **silence on `Ctrl+C`** — an abort is never reported as done.
-* 🎚️ **Your own chime.** `vibe --success-chime ~/sounds/done.wav` (or `--failure-chime`) replaces the done or failed sound with a WAV of yours, per project with `--here`; a file that stops working falls back to the built-in one. [Details ↓](#your-own-chime-vibe---success-chime)
+* 🎚️ **Your own chime.** `vibe --success-chime ~/sounds/done.wav` (or `--failure-chime`, `--attention-chime`) replaces the done, failed or "needs you" sound with a WAV of yours, per project with `--here`; a file that stops working falls back to the built-in one. [Details ↓](#your-own-chime-vibe---success-chime)
 * 💓 **A heartbeat when an agent looks stuck.** If 4 of a session's last 8 tool calls fail — the test-edit-test loop that goes nowhere — a soft pulse on the music's tonic joins the music until things start passing again. It's rare by design: on 4,497 real turns it fired in under 1%.
 * ✋ **A "your turn" chime.** When Claude Code stops to ask permission (or an MCP server asks for input), the music pauses and a rising two-note chime asks for you; it picks back up once you've answered.
 * 🔕 **Signals without the music.** `vibe --music off` keeps the done, failed and "needs you" chimes, banners and the state stream, and drops the music. For people who bring their own, or share an office. ([details](#signals-only-vibe---music-off))
@@ -558,20 +558,21 @@ The success chime is the tonic chord of whatever key your genre sits in — C ma
 
 ### Your own chime: `vibe --success-chime`
 
-Replace the done or failed chime with a sound you pick:
+Replace the done, failed or "needs you" chime with a sound you pick:
 
 ```bash
 vibe --success-chime ~/sounds/done.wav
 vibe --failure-chime ~/sounds/oops.wav --here   # this project only
+vibe --attention-chime ~/sounds/ping.wav        # the agent is blocked on you
 vibe --success-chime default                    # back to the built-in one
 ```
 
-- **Which chimes.** Done and failed. The "needs you" and stuck sounds stay built in: they carry a meaning chosen to sound unlike either outcome.
+- **Which chimes.** Done, failed and "needs you". The stuck heartbeat stays built in: it is laid on the music, not a chime. Pick a "needs you" sound that does not sound like your done one, or you lose the difference.
 - **The file.** WAV, 16-bit PCM, mono or stereo, up to 3 seconds and 2 MB. The path must be absolute or start with `~/`. Anything else (MP3, a longer file, a bad path) is refused when you save it.
 - **If it breaks later.** A missing or unreadable file never means silence: the built-in chime plays, and `vibe --status` and `vibe --doctor` say which file went wrong.
 - **Not in `--render`.** A rendered file is this repo's sound, made to be shared, so it keeps the built-in chime.
 - **It replaces the key-matched chime.** Your file plays as it is, whatever the genre. The volume still applies.
-- Settings follow the usual order: environment (`VIBE_CHIME_SUCCESS`, `VIBE_CHIME_FAILURE`), then this project, then everywhere. A one-off: `vibe --success-chime ~/x.wav npm test`.
+- Settings follow the usual order: environment (`VIBE_CHIME_SUCCESS`, `VIBE_CHIME_FAILURE`, `VIBE_CHIME_ATTENTION`), then this project, then everywhere. A one-off: `vibe --success-chime ~/x.wav npm test`.
 
 ### When an agent looks stuck
 
@@ -897,7 +898,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--whisper` | Quick preset: 15% volume (headphones / late night) | — |
 | `--quiet` | Quick preset: 25% volume (focus / open office) | — |
 | `--loud` | Quick preset: 75% volume (hear from across the room) | — |
-| `--success-chime <file>` / `--failure-chime <file>` | Your own WAV for done or failed (16-bit PCM, up to 3 s, absolute or `~/` path); `default` restores the built-in. With no command after it, saves it; add `--here` for this project. | built-in |
+| `--success-chime <file>` / `--failure-chime <file>` / `--attention-chime <file>` | Your own WAV for done, failed or "needs you" (16-bit PCM, up to 3 s, absolute or `~/` path); `default` restores the built-in. With no command after it, saves it; add `--here` for this project. | built-in |
 | `--no-chime` | Disable the resolution completion chime | `false` |
 | `--no-hud` | Disable terminal window/tab title animation | `false` |
 | `--preview <genre>` | Play one loop of a genre and exit | — |
@@ -939,7 +940,7 @@ export VIBE_CHIME_VOLUME=70     # Crisp completion chime at 70%
 export VIBE_GRACE_MS=3000       # Wait 3s of thinking before any music
 export VIBE_SEED=7              # Same arrangement everywhere, ignoring the directory
 export VIBE_DISABLE=1           # Mute, without uninstalling anything
-export VIBE_CHIME_SUCCESS=~/sounds/done.wav   # Your own done sound for this shell (VIBE_CHIME_FAILURE too)
+export VIBE_CHIME_SUCCESS=~/sounds/done.wav   # Your own done sound for this shell (VIBE_CHIME_FAILURE, VIBE_CHIME_ATTENTION too)
 export VIBE_MUSIC=off           # Signals only: chimes and banners, no music, for this shell
 export VIBE_NOTIFY=1            # Desktop banner naming the project, for this shell
 export VIBE_SPEAK=auto           # Spoken announcements (auto, always or off), for this shell
