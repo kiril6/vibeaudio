@@ -4974,7 +4974,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     // Playback path: setting -> file in the cache, built-in otherwise.
     const builtin = getChimePath("success", 1);
     assert.ok(!path.basename(builtin).includes("custom"));
-    const env = (k) => { for (const n of ["VIBE_CHIME_SUCCESS", "VIBE_CHIME_FAILURE"]) delete process.env[n]; if (k) Object.assign(process.env, k); };
+    const env = (k) => { for (const n of ["VIBE_CHIME_SUCCESS", "VIBE_CHIME_FAILURE", "VIBE_CHIME_ATTENTION"]) delete process.env[n]; if (k) Object.assign(process.env, k); };
     try {
       env({ VIBE_CHIME_SUCCESS: good });
       const custom = getChimePath("success", 1);
@@ -4982,8 +4982,20 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.ok(Math.abs(wavDurationMs(custom) - 200) < 1, "wavDurationMs reads the normalised file");
       assert.strictEqual(getChimePath("failure", 1), getChimePath("failure", 1));
       assert.ok(!path.basename(getChimePath("failure", 1)).includes("custom"), "failure was not replaced");
-      assert.ok(!path.basename(getChimePath("attention", 1)).includes("custom"), "attention is never replaceable");
-      assert.ok(!path.basename(getChimePath("stuck", 1)).includes("custom"), "nor is stuck");
+      assert.ok(!path.basename(getChimePath("attention", 1)).includes("custom"), "attention was not replaced");
+      assert.ok(!path.basename(getChimePath("stuck", 1)).includes("custom"), "stuck is never replaceable");
+      env({ VIBE_CHIME_SUCCESS: good, VIBE_CHIME_ATTENTION: good });
+      assert.match(path.basename(getChimePath("attention", 1)), /^chime_custom_attention_/, "the 'needs you' chime can be replaced");
+      env({ VIBE_CHIME_STUCK: good });
+      assert.ok(!path.basename(getChimePath("stuck", 1)).includes("custom"), "VIBE_CHIME_STUCK does nothing");
+      delete process.env.VIBE_CHIME_STUCK;
+      // The spoken line waits out a chime of the user's own, not ours.
+      const speech = require("../src/speech");
+      env({ VIBE_CHIME_ATTENTION: good });
+      assert.strictEqual(speech.chimeDelayMs("attention"), wavDurationMs(getChimePath("attention", 1)) + 150, "speech starts after the custom chime");
+      env({ VIBE_CHIME_SUCCESS: good });
+      assert.strictEqual(speech.chimeDelayMs("attention"), 1450, "built-in attention keeps its own length");
+      env({ VIBE_CHIME_SUCCESS: good });
 
       // Gain exactly once: a backend that cannot attenuate gets a pre-scaled copy, and only that copy.
       const quiet = getChimePath("success", 0.5);
@@ -5022,7 +5034,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
     // End to end through the CLI, under a throwaway HOME: save, refuse bad input, restore.
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-chimecli-"));
     const cenv = { ...process.env, HOME: home, USERPROFILE: home, VIBE_NO_UPDATE_CHECK: "1", VIBE_NO_HISTORY: "1" };
-    for (const n of ["VIBE_CHIME_SUCCESS", "VIBE_CHIME_FAILURE", "VIBE_DISABLE"]) delete cenv[n];
+    for (const n of ["VIBE_CHIME_SUCCESS", "VIBE_CHIME_FAILURE", "VIBE_CHIME_ATTENTION", "VIBE_DISABLE"]) delete cenv[n];
     const CLI = path.join(__dirname, "..", "bin", "vibeaudio.js");
     const cli = (...args) => spawnSync(process.execPath, [CLI, ...args], { env: cenv, encoding: "utf8", timeout: 20000 });
     const saved = () => { try { return JSON.parse(fs.readFileSync(path.join(home, ".vibeaudio", "config.json"), "utf8")); } catch (e) { return {}; } };
@@ -5032,6 +5044,10 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       assert.deepStrictEqual(saved().chimes, { success: fresh });
       assert.strictEqual(cli("--failure-chime", fresh).status, 0);
       assert.deepStrictEqual(saved().chimes, { success: fresh, failure: fresh }, "the second flag keeps the first");
+      assert.strictEqual(cli("--attention-chime", fresh).status, 0);
+      assert.deepStrictEqual(saved().chimes, { success: fresh, failure: fresh, attention: fresh }, "attention saves like the others");
+      assert.strictEqual(cli("--attention-chime", "default").status, 0);
+      assert.deepStrictEqual(saved().chimes, { success: fresh, failure: fresh });
       assert.match(cli("--status").stdout, /success chime\s+\S*fresh\.wav/, "--status names the chime in effect");
 
       const bad = cli("--success-chime", "relative.wav");
@@ -5058,7 +5074,7 @@ const NODE_HANG = [process.execPath, "-e", "setTimeout(() => {}, 30000)"];
       fs.rmSync(home, { recursive: true, force: true });
       fs.rmSync(dir, { recursive: true, force: true });
     }
-    console.log("   ✓ Your own WAV replaces success or failure: real headers read, 3 s cap, gain once, built-in on any fault.");
+    console.log("   ✓ Your own WAV replaces done, failed or needs-you: real headers read, 3 s cap, gain once, built-in on any fault.");
   }
 
   console.log("\n\x1b[32mAll 80 tests passed successfully!\x1b[0m");

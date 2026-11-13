@@ -20,7 +20,7 @@ const path = require("path");
 
 const MAX_CHIME_MS = 3000;
 const MAX_CHIME_BYTES = 2 * 1024 * 1024;
-const KINDS = ["success", "failure"];
+const KINDS = ["success", "failure", "attention"];
 
 /** `~` expands, anything else must already be absolute. Never goes through a shell. */
 function expandChimePath(raw) {

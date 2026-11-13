@@ -156,7 +156,10 @@ function speak(text, { delayMs = 0, volume = 0.4 } = {}) {
 
 /** How long to wait so a sentence starts after the chime that was just played. */
 function chimeDelayMs(outcome, played = true) {
-  return played ? (CHIME_MS[outcome] || CHIME_MS.success) + CHIME_GAP_MS : 0;
+  if (!played) return 0;
+  // A chime of the user's own may be longer than ours; the sentence still waits it out.
+  const ms = require("./player").customChimeMs(outcome === "error" ? "failure" : outcome) ?? (CHIME_MS[outcome] || CHIME_MS.success);
+  return ms + CHIME_GAP_MS;
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
