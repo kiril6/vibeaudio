@@ -25,6 +25,7 @@ const {
   AVAILABLE_GENRES
 } = require("./player");
 const pkg = require("../package.json");
+const chimefile = require("./chimefile");
 
 const DEFAULT_GRACE_PERIOD_MS = 1500; // 1.5 second silence grace window
 
@@ -88,6 +89,7 @@ Procedural focus music while your AI coding tools think.
       --notify | --no-notify   Also show a desktop banner naming the project when a turn finishes, fails, needs you or looks stuck (macOS and Linux; off by default)
       --speak | --no-speak     Also say which project finished, failed or needs you, after the chime - with two or more sessions going (off by default)
       --speak-always           Like --speak, but every time, even with one session
+      --success-chime <file>   Play your own sound when a turn finishes (also --failure-chime; WAV, 16-bit PCM, up to 3 s; 'default' restores the built-in; add --here for this project)
       --announcements <on|off> Turn vibe --announce on or off for good (a saved setting; on by default)
       --report [days]          How long you waited on agents, and where (default: 7 days)
       --card [--out <path>]    With --report: save the totals as an image (PNG on macOS, SVG anywhere) to ~/.vibeaudio/card.*, replaced each run
@@ -147,6 +149,7 @@ Procedural focus music while your AI coding tools think.
   VIBE_GENRE=<name>            Override the saved genre for this shell
   VIBE_VOLUME=<5-100>          Override the saved volume for this shell
   VIBE_CHIME_VOLUME=<5-100>    Override the saved chime volume for this shell
+  VIBE_CHIME_SUCCESS=<file>    Your own done sound for this shell (VIBE_CHIME_FAILURE for failed)
   VIBE_GRACE_MS=<ms>           Override the saved grace window, in ms
   VIBE_MUSIC=<on|off>          Override the saved music setting for this shell
   VIBE_NOTIFY=<on|off>         Override the saved desktop-banner setting for this shell
@@ -178,6 +181,21 @@ function printUpdateNotice() {
 }
 
 /**
+ * The chimes the user replaced, and whether each file is usable. A bad one is
+ * not an error at playback - the built-in plays - so this is where it shows.
+ */
+function customChimeReport() {
+  const { customChimeSetting } = require("./player");
+  return chimefile.KINDS.flatMap((kind) => {
+    const setting = customChimeSetting(kind);
+    if (!setting) return [];
+    const file = chimefile.expandChimePath(setting);
+    const error = file ? chimefile.readChimeWav(file).error : "needs an absolute path";
+    return [{ kind, setting, error }];
+  });
+}
+
+/**
  * Flags that consume the next argument. Without this list a trailing
  * `vibe --genre` falls through every branch below and lands in cmdArgs, so the
  * wrapper tries to spawn a program called `--genre` and reports ENOENT on it -
@@ -189,6 +207,7 @@ const VALUE_FLAGS = new Set([
   "-cv", "--chime-volume",
   "--grace",
   "--music",
+  "--success-chime", "--failure-chime",
   "--announcements",
   "--seed",
   "--tools",
@@ -375,6 +394,21 @@ function parseArgs(argv) {
       }
       music = value === "on";
       typed.music = music;
+      i += 2;
+      continue;
+    }
+
+    if (arg === "--success-chime" || arg === "--failure-chime") {
+      const kind = arg === "--success-chime" ? "success" : "failure";
+      const value = args[i + 1].trim();
+      // A relative path would mean a different file in every project, so it is refused, not guessed.
+      if (value.toLowerCase() !== "default" && !chimefile.expandChimePath(value)) {
+        console.error(`\x1b[31m[vibeaudio] ${arg} needs an absolute path (or ~/...), or 'default' - not '${value}'.\x1b[0m`);
+        process.exit(1);
+      }
+      typed.chimes = { ...typed.chimes, [kind]: value.toLowerCase() === "default" ? null : value };
+      // A flag beats the environment, and the player reads the environment, so this is what makes a one-off work.
+      process.env[`VIBE_CHIME_${kind.toUpperCase()}`] = value;
       i += 2;
       continue;
     }
@@ -935,6 +969,9 @@ function printStatus() {
 
   console.log(`\x1b[1mSound\x1b[0m`);
   console.log(`  music     ${musicEnabled() ? on("on") : "\x1b[33moff\x1b[0m"}${source("VIBE_MUSIC", "music")}${musicEnabled() ? "" : off("  signals only — vibe --music on")}`);
+  for (const { kind, setting, error } of customChimeReport()) {
+    console.log(`  ${`${kind} chime`.padEnd(15)}${error ? `\x1b[33m${setting}: ${error}\x1b[0m${off("  built-in plays instead")}` : on(setting)}`);
+  }
   console.log(`  genre     ${on(genreNow())}${source("VIBE_GENRE", "genre")}`);
   console.log(`  volume    ${on(`${Math.round(volumeNow() * 100)}%`)}${source("VIBE_VOLUME", "volume")}`);
   console.log(`            ${off("change either with: vibe --genre <name> --volume <n>")}`);
@@ -1148,6 +1185,10 @@ function doctorChecks() {
   if (mute !== null) add("warn", "Mute", `muted ${muteRemainingText(mute)}`, "vibe --unmute");
   if (playbackDisabled()) add("warn", "VIBE_DISABLE", `set to "${process.env.VIBE_DISABLE}" — automatic playback is off`, "unset VIBE_DISABLE");
   if (mute === null && !playbackDisabled()) add("ok", "Mute", "not muted");
+  for (const { kind, setting, error } of customChimeReport()) {
+    if (error) add("warn", `Custom ${kind} chime`, `${setting}: ${error}, so the built-in chime plays instead`, `vibe --${kind}-chime default`);
+    else add("ok", `Custom ${kind} chime`, setting);
+  }
   if (!musicEnabled()) add("ok", "Music", "off — chimes and banners only, by your setting (vibe --music on)");
   if (hooks.notifyEnabled()) {
     if (process.platform === "darwin") add("ok", "Desktop banners", "on, through osascript");
@@ -1405,7 +1446,22 @@ function saveDefaults(typed, hereOnly = false, live = null) {
   if (typed.grace !== undefined) patch.grace = typed.grace;
   if (typed.music !== undefined) patch.music = typed.music;
 
-  const { CONFIG_FILE } = require("./player");
+  const { CONFIG_FILE, loadConfig: load, projectSettings: projectOf } = require("./player");
+  if (typed.chimes) {
+    // A file that would not play is refused now, not discovered when the chime is missing.
+    for (const [kind, value] of Object.entries(typed.chimes)) {
+      const problem = value && chimefile.readChimeWav(chimefile.expandChimePath(value)).error;
+      if (problem) {
+        console.error(`\x1b[31m[vibeaudio] ${kind} chime: ${problem} - nothing saved.\x1b[0m`);
+        process.exit(1);
+      }
+    }
+    // The map is saved whole under one key, so merge into what this scope already has.
+    const current = (hereOnly ? projectOf(load()) : load()).chimes;
+    const chimes = { ...(current && typeof current === "object" ? current : {}), ...typed.chimes };
+    for (const kind of Object.keys(chimes)) if (chimes[kind] === null) delete chimes[kind];
+    patch.chimes = Object.keys(chimes).length ? chimes : null;
+  }
   if (hereOnly) saveProjectConfig(patch);
   else saveConfig(patch);
 
@@ -1414,7 +1470,8 @@ function saveDefaults(typed, hereOnly = false, live = null) {
     volume: (v) => `volume ${v}%`,
     chimeVolume: (v) => `chime volume ${v}%`,
     grace: (v) => `grace ${v}ms`,
-    music: (v) => `music ${v ? "on" : "off"}`
+    music: (v) => `music ${v ? "on" : "off"}`,
+    chimes: () => Object.entries(typed.chimes).map(([k, v]) => `${k} chime ${v || "default"}`).join(", ")
   };
   const changed = Object.keys(patch).map((k) => label[k](patch[k])).join(", ");
   const where = hereOnly ? ` for ${process.cwd()}` : "";
