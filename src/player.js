@@ -1017,7 +1017,9 @@ class AudioPlayer {
             .unref();
         } else {
           // A custom chime may run longer than the built-in ones; its length is capped by chimefile.
-          const timeout = Math.max(2500, (wavDurationMs(chimeFile) || 0) + 500);
+          // afplay needs ~1 s beyond the file to start and close the device (measured: a 2.95 s file
+          // takes 3.7-4.2 s), so a tighter margin SIGKILLs the tail. Stays under the hooks' 5 s timeout.
+          const timeout = Math.max(2500, (wavDurationMs(chimeFile) || 0) + 1500);
           spawnSync(backend.cmd, backend.args(chimeFile, clamped), { stdio: "ignore", timeout, killSignal: "SIGKILL" });
         }
       } catch (e) {
