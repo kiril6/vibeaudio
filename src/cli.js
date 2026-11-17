@@ -172,12 +172,31 @@ Procedural focus music while your AI coding tools think.
   printUpdateNotice();
 }
 
+/**
+ * Names of the agents whose installed hooks lack an event this version writes.
+ * A hook file outlives upgrades, so these people hear nothing from the new
+ * event until they reinstall (#86). Offline: reads the hook files only.
+ */
+function staleHookAgents() {
+  const hooks = require("./hooks");
+  return Object.keys(hooks.TARGETS).flatMap((id) => {
+    const t = hooks.TARGETS[id];
+    const installed = readVibeHooks(t.file(), t);
+    if (!installed.length) return [];
+    return hooks.expectedEvents(id).some((e) => !installed.some(({ event }) => event === e)) ? [t.name] : [];
+  });
+}
+
 // Only where a person is reading: help, status and the menu. See update.js.
-function printUpdateNotice() {
+// `status` prints the per-agent detail itself, so it skips the hooks line.
+function printUpdateNotice({ hooks = true } = {}) {
   if (!process.stdout.isTTY) return;
   const { ephemeralInstallReason } = require("./hooks");
   const line = require("./update").updateNotice({ ephemeral: Boolean(ephemeralInstallReason()) });
   if (line) console.log(`${line}\n`);
+  if (!hooks || require("./update").checkDisabled()) return;
+  const stale = staleHookAgents();
+  if (stale.length) console.log(`\x1b[33mNew hook events since you installed for ${stale.join(", ")}: run vibe --install-hooks to pick them up.\x1b[0m\n`);
 }
 
 /**
@@ -1064,7 +1083,7 @@ function printStatus() {
     }
   }
   console.log();
-  printUpdateNotice();
+  printUpdateNotice({ hooks: false });
 }
 
 /**
@@ -2185,6 +2204,7 @@ module.exports = {
   run,
   parseArgs,
   hooksAlreadyCover,
+  staleHookAgents,
   applyMenuSelection,
   previewAudioFile,
   windowsCommandNeedsShell
