@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { spawn, spawnSync } = require("child_process");
+const { PcmStream } = require("./pcm-stream");
 
 const { generateLofiLoop } = require("./synth/lofi");
 const { generateSynthwaveLoop } = require("./synth/synthwave");
@@ -101,17 +102,32 @@ const LOOP_BARS = 3;
  * Playback backends, in preference order. `volume` marks whether the backend
  * can attenuate; the others play at system volume.
  */
+// How far ahead a streaming backend may buffer. It is how late a volume change lands, since
+// the gain is applied before the bytes are written.
+const STREAM_LATENCY_MS = 200;
+
 const PLAYER_CANDIDATES = [
   { cmd: "afplay", volume: true, args: (file, vol) => ["-v", String(vol), file] },
   // PulseAudio applies --volume as a cube ((v/65536)^3 amplitude), so the linear 0-1 volume
   // goes in as its cube root: 15% measured -49 dB, where aplay and ffplay give -16 dB (#6).
-  { cmd: "paplay", volume: true, args: (file, vol) => [`--volume=${Math.round(Math.cbrt(vol) * 65536)}`, file] },
+  {
+    cmd: "paplay",
+    volume: true,
+    args: (file, vol) => [`--volume=${Math.round(Math.cbrt(vol) * 65536)}`, file],
+    stream: (rate, ch) => ["--raw", "--format=s16le", `--rate=${rate}`, `--channels=${ch}`, `--latency-msec=${STREAM_LATENCY_MS}`]
+  },
   {
     cmd: "ffplay",
     volume: true,
-    args: (file, vol) => ["-nodisp", "-autoexit", "-loglevel", "quiet", "-volume", String(Math.round(vol * 100)), file]
+    args: (file, vol) => ["-nodisp", "-autoexit", "-loglevel", "quiet", "-volume", String(Math.round(vol * 100)), file],
+    stream: (rate, ch) => ["-nodisp", "-autoexit", "-loglevel", "quiet", "-fflags", "nobuffer", "-probesize", "32", "-analyzeduration", "0", "-f", "s16le", "-ar", String(rate), "-ac", String(ch), "-i", "pipe:0"]
   },
-  { cmd: "aplay", volume: false, args: (file) => ["-q", file] }
+  {
+    cmd: "aplay",
+    volume: false,
+    args: (file) => ["-q", file],
+    stream: (rate, ch) => ["-q", "-t", "raw", "-f", "S16_LE", "-r", String(rate), "-c", String(ch), `--buffer-time=${STREAM_LATENCY_MS * 1000}`, "-"]
+  }
 ];
 
 let cachedPlayer;
@@ -128,6 +144,14 @@ let helperFailed = false;
 
 function helperUsable(backend) {
   return process.platform === "darwin" && backend.cmd === "afplay" && !helperFailed && !process.env.VIBE_NO_FADE;
+}
+
+// Linux: one long-lived player fed PCM (src/pcm-stream.js, #16), for the same fades
+// and live volume. The per-loop spawn stays as the fallback once a stream has failed.
+let streamFailed = false;
+
+function streamUsable(backend) {
+  return process.platform === "linux" && Boolean(backend && backend.stream) && !streamFailed && !process.env.VIBE_NO_STREAM;
 }
 
 function detectPlayer() {
@@ -802,6 +826,7 @@ class AudioPlayer {
     this.isPlaying = false;
     this.procs = new Set();
     this.helper = null;
+    this.stream = null;
     this.startTime = 0;
     this.genre = "lofi";
     this.volume = 0.42;
@@ -884,11 +909,13 @@ class AudioPlayer {
     // Either the backend attenuates, or the file is rendered pre-attenuated -
     // never both, or the volume would be applied twice.
     const backend = detectPlayer();
-    const gain = bakedGain(backend, this.volume);
+    const streaming = streamUsable(backend);
+    const gain = streaming ? 1 : bakedGain(backend, this.volume); // The stream applies the volume itself.
     // An agent that looks stuck adds a heartbeat, landing at this loop boundary.
     const audioFile = getAudioPath(this.genre, this.currentTier, this.seed, gain, this.bar, Boolean(this.tension && this.tension()));
     // Advanced after the choice, so the bar that plays first is bar 0.
     this.bar = (this.bar + 1) % LOOP_BARS;
+    if (streaming && this.playViaStream(audioFile, backend)) return; // It asks for the next bar itself.
     if (!(helperUsable(backend) && this.playViaHelper(audioFile, backend))) this.spawnLoop(audioFile, backend);
 
     const durationMs = wavDurationMs(audioFile) || 6500;
@@ -906,9 +933,43 @@ class AudioPlayer {
     this.volume = target;
     try {
       if (this.helper) this.helper.stdin.write(`volume ${this.volume} ${VOLUME_RAMP_S}\n`);
+      if (this.stream) this.stream.setVolume(this.volume);
     } catch (e) {
       // The helper's own exit handler deals with a dead pipe.
     }
+  }
+
+  /**
+   * Queues one bar on the stream, starting it on first use. False when the stream
+   * cannot take it, so the caller plays it per loop. A stream that dies while we are
+   * playing is dropped for the rest of the process and the bar replayed that way.
+   */
+  playViaStream(audioFile, backend) {
+    try {
+      if (!this.stream) {
+        const stream = new PcmStream(backend, {
+          volume: this.volume,
+          overlapMs: LOOP_OVERLAP_MS,
+          onLow: () => this.playLoop(),
+          onDead: () => {
+            if (this.stream !== stream) return;
+            this.stream = null;
+            streamFailed = true;
+            if (this.isPlaying) this.playLoop();
+          }
+        });
+        this.stream = stream;
+      }
+      if (this.stream.append(fs.readFileSync(audioFile))) return true;
+    } catch (e) {
+      // Fall through to the per-loop path.
+    }
+    if (this.stream) {
+      this.stream.kill();
+      this.stream = null;
+    }
+    streamFailed = true;
+    return false;
   }
 
   spawnLoop(audioFile, backend) {
@@ -969,6 +1030,10 @@ class AudioPlayer {
       } catch (e) {
         // Already gone.
       }
+    }
+    if (this.stream) {
+      this.stream.kill();
+      this.stream = null;
     }
     for (const proc of this.procs) {
       try {
