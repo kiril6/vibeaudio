@@ -50,6 +50,27 @@ async function until(fn, what, ms = 8000) {
     stream.kill();
     await until(() => stream.proc === null, "kill");
     assert.strictEqual(dead, 0, "a deliberate kill is not a dead player");
+    // Fade-out: ramps to exact silence, then reports done.
+    const out2 = path.join(dir, "fade.raw");
+    const dump2 = `process.stdin.pipe(require("fs").createWriteStream(${JSON.stringify(out2)}));`;
+    const s2 = new PcmStream({ cmd: process.execPath, stream: () => ["-e", dump2] }, { volume: 1, overlapMs: 100, onLow: () => {}, onDead: () => {} });
+    try {
+      assert.ok(s2.append(wav()));
+      await until(() => fs.existsSync(out2) && fs.statSync(out2).size > 44100 * FRAME * 0.4, "bar playing");
+      let done = false;
+      s2.fadeOut(() => (done = true));
+      await until(() => done, "fade-out done");
+      s2.kill();
+      const f = fs.readFileSync(out2);
+      const frames = f.length / FRAME;
+      assert.strictEqual(f.readInt16LE((frames - 1) * FRAME), 0, "ends in silence");
+      let last = frames - 1;
+      while (last > 0 && f.readInt16LE(last * FRAME) === 0) last--;
+      const mid = f.readInt16LE((last - 5000) * FRAME);
+      assert.ok(mid > 0 && mid < 0.25 * 32767 * 0.8, `a ramp, not a cut: ${mid} before the end of the fade`);
+    } finally {
+      s2.kill();
+    }
     console.log("   ✓ PcmStream fades in, ramps volume live, joins bars by overlap and stops on kill.");
   } finally {
     stream.kill();

@@ -6,6 +6,12 @@ const CHUNK_MS = 50; // Granularity of a write: the gain ramp and a volume chang
 const LEAD_MS = 1500; // Ask for the next bar when this little is queued.
 const FADE_IN_S = 0.5;
 const VOLUME_RAMP_S = 0.3;
+const FADE_OUT_S = 0.25;
+// How far ahead of the clock bytes are written. Gain is applied before a write, so this is how
+// late a volume change or a fade lands; the pipe alone would let ~1.2 s queue up. An event loop
+// stalled for longer than this (a first-time render) is heard as a gap.
+const WRITE_AHEAD_MS = 300;
+const PLAYER_BUFFER_MS = 600; // Room for what a backend holds beyond the ~200 ms it is asked for: paplay held >0.75 s, measured.
 
 /**
  * One long-lived player process fed raw PCM (#16), where the other path spawns
@@ -35,6 +41,10 @@ class PcmStream {
     this.waiting = false; // Waiting on `drain`.
     this.asked = false;
     this.dead = false;
+    this.fading = false;
+    this.t0 = 0; // When the first sample was written, and how much since: the stream's own clock.
+    this.writtenMs = 0;
+    this.timer = null;
   }
 
   /** Queues one canonical-header WAV. Returns false if the stream cannot play it. */
@@ -91,11 +101,28 @@ class PcmStream {
     this.slew = Math.max(Math.abs(volume - this.gain), 0.05) / VOLUME_RAMP_S;
   }
 
+  /** Ramps to silence and calls `done` once it has been heard. Asks for no more bars. */
+  fadeOut(done) {
+    this.fading = true;
+    this.target = 0;
+    this.slew = Math.max(this.gain, 0.05) / FADE_OUT_S;
+    this.pump();
+    setTimeout(done, (FADE_OUT_S * 1000) + WRITE_AHEAD_MS + PLAYER_BUFFER_MS);
+  }
+
   pump() {
     if (this.waiting || !this.proc) return;
+    clearTimeout(this.timer);
     const stdin = this.proc.stdin;
     const chunkSamples = Math.round((CHUNK_MS / 1000) * this.rate) * this.channels;
     while (this.queue.length) {
+      const now = Date.now();
+      if (!this.t0 || this.writtenMs < now - this.t0) this.t0 = now - this.writtenMs; // First write, or an underrun.
+      const ahead = this.writtenMs - (now - this.t0);
+      if (ahead > WRITE_AHEAD_MS) {
+        this.timer = setTimeout(() => this.pump(), Math.max(10, ahead - WRITE_AHEAD_MS));
+        break;
+      }
       const head = this.queue[0];
       const n = Math.min(chunkSamples, head.length);
       const out = Buffer.alloc(n * 2);
@@ -108,6 +135,7 @@ class PcmStream {
       if (n === head.length) this.queue.shift();
       else this.queue[0] = head.subarray(n);
       this.queuedFrames -= n / this.channels;
+      this.writtenMs += (n / this.channels / this.rate) * 1000;
       if (!stdin.write(out)) {
         this.waiting = true;
         stdin.once("drain", () => {
@@ -117,7 +145,7 @@ class PcmStream {
         break;
       }
     }
-    if (!this.asked && (this.queuedFrames / this.rate) * 1000 < LEAD_MS) {
+    if (!this.asked && !this.fading && (this.queuedFrames / this.rate) * 1000 < LEAD_MS) {
       this.asked = true;
       this.onLow();
     }
@@ -128,6 +156,7 @@ class PcmStream {
     const proc = this.proc;
     this.proc = null;
     this.queue = [];
+    clearTimeout(this.timer);
     if (!proc) return;
     try {
       proc.stdin.destroy();

@@ -114,7 +114,7 @@ const PLAYER_CANDIDATES = [
     cmd: "paplay",
     volume: true,
     args: (file, vol) => [`--volume=${Math.round(Math.cbrt(vol) * 65536)}`, file],
-    stream: (rate, ch) => ["--raw", "--format=s16le", `--rate=${rate}`, `--channels=${ch}`, `--latency-msec=${STREAM_LATENCY_MS}`]
+    stream: (rate, ch) => ["--raw", "--format=s16le", `--rate=${rate}`, `--channels=${ch}`, `--latency-msec=${STREAM_LATENCY_MS}`, "--process-time-msec=20"]
   },
   {
     cmd: "ffplay",
@@ -1015,6 +1015,22 @@ class AudioPlayer {
       this.helper = null;
       return false;
     }
+  }
+
+  /**
+   * Stops with a short decay where the stream can give one, then calls `done`. The daemon
+   * uses it on SIGTERM; any other path has no stream and stops at once.
+   */
+  fadeOut(done) {
+    const stream = this.stream;
+    if (!this.isPlaying || !stream) {
+      this.stop({ playChime: false });
+      return done();
+    }
+    stream.fadeOut(() => {
+      this.stop({ playChime: false });
+      done();
+    });
   }
 
   killProcs() {

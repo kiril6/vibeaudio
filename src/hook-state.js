@@ -512,9 +512,12 @@ function runDaemon(genre, volume, { reactive = false, volumeSource = null } = {}
   });
   if (!started) process.exit(0);
 
+  // A second signal while fading changes nothing; the fade ends by itself.
+  let closing = false;
   const shutdown = () => {
-    player.stop({ playChime: false });
-    process.exit(0);
+    if (closing) return;
+    closing = true;
+    player.fadeOut(() => process.exit(0));
   };
 
   process.on("SIGTERM", shutdown);
