@@ -6,7 +6,7 @@ Contributions welcome. To keep the project simple and dependable, a few ground r
 
 - **Zero runtime dependencies.** `package.json` has no `dependencies` block and should stay that way. Every oscillator, envelope and WAV header is hand-rolled in `src/synth/`. Don't add a package for what a few lines of math can do.
 - **No build step.** Plain CommonJS Node (`engines.node >= 18`). No bundler, no transpiler, no `node-gyp` — `npx github:kiril6/vibeaudio` must keep working on a clean machine.
-- **Keep `src/synth/` pure.** Those modules take numbers and return a WAV `Buffer`. No file I/O, no spawning, no globals — that purity is what lets `test/test-synth.js` assert on generator output directly.
+- **Keep `src/synth/` pure.** Those modules take numbers and return a WAV `Buffer`. No file I/O, no spawning, no globals — that purity is what lets `test/cases/` assert on generator output directly.
 - **Parse arguments in one place.** All flags and env vars go through `parseArgs` in `src/cli.js`, which is unit-tested. Don't read `process.argv` or `process.env` anywhere else.
 - **Never let audio break the wrapped command.** VibeAudio is a wrapper; if playback fails, the user's tool must still run, and the exit code must still propagate unchanged.
 - **Test on more than one platform** when touching playback (`src/player.js`) — the backend differs per OS.
@@ -41,7 +41,7 @@ This project is built with the help of [Claude Code](https://claude.com/claude-c
 5. **Draw ornaments before gating them by tier.** If a `tier >= 2` branch consumes random values, tier 1 and tier 3 stop being the same piece.
 6. Fade the first and last ~0.08s so the loop boundary doesn't click.
 7. Register it in `src/player.js`: add to `AVAILABLE_GENRES` and to the `generateLoop` switch.
-8. Add it to the menu in `src/interactive.js`, the genre table in `README.md`, and the tier/seed tests in `test/test-synth.js`.
+8. Add it to the menu in `src/interactive.js`, the genre table in `README.md`, and the tier/seed tests in `test/cases/`.
 
 **Listen before you ship.** The test suite proves a generator is deterministic and that tiers differ — it cannot tell you whether the result sounds good. Use `--preview` with a few seeds (`vibe --seed 1 --preview <name>`, then 2, 3…) and actually listen to each variant.
 
