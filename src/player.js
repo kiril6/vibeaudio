@@ -103,7 +103,9 @@ const LOOP_BARS = 3;
  */
 const PLAYER_CANDIDATES = [
   { cmd: "afplay", volume: true, args: (file, vol) => ["-v", String(vol), file] },
-  { cmd: "paplay", volume: true, args: (file, vol) => [`--volume=${Math.round(vol * 65536)}`, file] },
+  // PulseAudio applies --volume as a cube ((v/65536)^3 amplitude), so the linear 0-1 volume
+  // goes in as its cube root: 15% measured -49 dB, where aplay and ffplay give -16 dB (#6).
+  { cmd: "paplay", volume: true, args: (file, vol) => [`--volume=${Math.round(Math.cbrt(vol) * 65536)}`, file] },
   {
     cmd: "ffplay",
     volume: true,
