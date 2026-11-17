@@ -36,6 +36,7 @@ const { parseArgs, windowsCommandNeedsShell } = require("../src/cli");
 // is the AVAudioPlayer helper, which would walk straight past the fake. Test
 // [59] is the one that exercises the helper itself.
 process.env.VIBE_NO_FADE = "1";
+process.env.VIBE_NO_STREAM = "1"; // Linux: the fake backends take a file, not a pipe (#16).
 
 function sandboxPathWith(names) {
   const fs = require("fs");
