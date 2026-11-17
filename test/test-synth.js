@@ -523,7 +523,7 @@ assert.strictEqual(
 // The guard runs before any mkdir/write, so a refusal cannot touch settings.
 assert.ok(
   /ephemeralInstallReason\(\);?\s*\n\s*if \(ephemeral\)/.test(
-    fs.readFileSync(path.join(__dirname, "..", "src", "hooks.js"), "utf8")
+    fs.readFileSync(path.join(__dirname, "..", "src", "hook-install.js"), "utf8")
   ),
   "installHooks must check the guard first, before writing anything"
 );
