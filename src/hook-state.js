@@ -3,10 +3,14 @@
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
+
 const { execFileSync } = require("child_process");
+
 const { AudioPlayer } = require("./player");
+
 const { STATE_DIR, PID_FILE, INTENSITY_FILE, SESSIONS_DIR, EVENTS_FILE, ANON_SESSION, CLI_ENTRY, readIntensity, parsePayload, payloadSession, payloadProject, MAX_DAEMON_MS, DAEMON_CEILING_MS, projectName } = require("./hook-core");
 const { TARGETS } = require("./hook-targets");
+
 
 function settingsPath() {
   return TARGETS.claude.file();
