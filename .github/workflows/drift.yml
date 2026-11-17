@@ -1,0 +1,62 @@
+name: drift
+
+# Does the latest release of each agent CLI still accept what VibeAudio
+# installs, and still know the events it hooks? See scripts/drift-check.js and
+# #41. No credentials: it installs the CLI and validates, it never runs a turn.
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays, off the hour
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        agent: [claude, codex, gemini, copilot, qwen]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Install the latest ${{ matrix.agent }}
+        run: |
+          case "${{ matrix.agent }}" in
+            claude) pkg=@anthropic-ai/claude-code ;;
+            codex) pkg=@openai/codex ;;
+            gemini) pkg=@google/gemini-cli ;;
+            copilot) pkg=@github/copilot ;;
+            qwen) pkg=@qwen-code/qwen-code ;;
+          esac
+          npm install -g "$pkg@latest"
+      - run: node scripts/drift-check.js --agent ${{ matrix.agent }}
+
+  # One issue, opened on the first failure and closed when the check passes
+  # again, so a weekly job nobody watches still says something.
+  report:
+    needs: drift
+    if: always() && needs.drift.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.drift.result }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Agent drift check failed"
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number,title -q "[.[] | select(.title == \"$title\")][0].number")
+          if [ "$RESULT" = "failure" ]; then
+            body="The latest release of at least one agent no longer matches what TARGETS expects. Details: $RUN"
+            if [ -n "$open" ]; then gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "Still failing. $RUN"
+            else gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"; fi
+          elif [ -n "$open" ]; then
+            gh issue close "$open" --repo "$GITHUB_REPOSITORY" --comment "Passing again. $RUN"
+          fi
