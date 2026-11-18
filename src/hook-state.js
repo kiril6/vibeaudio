@@ -6,7 +6,7 @@ const { spawn } = require("child_process");
 
 const { execFileSync } = require("child_process");
 
-const { AudioPlayer } = require("./player");
+const { AudioPlayer, onCall } = require("./player");
 
 const { STATE_DIR, PID_FILE, INTENSITY_FILE, SESSIONS_DIR, EVENTS_FILE, ANON_SESSION, CLI_ENTRY, readIntensity, parsePayload, payloadSession, payloadProject, MAX_DAEMON_MS, DAEMON_CEILING_MS, projectName } = require("./hook-core");
 const { TARGETS } = require("./hook-targets");
@@ -293,9 +293,9 @@ function formatStatusline({ status, sessions }) {
  * outranks what silences only the music, and a running player outranks every
  * reason it might not be running. Each silent line names the command that
  * changes it. `mute` is the minutes left, Infinity for an open-ended mute,
- * null when not muted; `musicSource` is "env", "project" or "" (saved or default).
+ * null when not muted; `call` is { apps } while a call has the music paused (--mute-on-calls), else null; `musicSource` is "env", "project" or "" (saved or default).
  */
-function explainMusic({ disabledByEnv, mute, backend, daemon, genre, volume, music, musicSource, sessions }) {
+function explainMusic({ disabledByEnv, mute, call, backend, daemon, genre, volume, music, musicSource, sessions }) {
   const names = (list) => {
     const all = [...new Set(list.map((s) => (s.project ? projectName(s.project) : null)).filter(Boolean))];
     return all.length > 3 ? `${all.slice(0, 3).join(", ")} +${all.length - 3}` : all.join(", ");
@@ -310,6 +310,7 @@ function explainMusic({ disabledByEnv, mute, backend, daemon, genre, volume, mus
 
   if (disabledByEnv) return silent("VIBE_DISABLE is set in this shell (unset it to hear music)");
   if (mute != null) return silent(`muted ${mute === Infinity ? "until you unmute" : `for ${mute} more min`} (vibe --unmute)`);
+  if (call) return silent(`on a call (${call.apps.length ? call.apps.join(", ") : "the microphone is in use"}); music resumes when it ends (vibe --no-mute-on-calls to turn this off)`);
   if (!backend) return silent("no audio player found on this machine (vibe --doctor)");
   if (daemon) {
     const stuck = sessions.filter((s) => s.state === "stuck");
@@ -501,7 +502,7 @@ function runDaemon(genre, volume, { reactive = false, volumeSource = null } = {}
   if (!sweep()) endIdle(); // Already interrupted before this daemon started.
 
   const player = new AudioPlayer();
-  const started = player.start(genre, volume, {
+  const options = {
     intensity: reactive ? readIntensity : null,
     // The same piece with more of it, as time escalation already does: two
     // sessions working is tier 2 at least, three or more is tier 3. Read at
@@ -509,8 +510,12 @@ function runDaemon(genre, volume, { reactive = false, volumeSource = null } = {}
     minTier: () => Math.min(3, working(listSessions()).length),
     // A heartbeat under the music while any working session looks stuck.
     tension: () => working(listSessions()).some(isStuck)
-  });
-  if (!started) process.exit(0);
+  };
+  // A call (--mute-on-calls) pauses the music and this daemon waits it out: the
+  // turn is still running, so the music comes back when the call ends. Unlike a
+  // mute, which stops the daemon, nobody would start another until the next prompt.
+  let pausedForCall = onCall();
+  if (!pausedForCall && !player.start(genre, volume, options)) process.exit(0);
 
   // A second signal while fading changes nothing; the fade ends by itself.
   let closing = false;
@@ -533,7 +538,18 @@ function runDaemon(genre, volume, { reactive = false, volumeSource = null } = {}
     if (readPid() !== process.pid) return shutdown();
     // A volume saved while this plays reaches it now, not at the next prompt.
     if (volumeSource) player.setVolume(volumeSource());
-    if (sweep()) return;
+    if (sweep()) {
+      if (onCall()) {
+        if (!pausedForCall) {
+          pausedForCall = true;
+          player.fadeOut(() => {});
+        }
+      } else if (pausedForCall) {
+        pausedForCall = false;
+        if (!player.start(genre, volume, options)) process.exit(0);
+      }
+      return;
+    }
     player.stop({ playChime: false });
     endIdle();
   }, INTERRUPT_POLL_MS);

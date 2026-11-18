@@ -362,7 +362,7 @@ function resumeAfterUnmute(genre, volume, { music = true, follow = false } = {})
 function applyLiveMusic(genre, volume, { music = true, follow = false } = {}) {
   const was = daemonRunning();
   if (was) stopDaemon({ keepSessions: true });
-  const start = music && !playbackDisabled() && working(listSessions()).length > 0;
+  const start = music && !playbackDisabled({ calls: false }) && working(listSessions()).length > 0;
   if (start) spawnDaemon(genre, volume, false, follow);
   return was || start;
 }

@@ -1,0 +1,73 @@
+// Is something recording from the default input device? Line 1 is 1, 0 or ?;
+// the lines after it name the apps. JXA has no btoa/atob, so each property
+// address goes in as base64 built by hand.
+//
+// The signal is kAudioDevicePropertyDeviceIsRunningSomewhere, the flag behind the
+// system's microphone indicator. It is per *device*, not per direction, so on a
+// headset (one device for both the mic and the speaker, AirPods and most USB
+// headsets) it is also 1 while our own music plays - which would pause the music,
+// which clears the flag, which starts it again, forever. For that case the answer
+// comes from the processes instead: those with the input device in their input
+// scope (kAudioProcessPropertyDevices), macOS 14.2 and later. Older than that and
+// shared, the answer is ? (cannot tell), never a guess. The process flag alone
+// (kAudioProcessPropertyIsRunningInput) is not enough: a per-app volume tool holds
+// an input stream open on a tap and would read as a call for good.
+ObjC.import('Foundation');
+ObjC.import('CoreAudio');
+ObjC.import('AppKit');
+ObjC.bindFunction('AudioObjectGetPropertyData', ['int', ['unsigned int', 'void *', 'unsigned int', 'void *', 'void *', 'void *']]);
+ObjC.bindFunction('AudioObjectGetPropertyDataSize', ['int', ['unsigned int', 'void *', 'unsigned int', 'void *', 'void *']]);
+
+const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const btoa = (b) => { let o = ''; for (let i = 0; i < b.length; i += 3) { const n = (b[i] << 16) | ((b[i + 1] || 0) << 8) | (b[i + 2] || 0); o += A[n >> 18 & 63] + A[n >> 12 & 63] + (i + 1 < b.length ? A[n >> 6 & 63] : '=') + (i + 2 < b.length ? A[n & 63] : '='); } return o; };
+const atob = (s) => { const r = []; for (let i = 0; i < s.length; i += 4) { const n = [0, 1, 2, 3].map((k) => s[i + k] === '=' ? 0 : A.indexOf(s[i + k])); const v = (n[0] << 18) | (n[1] << 12) | (n[2] << 6) | n[3]; r.push(v >> 16 & 255, v >> 8 & 255, v & 255); } return r; };
+const le32 = (n) => [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255];
+const four = (s) => ((s.charCodeAt(0) << 24) | (s.charCodeAt(1) << 16) | (s.charCodeAt(2) << 8) | s.charCodeAt(3)) >>> 0;
+const data = (bytes) => $.NSMutableData.dataWithData($.NSData.alloc.initWithBase64EncodedStringOptions(btoa(bytes), 0));
+const address = (selector, scope) => data([...le32(four(selector)), ...le32(four(scope || 'glob')), ...le32(0)]);
+const bytesOf = (d) => atob(ObjC.unwrap(d.base64EncodedStringWithOptions(0)));
+const u32 = (r, i) => ((r[i] | (r[i + 1] << 8) | (r[i + 2] << 16) | (r[i + 3] << 24)) >>> 0);
+
+// One UInt32 property, or null when the object does not have it.
+function readU32(object, selector) {
+  const out = data([0, 0, 0, 0]);
+  const size = data(le32(4));
+  if ($.AudioObjectGetPropertyData(object, address(selector).bytes, 0, null, size.mutableBytes, out.mutableBytes) !== 0) return null;
+  return u32(bytesOf(out), 0);
+}
+
+// An array of object ids, or null when the object does not have the property.
+function readList(object, selector, scope) {
+  const sz = data([0, 0, 0, 0]);
+  if ($.AudioObjectGetPropertyDataSize(object, address(selector, scope).bytes, 0, null, sz.mutableBytes) !== 0) return null;
+  const length = u32(bytesOf(sz), 0);
+  if (length === 0) return [];
+  const out = data(new Array(length).fill(0));
+  const size = data(le32(length));
+  if ($.AudioObjectGetPropertyData(object, address(selector, scope).bytes, 0, null, size.mutableBytes, out.mutableBytes) !== 0) return null;
+  const r = bytesOf(out);
+  const ids = [];
+  for (let i = 0; i + 3 < length; i += 4) ids.push(u32(r, i));
+  return ids;
+}
+
+function appName(object) {
+  const pid = readU32(object, 'ppid');
+  if (pid === null) return 'an app';
+  const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid | 0);
+  const name = app && !app.isNil() ? ObjC.unwrap(app.localizedName) : '';
+  return name || 'process ' + pid;
+}
+
+function probe() {
+  const device = readU32(1, 'dIn '); // the system object's default input device
+  if (!device) return ['0']; // no input device at all
+  if (!readU32(device, 'gone')) return ['0'];
+  const processes = readList(1, 'prs#');
+  const users = processes === null ? null : processes.filter((p) => (readList(p, 'pdv#', 'inpt') || []).indexOf(device) !== -1).map(appName);
+  if (readU32(1, 'dOut') !== device) return ['1'].concat(users || []); // a mic of its own: the flag is the answer
+  if (users === null) return ['?']; // a headset on a macOS without process objects: the flag includes our own music
+  return [users.length ? '1' : '0'].concat(users);
+}
+
+probe().join('\n');

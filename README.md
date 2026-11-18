@@ -150,7 +150,7 @@ Want the music to follow what the agent is doing — calm while it reads, busies
 vibe --reactive --install-hooks
 ```
 
-Prefer a guided setup? Run `vibe` with nothing after it: a menu asks for your agent, genre and volume (press `p` to hear a genre first) and installs the hooks for you. The menu's last entry, **Alerts & extras**, flips the saved toggles (banners, spoken announcements, `vibe --announce`, music, a one-hour mute) without a flag to remember. Installing hooks doesn't start the agent: open it whenever you like, and the music plays from your first prompt. ("Just launch it" and "This session only" do start it.)
+Prefer a guided setup? Run `vibe` with nothing after it: a menu asks for your agent, genre and volume (press `p` to hear a genre first) and installs the hooks for you. The menu's last entry, **Alerts & extras**, flips the saved toggles (banners, spoken announcements, `vibe --announce`, music, quiet on calls, a one-hour mute) without a flag to remember. Installing hooks doesn't start the agent: open it whenever you like, and the music plays from your first prompt. ("Just launch it" and "This session only" do start it.)
 
 Now run your agent normally, with no prefix. Music starts when you submit a prompt and stops with a chime when the agent finishes. [Details below.](#-agent-hooks-no-wrapper-needed)
 
@@ -339,6 +339,23 @@ Sessions with no id in their payload share a single slot, so they behave as one.
 
 > **One player is shared.** Prompt two agents at once and the last prompt owns the music. One person, one set of speakers — deliberate, not a limitation being worked around.
 
+### 📞 Quiet on calls: `vibe --mute-on-calls`
+
+```bash
+vibe --mute-on-calls      # on
+vibe --no-mute-on-calls   # off again (the default)
+```
+
+While any app is recording from your microphone, VibeAudio goes quiet: the music pauses, and the chimes, banners and spoken lines wait too, so nothing plays into a call. When the microphone has been free for five seconds the music comes back **by itself if an agent is still working**; a turn that finished during the call is not announced afterwards. A wrapper run (`vibe npm test`) pauses and resumes the same way, and one started during a call stays quiet until it ends. It is saved, so it applies from your next prompt.
+
+It reads the system's own "microphone in use" state, so Teams, Zoom, Meet in a browser, Discord and anything else are covered with no list of apps to keep current. Voice dictation and recorders count too. It is off by default because it asks the system which apps record.
+
+- **macOS**: the default input device's "running somewhere" flag (the one behind the orange dot), through `osascript`. On a headset, where the mic and the speaker are one device and the flag is also set by our own music, it asks which processes record from it instead (macOS 14.2 or later); on an older macOS with a headset it cannot tell, so nothing pauses.
+- **Windows**: the microphone entries in the capability store, through `reg query`; an app that started and has not stopped is on the mic. An app that never used it, or one that died on the mic more than 12 hours ago, is not counted.
+- **Linux**: `pactl list source-outputs` (PulseAudio, or PipeWire through `pipewire-pulse`). Paused streams, ones capturing what plays, volume meters (`pavucontrol`, the desktop's sound panel) and loopback or echo-cancel modules are ignored.
+
+If the system cannot be asked (no `pactl`, say), nothing pauses; `vibe --doctor` says so. A tool that holds the microphone all day (a virtual audio device, a meeting bot) keeps the music paused until you turn this off. `vibe --status` names the apps and says why it is quiet. `VIBE_MUTE_ON_CALLS=1` turns it on for one shell. The **Alerts & extras** menu, `/vibeaudio calls on|off` and the mod's Alerts card toggle it too. *Not yet checked on a real call on any platform; see the issue for what was and was not run.*
+
 ### 🔔 Desktop banners: `vibe --notify`
 
 ```bash
@@ -424,6 +441,7 @@ Installing the Claude Code hooks also adds a `/vibe` command (`~/.claude/command
 /vibe stop            stop the music now
 /vibe genre jazz      switch genre, keeping your volume
 /vibe volume 20       change volume, keeping your genre
+/vibe music off       also: notify on|off, speak off|auto|always, calls on|off
 ```
 
 The optional [`/vibeaudio` mod](#vibeaudio-instant-controls-and-a-pane-claude-code-mod) does the same instantly with no turn; `/vibe` is the version that works everywhere. It asks Claude to run the matching `vibe` command, so Claude Code will ask permission for that command the first time. If you already have your own `vibe.md` there, VibeAudio leaves it alone and says so; `--uninstall-hooks` removes only its own.
@@ -461,7 +479,7 @@ To update later, run `claude plugin marketplace update vibeaudio` and then `clau
 ```text
 /vibeaudio               open the pane: mute, stop, music, genre, preview, volume, speech, banners, announcements, test signal
 /vibeaudio mute 30       silence for 30 minutes (unmute ends it)
-/vibeaudio genre jazz    also: volume <n>, music on|off, speak off|auto|always, notify on|off, announce on|off, preview, stop
+/vibeaudio genre jazz    also: volume <n>, music on|off, speak off|auto|always, notify on|off, calls on|off, announce on|off, preview, stop
 /vibeaudio genre zen here   genre, volume and music also take "here": save for this project only
 /vibeaudio card          make your week card; the pane shows it in terminals that draw images
 /vibeaudio band on       an always-visible logo band above the prompt (off by default; band off removes it)
@@ -470,7 +488,7 @@ To update later, run `claude plugin marketplace update vibeaudio` and then `clau
 /vibeaudio help          every command on one line, and the "here" option
 ```
 
-The pane is four cards under a logo header with a status pill (Playing, Ready, Muted or Music off): Now playing (why the music is playing or silent, in the CLI's own words from `vibe --why`, then mute for 15 minutes or an hour, stop the music, send a test signal), Sound (genre, volume, **Preview** plays one loop of the chosen genre, and where to save), Alerts (speech, banners, `vibe --announce`) and Share, which holds your last 7 days as a small chart and the week card buttons. Its colours come from the site and adapt to your Claude Code theme, light or dark. While you are muted, a line above the prompt says how many minutes are left, so a forgotten mute does not look like a broken tool. Nothing else is shown unless you turn the band on.
+The pane is four cards under a logo header with a status pill (Playing, Ready, Muted or Music off): Now playing (why the music is playing or silent, in the CLI's own words from `vibe --why`, then mute for 15 minutes or an hour, stop the music, send a test signal), Sound (genre, volume, **Preview** plays one loop of the chosen genre, and where to save), Alerts (speech, banners, `vibe --announce`, quiet on calls) and Share, which holds your last 7 days as a small chart and the week card buttons. Its colours come from the site and adapt to your Claude Code theme, light or dark. While you are muted, a line above the prompt says how many minutes are left, so a forgotten mute does not look like a broken tool. Nothing else is shown unless you turn the band on.
 
 The optional **band** (`/vibeaudio band on`, remembered across sessions) puts the VibeAudio logo above the prompt, three level bars that move while music is playing (an SVG on the Desktop app, text bars in the terminal). Next to it: the genre and volume, your last 7 days as the week card counts them (turns and time waited, read from `~/.vibeaudio/history.jsonl`). The bars also move while another agent on the machine is working. The buttons are compact icons that show the current state: 🔊/🔇 sound on or muted (press to flip it), ♪ on/off for music, ♫ with the current genre (press for the next one), − and + for volume, ▤ week for the week card (then ↗ to open it) and ⚙ for the controls pane. Under the buttons, dimmed, the same `vibe --why` line as the pane says why it is playing or silent. In a short window it shrinks to one line. It runs `vibe --state` and `vibe --why` every 5 seconds and redraws the text bars twice a second only in the terminal, while it is on and music is playing; on the Desktop app the SVG animates itself, so only the level bars inside the headphones move. Tab to it with Ctrl+X then Tab. With `/vibeaudio usage on` it also shows how full the context window is and, on a Claude plan, your 5-hour and 7-day limits, turning the warning colour at 80%; it reads the same figures Claude Code's status line has, and nothing else. While Claude works, the spinner also says what is playing (`· ♪ jazz…`, or `· ♪ muted`).
 
@@ -905,6 +923,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 | `--render [file]` | Write this project's music to a `.wav` and exit (full scale, ignores `--volume`) | `vibeaudio-<genre>.wav` |
 | `--status` | Say why the music is silent or playing, then show what's installed, running and detected, and exit | — |
 | `--doctor` | Check the setup; every problem comes with the command that fixes it. Exits 1 on a failure, so it scripts | — |
+| `--mute-on-calls` / `--no-mute-on-calls` | Pause the music (and hold chimes, banners and speech) while any app records from the microphone; music resumes after the call if a turn is still working. Saved to `config.json` | off |
 | `--notify` / `--no-notify` | Also show a desktop banner naming the project when a turn finishes, fails or needs you. Saved to `config.json` | off |
 | `--speak` / `--speak-always` / `--no-speak` | Say which project finished, failed or needs you, after the chime: only with two or more sessions going (`--speak`), or every time (`--speak-always`). Saved to `config.json` | off |
 | `--announcements <on\|off>` | Turn `vibe --announce` on or off for good. Saved to `config.json` | on |
@@ -943,6 +962,7 @@ export VIBE_DISABLE=1           # Mute, without uninstalling anything
 export VIBE_CHIME_SUCCESS=~/sounds/done.wav   # Your own done sound for this shell (VIBE_CHIME_FAILURE, VIBE_CHIME_ATTENTION too)
 export VIBE_MUSIC=off           # Signals only: chimes and banners, no music, for this shell
 export VIBE_NOTIFY=1            # Desktop banner naming the project, for this shell
+export VIBE_MUTE_ON_CALLS=1     # Quiet while the microphone is in use, for this shell
 export VIBE_SPEAK=auto           # Spoken announcements (auto, always or off), for this shell
 export VIBE_ANNOUNCE=off         # Make vibe --announce do nothing, for this shell
 export VIBE_NO_HISTORY=1        # Do not log finished turns (what --report reads)

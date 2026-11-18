@@ -6,7 +6,7 @@ const path = require("path");
 const pkg = require("../package.json");
 const { spawn, spawnSync } = require("child_process");
 
-const { AudioPlayer, getAudioPath, clearCache, detectPlayer, bakedGain, resolveGenre, isKnownGenre, loadConfig, saveConfig, wavDurationMs, projectSeed, AVAILABLE_GENRES } = require("./player");
+const { AudioPlayer, getAudioPath, clearCache, detectPlayer, bakedGain, resolveGenre, isKnownGenre, loadConfig, saveConfig, wavDurationMs, projectSeed, AVAILABLE_GENRES, muteOnCalls, onCall } = require("./player");
 
 const { promptInteractive } = require("./interactive");
 
@@ -223,6 +223,20 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRA
   const startTime = Date.now();
   let musicStarted = false;
   let finished = false;
+  // --mute-on-calls: the wrapper has no daemon to wait out a call, so it polls
+  // itself. Only a pause *we* made is undone, never a mute.
+  let pausedForCall = false;
+  let callPoll = null;
+  const watchCall = () => {
+    const call = onCall();
+    if (call && !pausedForCall) {
+      pausedForCall = true;
+      player.stop({ playChime: false });
+    } else if (!call && pausedForCall) {
+      pausedForCall = false;
+      player.start(genre, volume);
+    }
+  };
 
   // `claude -p` and `codex exec` exit when their work does, so the wrapper is
   // right there. An interactive session is the case where process lifetime
@@ -248,7 +262,14 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRA
   // Grace window before triggering audio (silences fast commands)
   const graceTimer = hookDriven ? null : setTimeout(() => {
     musicStarted = true; // Set with music off too: the chime marks the end of a run that outlasted the grace window.
-    if (music) player.start(genre, volume);
+    if (music) {
+      pausedForCall = onCall();
+      if (!pausedForCall) player.start(genre, volume);
+      if (muteOnCalls()) {
+        callPoll = setInterval(watchCall, 1000);
+        callPoll.unref();
+      }
+    }
     if (hud) hud.start();
   }, grace);
 
@@ -265,6 +286,7 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRA
     if (finished) return;
     finished = true;
     clearTimeout(graceTimer);
+    clearInterval(callPoll);
 
     const elapsed = Date.now() - startTime;
     const interrupted = signal === "SIGINT" || signal === "SIGTERM";
@@ -286,6 +308,7 @@ function executeCommand(cmdArgs, genre, volume, chimeVolume, grace = DEFAULT_GRA
     if (finished) return;
     finished = true;
     clearTimeout(graceTimer);
+    clearInterval(callPoll);
     if (hud) hud.stop({ outcome: "failure", code: 1 });
     player.stop({ playChime: false });
     console.error(`\x1b[31m[vibeaudio] Failed to start command '${command}':\x1b[0m ${err.message}`);
@@ -371,6 +394,7 @@ async function run() {
     events: followEvents,
     doctor: showDoctor,
     notify: notifyChange,
+    muteOnCalls: callsChange,
     speak: speakChange,
     announcements: announcementsChange,
     report: reportDays,
@@ -418,6 +442,7 @@ async function run() {
   {
     const own = muteChange !== null ? (muteChange ? "--mute" : "--unmute")
       : notifyChange !== null ? (notifyChange ? "--notify" : "--no-notify")
+      : callsChange !== null ? (callsChange ? "--mute-on-calls" : "--no-mute-on-calls")
       : speakChange !== null ? (speakChange === "off" ? "--no-speak" : speakChange === "always" ? "--speak-always" : "--speak")
       : announcementsChange !== null ? "--announcements"
       : announceReq.text !== null ? "--announce"
@@ -478,6 +503,14 @@ async function run() {
     console.log(`  Hooks and settings are untouched. Ending it early: vibe --unmute`);
     if (minutes > 0) console.log(`  \x1b[90mLonger call? vibe --mute 120 — or vibe --mute 0 to stay off until you say otherwise.\x1b[0m`);
     console.log();
+    return;
+  }
+
+  if (callsChange !== null) {
+    saveConfig({ muteOnCalls: callsChange });
+    console.log(callsChange
+      ? "\x1b[32m✔ Quiet on calls.\x1b[0m Music, chimes and speech pause while any app uses the microphone, and music resumes when the call ends."
+      : "\x1b[90mCalls no longer pause anything.\x1b[0m");
     return;
   }
 

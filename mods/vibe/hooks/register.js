@@ -12,11 +12,11 @@ const GENRES = ['lofi', 'synthwave', '8bit', 'electronic', 'jazz', 'zen', 'piano
 const DEFAULT_MUTE_MINUTES = 60
 const REFRESH_MS = 30000
 const NO_VIBE = 'could not run vibe - install it with: npm i -g vibeaudio'
-const HELP = 'Usage: /vibeaudio [mute [min] | unmute | genre <name> | volume <5-100> | music on|off | speak off|auto|always | notify on|off | announce on|off | preview | card [days] | doctor | band on|off | usage on|off | test | stop | status | help]'
+const HELP = 'Usage: /vibeaudio [mute [min] | unmute | genre <name> | volume <5-100> | music on|off | speak off|auto|always | notify on|off | calls on|off | announce on|off | preview | card [days] | doctor | band on|off | usage on|off | test | stop | status | help]'
 const HELP_HERE = 'Add "here" to save for this project only: /vibeaudio genre jazz here'
 
 // What the pane and the band draw, refreshed from the two files.
-let view = { genre: 'lofi', volume: 40, music: true, speak: 'off', notify: false, announce: true, muteUntil: undefined, here: false }
+let view = { genre: 'lofi', volume: 40, music: true, speak: 'off', notify: false, calls: false, announce: true, muteUntil: undefined, here: false }
 let note = ''
 let cardFile = null
 let cardIsPng = false
@@ -108,6 +108,7 @@ async function refresh($) {
     here: ['genre', 'volume', 'music'].some((k) => mine[k] !== undefined),
     speak: speak === 'always' ? 'always' : ['1', 'true', 'on', 'yes', 'auto'].includes(speak) ? 'auto' : 'off',
     notify: ['1', 'true', 'on', 'yes'].includes(String(config.notify ?? '').trim().toLowerCase()),
+    calls: ['1', 'true', 'on', 'yes'].includes(String(config.muteOnCalls ?? '').trim().toLowerCase()),
     announce: !['0', 'false', 'off', 'no'].includes(String(config.announce ?? '').trim().toLowerCase()),
     muteUntil: mute ? (mute.until ? Number(mute.until) : null) : undefined,
   }
@@ -428,6 +429,9 @@ async function runLine($, line) {
     case 'notify':
       if (arg !== 'on' && arg !== 'off') return say($, 'Usage: /vibeaudio notify on|off')
       return change($, [arg === 'on' ? '--notify' : '--no-notify'], 'Banners: ' + arg)
+    case 'calls':
+      if (arg !== 'on' && arg !== 'off') return say($, 'Usage: /vibeaudio calls on|off')
+      return change($, [arg === 'on' ? '--mute-on-calls' : '--no-mute-on-calls'], 'Quiet on calls: ' + arg)
     case 'card':
       if (arg !== undefined && !INT.test(arg)) return say($, HELP)
       return makeCard($, arg === undefined ? 7 : Number(arg))
@@ -611,6 +615,7 @@ export function register(on) {
             Button({ key: 'speak', label: 'Speech: ' + view.speak + ' (s)', hotkey: 's', onPress: run([speakArg[nextSpeak]], 'Speak: ' + nextSpeak) }),
             Button({ key: 'announce', label: 'Announce: ' + (view.announce ? 'on' : 'off') + ' (a)', hotkey: 'a', onPress: run(['--announcements', view.announce ? 'off' : 'on'], 'Announcements: ' + (view.announce ? 'off' : 'on')) }),
             Button({ key: 'notify', label: 'Banners: ' + (view.notify ? 'on' : 'off') + ' (n)', hotkey: 'n', onPress: run([view.notify ? '--no-notify' : '--notify'], 'Banners: ' + (view.notify ? 'off' : 'on')) }),
+            Button({ key: 'calls', label: 'Calls: ' + (view.calls ? 'quiet' : 'off') + ' (l)', hotkey: 'l', onPress: run([view.calls ? '--no-mute-on-calls' : '--mute-on-calls'], 'Quiet on calls: ' + (view.calls ? 'off' : 'on')) }),
           ]),
         ]),
         panel(Box, Text, 'SHARE', INK.amber, [

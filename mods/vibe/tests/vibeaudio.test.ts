@@ -94,6 +94,7 @@ test('genre, volume, music, speak and notify map to one CLI call each', async ($
   await run($, 'music off')
   await run($, 'speak always')
   await run($, 'notify on')
+  await run($, 'calls on')
   await run($, 'unmute')
   expect(s.ran).toEqual([
     ['vibe', '--genre', 'jazz'],
@@ -101,6 +102,7 @@ test('genre, volume, music, speak and notify map to one CLI call each', async ($
     ['vibe', '--music', 'off'],
     ['vibe', '--speak-always'],
     ['vibe', '--notify'],
+    ['vibe', '--mute-on-calls'],
     ['vibe', '--unmute'],
   ])
 })

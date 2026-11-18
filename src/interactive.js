@@ -328,7 +328,7 @@ const NEXT_SPEAK = { off: "auto", auto: "always", always: "off" };
  * row says so rather than letting the toggle look dead.
  */
 async function promptSettings() {
-  const { loadConfig, saveConfig, muteState, setMuted, musicEnabled, DEFAULT_MUTE_MINUTES } = require("./player");
+  const { loadConfig, saveConfig, muteState, setMuted, musicEnabled, muteOnCalls, DEFAULT_MUTE_MINUTES } = require("./player");
   const hooks = require("./hooks");
   const speech = require("./speech");
 
@@ -345,6 +345,8 @@ async function promptSettings() {
         desc: `the chime for CI runs and scripts${pinned("VIBE_ANNOUNCE")}` },
       { id: "music", name: "Music", value: musicEnabled() ? "on" : "off",
         desc: `off keeps the chimes, banners and events, and drops the music${pinned("VIBE_MUSIC")}` },
+      { id: "calls", name: "Quiet on calls", value: muteOnCalls(process.env, config) ? "on" : "off",
+        desc: `pause everything while an app uses the microphone, resume after${pinned("VIBE_MUTE_ON_CALLS")}` },
       { id: "mute", name: "Mute", value: muteState() !== null ? "on" : "off",
         desc: `silence everything for ${DEFAULT_MUTE_MINUTES} minutes (vibe --unmute ends it)` },
       { id: "done", name: "Done", value: "", desc: "" }
@@ -363,6 +365,7 @@ async function promptSettings() {
     else if (chosen.id === "speak") saveConfig({ speak: NEXT_SPEAK[chosen.value] });
     else if (chosen.id === "announce") saveConfig({ announce: chosen.value !== "on" });
     else if (chosen.id === "music") saveConfig({ music: chosen.value !== "on" });
+    else if (chosen.id === "calls") saveConfig({ muteOnCalls: chosen.value !== "on" });
     else if (chosen.id === "mute") {
       if (chosen.value === "on") setMuted(false);
       else {
