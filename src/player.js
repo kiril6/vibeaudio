@@ -138,12 +138,22 @@ let warnedNoPlayer = false;
 // afplay stays the fallback: a helper that cannot start is not worth a silent
 // run, and it is used for the rest of the process once one has failed.
 const MAC_HELPER = path.join(__dirname, "mac-player.jxa");
+const WIN_HELPER = path.join(__dirname, "win-player.ps1");
 const FADE_IN_S = 0.5;
 const VOLUME_RAMP_S = 0.3;
 let helperFailed = false;
 
 function helperUsable(backend) {
-  return process.platform === "darwin" && backend.cmd === "afplay" && !helperFailed && !process.env.VIBE_NO_FADE;
+  const own = (process.platform === "darwin" && backend.cmd === "afplay") || (process.platform === "win32" && backend.cmd === "powershell");
+  return own && !helperFailed && !process.env.VIBE_NO_FADE;
+}
+
+// Windows: a PowerShell process hosting MediaPlayer (#17). It speaks the macOS
+// helper's protocol, so one code path serves both.
+function helperCommand() {
+  if (process.platform !== "win32") return ["osascript", ["-l", "JavaScript", MAC_HELPER]];
+  const script = Buffer.from(fs.readFileSync(WIN_HELPER, "utf8"), "utf16le").toString("base64");
+  return ["powershell", ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", script]];
 }
 
 // Linux: one long-lived player fed PCM (src/pcm-stream.js, #16), for the same fades
@@ -910,7 +920,8 @@ class AudioPlayer {
     // never both, or the volume would be applied twice.
     const backend = detectPlayer();
     const streaming = streamUsable(backend);
-    const gain = streaming ? 1 : bakedGain(backend, this.volume); // The stream applies the volume itself.
+    // The stream and the helper apply the volume themselves.
+    const gain = streaming || helperUsable(backend) ? 1 : bakedGain(backend, this.volume);
     // An agent that looks stuck adds a heartbeat, landing at this loop boundary.
     const audioFile = getAudioPath(this.genre, this.currentTier, this.seed, gain, this.bar, Boolean(this.tension && this.tension()));
     // Advanced after the choice, so the bar that plays first is bar 0.
@@ -993,13 +1004,17 @@ class AudioPlayer {
   playViaHelper(audioFile, backend) {
     try {
       if (!this.helper) {
-        const helper = spawn("osascript", ["-l", "JavaScript", MAC_HELPER], { stdio: ["pipe", "ignore", "ignore"] });
+        const helper = spawn(...helperCommand(), { stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
         helper.stdin.on("error", () => {}); // EPIPE once it is gone.
         const dropped = () => {
           if (this.helper !== helper) return;
           this.helper = null;
           helperFailed = true;
-          if (this.isPlaying) this.spawnLoop(audioFile, backend);
+          if (!this.isPlaying) return;
+          // SoundPlayer has no volume, so this bar must be rendered at it, not replayed as is.
+          if (process.platform !== "win32") return this.spawnLoop(audioFile, backend);
+          clearTimeout(this.nextTimer);
+          this.playLoop();
         };
         helper.on("error", dropped);
         helper.on("exit", dropped);
