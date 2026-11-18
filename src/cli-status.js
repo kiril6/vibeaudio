@@ -15,11 +15,12 @@ const { normalizeVolume, loadConfig, musicEnabled, projectSettings } = require("
 // --status read, so the one-line answer cannot disagree with them.
 function musicFacts() {
   const hooks = require("./hooks");
-  const { muteState, playbackDisabled, detectPlayer: detect } = require("./player");
+  const { muteState, envDisabled, onCall, detectPlayer: detect } = require("./player");
   const mute = muteState();
   const daemon = hooks.daemonPlaying();
   return {
-    disabledByEnv: mute === null && playbackDisabled(),
+    disabledByEnv: mute === null && envDisabled(),
+    call: onCall() ? { apps: require("./callwatch").callState().apps } : null,
     mute: mute === null ? null : mute.until ? Math.max(1, Math.round((mute.until - Date.now()) / 60000)) : Infinity,
     backend: Boolean(detect()),
     daemon,
@@ -62,6 +63,7 @@ function printStatus() {
   console.log(`  volume    ${on(`${Math.round(volumeNow() * 100)}%`)}${source("VIBE_VOLUME", "volume")}`);
   console.log(`            ${off("change either with: vibe --genre <name> --volume <n>")}`);
   console.log(`  notify    ${hooks.notifyEnabled() ? on("on") : off("off")}${off("  desktop banner naming the project — vibe --notify / --no-notify")}`);
+  console.log(`  calls     ${require("./player").muteOnCalls() ? on("mute on a call") : off("off")}${off("  go quiet while the microphone is in use, resume after — vibe --mute-on-calls / --no-mute-on-calls")}`);
   const speech = require("./speech");
   const speakNow = speech.speakMode(process.env, loadConfig());
   console.log(`  speak     ${speakNow === "off" ? off("off") : on(speakNow)}${off(speakNow === "off" ? "  a voice names the project after the chime — vibe --speak / --speak-always" : speakNow === "auto" ? "  only with two or more sessions — vibe --speak-always / --no-speak" : "  every time — vibe --no-speak")}${speakNow !== "off" && !speech.voiceAvailable() ? "  \x1b[33mno voice found on this machine\x1b[0m" : ""}`);
@@ -162,7 +164,7 @@ function printStatus() {
  */
 function doctorChecks() {
   const hooks = require("./hooks");
-  const { detectPlayer: detect, muteState, muteRemainingText, playbackDisabled, CACHE_ROOT, CONFIG_FILE } = require("./player");
+  const { detectPlayer: detect, muteState, muteRemainingText, envDisabled, CACHE_ROOT, CONFIG_FILE } = require("./player");
   const checks = [];
   const add = (level, label, detail = "", fix = "") => checks.push({ level, label, detail, fix });
 
@@ -269,13 +271,23 @@ function doctorChecks() {
 
   const mute = muteState();
   if (mute !== null) add("warn", "Mute", `muted ${muteRemainingText(mute)}`, "vibe --unmute");
-  if (playbackDisabled()) add("warn", "VIBE_DISABLE", `set to "${process.env.VIBE_DISABLE}" — automatic playback is off`, "unset VIBE_DISABLE");
-  if (mute === null && !playbackDisabled()) add("ok", "Mute", "not muted");
+  if (envDisabled()) add("warn", "VIBE_DISABLE", `set to "${process.env.VIBE_DISABLE}" — automatic playback is off`, "unset VIBE_DISABLE");
+  if (mute === null && !envDisabled()) add("ok", "Mute", "not muted");
   for (const { kind, setting, error } of customChimeReport()) {
     if (error) add("warn", `Custom ${kind} chime`, `${setting}: ${error}, so the built-in chime plays instead`, `vibe --${kind}-chime default`);
     else add("ok", `Custom ${kind} chime`, setting);
   }
   if (!musicEnabled()) add("ok", "Music", "off — chimes and banners only, by your setting (vibe --music on)");
+  if (require("./player").muteOnCalls()) {
+    // Ask once rather than guess: a probe that cannot tell leaves the music alone, so it fails silently otherwise.
+    const read = require("./callwatch").probe();
+    if (read === null) {
+      add("warn", "Mute on calls", "on, but this machine could not say whether the microphone is in use, so music never pauses",
+        process.platform === "linux" ? "install pulseaudio-utils (pactl); PipeWire works through pipewire-pulse"
+          : process.platform === "darwin" ? "check that osascript runs; on a headset it needs macOS 14.2 or later, where the mic flag cannot be told from our own music"
+          : "check that reg runs");
+    } else add("ok", "Mute on calls", `on — microphone ${read.inUse ? `in use now${read.apps.length ? ` by ${read.apps.join(", ")}` : ""}` : "idle"}`);
+  }
   if (hooks.notifyEnabled()) {
     if (process.platform === "darwin") add("ok", "Desktop banners", "on, through osascript");
     else if (process.platform === "linux") {

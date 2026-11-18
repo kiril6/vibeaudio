@@ -1,7 +1,7 @@
 /** --install-hooks / --uninstall-hooks: target resolution, dry-run plan, reports. */
 
 const fs = require("fs");
-const { loadConfig, saveConfig } = require("./player");
+const { loadConfig, saveConfig, muteOnCalls } = require("./player");
 const { pinnedSettingsFor } = require("./cli-settings");
 
 /**
@@ -128,6 +128,7 @@ function installHookTargets(ids, genre, volume, reactive, dryRun = false, typed 
   if (live.length) console.log(`  ${live.join(", ")}: takes effect on your next prompt - no restart needed.`);
   console.log(`  \x1b[90mChange the sound any time with: vibe --genre <name> --volume <n> — no reinstall.\x1b[0m`);
   console.log(`  \x1b[90mCheck it with vibe --status · quiet for a call: vibe --mute · everything else: vibe --help\x1b[0m`);
+  if (!muteOnCalls()) console.log(`  \x1b[90mTake calls at your desk? vibe --mute-on-calls pauses the music while an app uses the microphone.\x1b[0m`);
   if (ids.length > 1) {
     console.log(`  \x1b[90mOne player is shared: whichever agent you prompt last owns the music.\x1b[0m`);
   }

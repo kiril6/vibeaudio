@@ -247,7 +247,7 @@ const CONTROL_DESCRIPTION = "Control VibeAudio - status, mute, unmute, stop, or 
 function slashCommandText() {
   return `---
 description: ${CONTROL_DESCRIPTION}
-argument-hint: "[status | mute [minutes] | unmute | stop | genre <name> | volume <5-100>]"
+argument-hint: "[status | mute [minutes] | unmute | stop | genre <name> | volume <5-100> | music on|off | notify on|off | speak off|auto|always | calls on|off]"
 ---
 ${SLASH_MARK}
 Control VibeAudio, the focus music that plays while you work, for the user.
@@ -388,7 +388,11 @@ function controlCommands() {
 - \`stop\`: \`${cli} --stop\`
 - \`genre <name>\`: \`${cli} --genre <name>\`
 - \`volume <5-100>\`: \`${cli} --volume <n>\`
-  Both save the user's default and reach the hooks on the next prompt - there
+- \`music on|off\`: \`${cli} --music <on|off>\` (off keeps the chimes)
+- \`notify on|off\`: \`${cli} --notify\` or \`${cli} --no-notify\`
+- \`speak off|auto|always\`: \`${cli} --no-speak\`, \`${cli} --speak\` or \`${cli} --speak-always\`
+- \`calls on|off\`: \`${cli} --mute-on-calls\` or \`${cli} --no-mute-on-calls\`
+  These save the user's default and reach the hooks on the next prompt - there
   is nothing to reinstall, so do not run --install-hooks for these.
   Genres: lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, random.
 

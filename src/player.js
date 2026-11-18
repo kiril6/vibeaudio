@@ -8,6 +8,7 @@ const path = require("path");
 const os = require("os");
 const { spawn, spawnSync } = require("child_process");
 const { PcmStream } = require("./pcm-stream");
+const callwatch = require("./callwatch");
 
 const { generateLofiLoop } = require("./synth/lofi");
 const { generateSynthwaveLoop } = require("./synth/synthwave");
@@ -460,12 +461,34 @@ function muteState() {
   return state;
 }
 
-function playbackDisabled() {
+function envDisabled() {
   const raw = (process.env.VIBE_DISABLE || "").trim().toLowerCase();
-  if (raw === "1" || raw === "true" || raw === "yes" || raw === "on") return true;
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
+/**
+ * Quiet while a call is on (`--mute-on-calls`, #102): the microphone is in use
+ * by something. Off unless asked for, because it reads which apps record from the
+ * system. Env beats the saved value, like every setting.
+ */
+function muteOnCalls(env = process.env, config = loadConfig()) {
+  const raw = env.VIBE_MUTE_ON_CALLS ?? config.muteOnCalls ?? "off";
+  return ["on", "1", "true", "yes"].includes(String(raw).trim().toLowerCase());
+}
+
+function onCall() {
+  return muteOnCalls() && callwatch.callActive();
+}
+
+/**
+ * `calls: false` leaves a call out: the daemon asks that way, because it does not
+ * want to be told to stop for good by something it pauses for and resumes after.
+ */
+function playbackDisabled({ calls = true } = {}) {
+  if (envDisabled()) return true;
   // Checked per playback rather than cached, so unmuting - or an expiry -
   // lands on the next loop or prompt without restarting anything.
-  return muteState() !== null;
+  return muteState() !== null || (calls && onCall());
 }
 
 /**
@@ -1141,6 +1164,9 @@ module.exports = {
   bakedGain,
   applyGain,
   playbackDisabled,
+  envDisabled,
+  muteOnCalls,
+  onCall,
   musicEnabled,
   resolveGenre,
   isKnownGenre,

@@ -88,6 +88,7 @@ function parseArgs(argv) {
   let eventsFlag = false;
   let doctorFlag = false;
   let notifyFlag = null;
+  let callsFlag = null;
   let speakFlag = null;
   let announcementsFlag = null;
   let reportDays = null;
@@ -326,6 +327,12 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--mute-on-calls" || arg === "--no-mute-on-calls") {
+      callsFlag = arg === "--mute-on-calls";
+      i += 1;
+      continue;
+    }
+
     if (arg === "--speak" || arg === "--speak-always" || arg === "--no-speak") {
       speakFlag = arg === "--speak" ? "auto" : arg === "--speak-always" ? "always" : "off";
       i += 1;
@@ -522,6 +529,7 @@ function parseArgs(argv) {
     events: eventsFlag,
     doctor: doctorFlag,
     notify: notifyFlag,
+    muteOnCalls: callsFlag,
     speak: speakFlag,
     announcements: announcementsFlag,
     report: reportDays,
@@ -572,6 +580,7 @@ Procedural focus music while your AI coding tools think.
   vibe --preview jazz
   gh run watch; vibe --announce "CI finished" --exit-code $?   \x1b[90m# the chime for a CI run or a script\x1b[0m
   vibe --render                  \x1b[90m# save this repo's sound as a .wav to share\x1b[0m
+  vibe --mute-on-calls           \x1b[90m# go quiet while the microphone is in use (a call), and carry on when it ends\x1b[0m
   vibe --notify                  \x1b[90m# a desktop banner naming the project when a turn finishes or needs you (macOS, Linux)\x1b[0m
   vibe --speak                   \x1b[90m# a voice names the project after the chime (--no-speak turns it off)\x1b[0m
   vibe                           \x1b[90m# menu: pick a tool and a sound (p auditions a genre); "Alerts & extras" flips banners, speech, announce, music, mute\x1b[0m
@@ -593,6 +602,7 @@ Procedural focus music while your AI coding tools think.
       --render [file]          Write this project's music to a .wav and exit (full scale, ignores --volume)
       --status                 Say why the music is silent or playing, then show what is
                                installed, running and detected, and exit
+      --mute-on-calls | --no-mute-on-calls   Pause the music while the microphone is in use by any app and resume after the call; chimes and speech wait too (off by default; macOS, Windows, Linux with pactl)
       --notify | --no-notify   Also show a desktop banner naming the project when a turn finishes, fails, needs you or looks stuck (macOS and Linux; off by default)
       --speak | --no-speak     Also say which project finished, failed or needs you, after the chime - with two or more sessions going (off by default)
       --speak-always           Like --speak, but every time, even with one session
