@@ -43,7 +43,7 @@ It is built as **calm technology**, in the sense of Mark Weiser and John Seely B
 * 📈 **Escalating layers.** Tier 1 (0–15s) gentle intro → Tier 2 (15–45s) main groove → Tier 3 (45s+) deep focus. You can hear how deep into the task the agent is.
 * 🔁 **A phrase, not a loop.** Each piece is three bars that rotate through your project's own progressions, so a long turn moves through a ~21-second phrase instead of replaying one 7-second bar for half an hour.
 * 🎛️ **Music that follows the work** ([reactive mode](#reactive-mode-opt-in), opt-in). Calm while the agent reads, fuller while it edits, busiest when it runs commands or hands work to sub-agents — you can hear *what* it's doing, not just for how long.
-* 🌅 **It fades, it doesn't cut.** On macOS the music eases in and out instead of starting and stopping mid-note, and `vibe --volume` reaches music that is already playing within a second. On Linux the music eases in and out when an agent's turn ends, and a volume change lands within about a second. A wrapped command's exit still stops it at once.
+* 🌅 **It fades, it doesn't cut.** On macOS the music eases in and out instead of starting and stopping mid-note, and `vibe --volume` reaches music that is already playing within a second. On Linux the music eases in and out when an agent's turn ends, and a volume change lands within about a second. Windows has the same through a `MediaPlayer` helper, written but not yet heard on a real Windows machine. A wrapped command's exit still stops it at once.
 * 🔔 **Outcome-aware chimes.** Ascending on success, a soft descending minor chord on failure, and **silence on `Ctrl+C`** — an abort is never reported as done.
 * 🎚️ **Your own chime.** `vibe --success-chime ~/sounds/done.wav` (or `--failure-chime`, `--attention-chime`) replaces the done, failed or "needs you" sound with a WAV of yours, per project with `--here`; a file that stops working falls back to the built-in one. [Details ↓](#your-own-chime-vibe---success-chime)
 * 💓 **A heartbeat when an agent looks stuck.** If 4 of a session's last 8 tool calls fail — the test-edit-test loop that goes nowhere — a soft pulse on the music's tonic joins the music until things start passing again. It's rare by design: on 4,497 real turns it fired in under 1%.
@@ -947,7 +947,7 @@ export VIBE_SPEAK=auto           # Spoken announcements (auto, always or off), f
 export VIBE_ANNOUNCE=off         # Make vibe --announce do nothing, for this shell
 export VIBE_NO_HISTORY=1        # Do not log finished turns (what --report reads)
 export VIBE_NO_UPDATE_CHECK=1   # Never ask npm whether a newer version is out
-export VIBE_NO_FADE=1           # macOS: play with plain afplay, no fade in/out
+export VIBE_NO_FADE=1           # macOS/Windows: play with plain afplay / SoundPlayer, no fade in/out
 export VIBE_NO_STREAM=1         # Linux: one player per loop file, no fade-in or live volume
 ```
 
