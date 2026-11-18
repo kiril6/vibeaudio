@@ -22,10 +22,14 @@ const { path, assert, fs, TEST_DIR } = require("../helpers");
     assert.strictEqual(helper.exitCode, null, `a volume change must not end the helper: ${err}`);
     const closed = Date.now();
     helper.stdin.end();
-    const { code, at } = await Promise.race([exited, new Promise((r) => setTimeout(() => r({ code: "hung" }), 5000))]);
+    // The fade is 0.35 s and the rest is PowerShell teardown, 2.6 s seen on a loaded
+    // runner. The cutoff for "never exits" sits above the bound on how long it may
+    // take: the other way round (5 s against 6 s) made anything between them read as
+    // a hang, which is how 'hung' failed this on Windows CI twice.
+    const { code, at } = await Promise.race([exited, new Promise((r) => setTimeout(() => r({ code: "hung" }), 20000))]);
     helper.kill();
     assert.strictEqual(code, 0, `closing its input must end it: ${err}`);
-    assert.ok(at - closed < 6000, `fade-out then exit, took ${at - closed}ms`);
+    assert.ok(at - closed < 10000, `fade-out then exit, took ${at - closed}ms`);
     fs.rmSync(path.dirname(file), { recursive: true, force: true });
     console.log("   ✓ The helper plays until its pipe closes, then fades out and exits.");
   } else {
