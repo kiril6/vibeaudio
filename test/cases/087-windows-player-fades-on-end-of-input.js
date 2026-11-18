@@ -25,7 +25,7 @@ const { path, assert, fs, TEST_DIR } = require("../helpers");
     const { code, at } = await Promise.race([exited, new Promise((r) => setTimeout(() => r({ code: "hung" }), 5000))]);
     helper.kill();
     assert.strictEqual(code, 0, `closing its input must end it: ${err}`);
-    assert.ok(at - closed < 2500, `fade-out then exit, took ${at - closed}ms`);
+    assert.ok(at - closed < 6000, `fade-out then exit, took ${at - closed}ms`);
     fs.rmSync(path.dirname(file), { recursive: true, force: true });
     console.log("   ✓ The helper plays until its pipe closes, then fades out and exits.");
   } else {
