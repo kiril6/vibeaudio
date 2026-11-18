@@ -101,9 +101,9 @@ A whole session in one file: every bar of the phrase at tier 1, then tier 2, the
 | :--- | :--- | :--- | :--- |
 | **macOS** | `afplay` | ✅ | Ships with the system — nothing to install. |
 | **Linux** | `paplay`, `ffplay`, or `aplay` | ✅ | Install `pulseaudio-utils`, `ffmpeg`, or `alsa-utils`. |
-| **Windows** | PowerShell `SoundPlayer` | ✅ | Nothing to install. |
+| **Windows** | PowerShell (`MediaPlayer`; `SoundPlayer` for chimes) | ✅ | Nothing to install. Fades and live volume are written but **not yet heard on a real Windows machine**. |
 
-`aplay` and PowerShell's `SoundPlayer` take no volume argument, so `--volume` is applied by rendering the loop pre-attenuated instead — same result, one cached file per volume you use.
+`aplay` and PowerShell's `SoundPlayer` (the Windows chimes, and the music if the `MediaPlayer` helper cannot start) take no volume argument, so `--volume` is applied by rendering the loop pre-attenuated instead — same result, one cached file per volume you use.
 
 If no player is found, VibeAudio prints a one-line notice and runs your command **silently** — it never blocks the tool you actually wanted to run.
 
