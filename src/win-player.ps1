@@ -24,6 +24,7 @@ while ($true) {
       $line = $pending.Result
       $pending = $null
       if ($null -eq $line) {
+        [Console]::Error.WriteLine('vibe: eof at ' + $now)
         $closing = $true; $closeAt = $now + 0.35
         $target = 0.0; $rate = $gain / 0.3
       } elseif ($line -match '^volume (\S+) (\S+)$') {
@@ -63,7 +64,9 @@ while ($true) {
   try { [Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke($bg, $pump) } catch {}
   Start-Sleep -Milliseconds 20
 }
+[Console]::Error.WriteLine('vibe: closing players')
 foreach ($e in $players) { $e.P.Close() }
+[Console]::Error.WriteLine('vibe: exiting')
 # Leave from here, not by running off the end of the script: WPF's media threads can keep a
 # PowerShell host alive after the script is done, and this process must never outlive its pipe.
 [Environment]::Exit(0)

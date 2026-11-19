@@ -1,0 +1,27 @@
+# TEMPORARY: runs test 87 repeatedly on Windows to catch the helper hang and print where it stopped. Delete after.
+name: win-helper-soak
+on:
+  push:
+    branches: [claude/win-helper-diag]
+permissions:
+  contents: read
+jobs:
+  soak:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: ${{ matrix.node }}
+      - shell: bash
+        run: |
+          fail=0
+          for i in $(seq 1 25); do
+            node test/cases/087-windows-player-fades-on-end-of-input.js > out.txt 2>&1 || { fail=$((fail+1)); echo "=== run $i FAILED"; cat out.txt; }
+          done
+          echo "failures: $fail / 25"
