@@ -5,6 +5,7 @@ const { path, assert, fs, TEST_DIR } = require("../helpers");
   console.log("\n\x1b[1m[87] The Windows player fades on end of input\x1b[0m");
   const script = fs.readFileSync(path.join(TEST_DIR, "..", "src", "win-player.ps1"), "utf8");
   assert.ok(/\^play /.test(script) && /\^volume /.test(script), "the helper speaks the macOS helper's protocol");
+  assert.ok(/\[Environment\]::Exit\(0\)\s*$/.test(script), "the helper ends the process itself: a lingering media thread must not keep it alive after the pipe closes");
   if (process.platform === "win32") {
     const { spawn } = require("child_process");
     const { getAudioPath } = require("../../src/player");

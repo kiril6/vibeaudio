@@ -64,3 +64,6 @@ while ($true) {
   Start-Sleep -Milliseconds 20
 }
 foreach ($e in $players) { $e.P.Close() }
+# Leave from here, not by running off the end of the script: WPF's media threads can keep a
+# PowerShell host alive after the script is done, and this process must never outlive its pipe.
+[Environment]::Exit(0)
