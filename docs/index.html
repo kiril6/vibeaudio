@@ -402,6 +402,17 @@ footer a{ color:var(--ink-dim); }
   *{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
 }
 
+/* ---------- Collapsible demo inside the feature grid ---------- */
+.feat-wide{ grid-column:1/-1; padding:0; }
+.feat-wide summary{ list-style:none; cursor:pointer; padding:16px 22px; display:flex; align-items:center; gap:12px; font-family:var(--mono); font-size:12.5px; letter-spacing:.06em; color:var(--ink-dim); }
+.feat-wide summary::-webkit-details-marker{ display:none; }
+.feat-wide summary:hover{ color:var(--ink); }
+.feat-wide summary:focus-visible{ outline:2px solid var(--cyan); outline-offset:-4px; }
+.feat-wide summary .tri{ color:var(--pink); transition:transform .2s; display:inline-block; }
+.feat-wide[open] summary .tri{ transform:rotate(90deg); }
+.feat-wide summary em{ font-style:normal; margin-left:auto; color:var(--ink-faint); }
+.feat-wide .vframe{ margin:0 22px 22px; }
+
 /* ---------- Promo video frame ---------- */
 .vframe{ margin-top:26px; border:1px solid var(--line); border-radius:14px; background:#0c0716; overflow:hidden;
   box-shadow:0 0 0 1px rgba(255,46,151,.15), 0 0 60px rgba(255,46,151,.22), 0 0 120px rgba(0,229,255,.12), 0 30px 80px rgba(0,0,0,.6); }
@@ -647,6 +658,23 @@ footer a{ color:var(--ink-dim); }
       <div class="feat"><h3>Title-bar HUD</h3><p>A live waveform in the terminal title — never corrupts a full-screen TUI.</p></div>
       <div class="feat"><h3>Quiet on calls</h3><p><code>vibe --mute-on-calls</code> pauses the music while any app uses your microphone and brings it back when the call ends. macOS, Windows and Linux, off by default.</p></div>
       <div class="feat"><h3>Which session?</h3><p><code>vibe --notify</code> adds a desktop banner naming the project that finished, failed or needs you. macOS and Linux, off by default.</p></div>
+      <details class="feat feat-wide" id="calls-demo">
+        <summary><span class="tri" aria-hidden="true">&#9654;</span> See quiet on calls in action <em>0:27 &middot; with sound</em></summary>
+        <div class="vframe">
+          <div class="vframe-bar" aria-hidden="true"><span></span><span></span><span></span><em>VibeAudio <i class="vt"><b>&middot;</b> Quiet on calls</i> <b>&middot;</b> 0:27</em></div>
+          <div class="vframe-stage">
+            <video playsinline preload="none" poster="video/calls-poster.jpg" aria-label="VibeAudio quiet on calls: the music pauses when a call starts and comes back when it ends, 27 seconds with sound">
+              <source src="video/vibeaudio-calls.mp4" type="video/mp4">
+            </video>
+            <button class="vplay" type="button" aria-label="Play the 27-second quiet on calls demo with sound">
+              <span class="vplay-ring"></span><span class="vplay-ring r2"></span>
+              <span class="vplay-btn"><svg viewBox="0 0 24 24" width="38" height="38" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.86l11-6.8a1 1 0 0 0 0-1.72l-11-6.8A1 1 0 0 0 8 5.2z" fill="currentColor"/></svg></span>
+              <span class="vplay-label">Play with sound</span>
+            </button>
+            <i class="vc tl"></i><i class="vc tr"></i><i class="vc bl"></i><i class="vc br"></i>
+          </div>
+        </div>
+      </details>
       <div class="feat"><h3>Say it out loud</h3><p><code>vibe --speak</code> adds a spoken line after the chime — "api: done." — when two or more sessions are going. System voice, fixed words, off by default.</p></div>
       <div class="feat"><h3>Signals only</h3><p><code>vibe --music off</code> keeps the chimes, banners and events and drops the music. Your genre is waiting when you turn it back on.</p></div>
       <div class="feat"><h3>Mute for calls</h3><p><code>vibe --mute</code> — expires in an hour so you never forget it's on.</p></div>
@@ -1280,6 +1308,8 @@ fetch("https://registry.npmjs.org/vibeaudio/latest")
     });
     v.addEventListener("ended", () => { v.controls = false; f.classList.remove("playing"); v.currentTime = 0; });
   });
+  const d = document.getElementById("calls-demo");
+  if (d) d.addEventListener("toggle", () => { if (!d.open) vids.forEach((v) => v.pause()); });
 })();
 </script>
 </body>

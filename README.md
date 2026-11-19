@@ -354,7 +354,7 @@ It reads the system's own "microphone in use" state, so Teams, Zoom, Meet in a b
 - **Windows**: the microphone entries in the capability store, through `reg query`; an app that started and has not stopped is on the mic. An app that never used it, or one that died on the mic more than 12 hours ago, is not counted.
 - **Linux**: `pactl list source-outputs` (PulseAudio, or PipeWire through `pipewire-pulse`). Paused streams, ones capturing what plays, volume meters (`pavucontrol`, the desktop's sound panel) and loopback or echo-cancel modules are ignored.
 
-If the system cannot be asked (no `pactl`, say), nothing pauses; `vibe --doctor` says so. A tool that holds the microphone all day (a virtual audio device, a meeting bot) keeps the music paused until you turn this off. `vibe --status` names the apps and says why it is quiet. `VIBE_MUTE_ON_CALLS=1` turns it on for one shell. The **Alerts & extras** menu, `/vibeaudio calls on|off` and the mod's Alerts card toggle it too. *Not yet checked on a real call on any platform; see the issue for what was and was not run.*
+If the system cannot be asked (no `pactl`, say), nothing pauses; `vibe --doctor` says so. A tool that holds the microphone all day (a virtual audio device, a meeting bot) keeps the music paused until you turn this off. `vibe --status` names the apps and says why it is quiet. `VIBE_MUTE_ON_CALLS=1` turns it on for one shell. The **Alerts & extras** menu, `/vibeaudio calls on|off` and the mod's Alerts card toggle it too. *Checked on a real call on macOS; Linux and Windows are not yet checked, see the issue for what was and was not run.*
 
 ### 🔔 Desktop banners: `vibe --notify`
 
