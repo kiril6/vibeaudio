@@ -14,6 +14,8 @@ $closing = $false; $closeAt = 0.0
 $in = New-Object IO.StreamReader([Console]::OpenStandardInput(), [Text.Encoding]::UTF8)
 $pending = $null
 $last = 0.0
+$tick = 0
+[Console]::Error.WriteLine('vibe: loop start')
 $pump = [Action]{}
 $bg = [Windows.Threading.DispatcherPriority]::Background
 while ($true) {
@@ -49,6 +51,8 @@ while ($true) {
       }
     }
   }
+  # Once a second to stderr (ignored by the daemon): a hang shows whether the loop was still turning.
+  if ([Math]::Floor($now) -gt $tick) { $tick = [Math]::Floor($now); [Console]::Error.WriteLine('vibe: tick ' + $tick) }
   $dt = $now - $last; $last = $now
   if ($gain -ne $target) {
     $step = $rate * $dt
