@@ -29,6 +29,8 @@ const { path, assert, fs, TEST_DIR } = require("../helpers");
     // a hang, which is how 'hung' failed this on Windows CI twice.
     const { code, at } = await Promise.race([exited, new Promise((r) => setTimeout(() => r({ code: "hung" }), 20000))]);
     helper.kill();
+    // Always shown, so a hang's markers can be compared with a clean run's.
+    console.log("   helper stderr (tail): " + JSON.stringify(err.split(/\r?\n/).filter((l) => l.startsWith("vibe:")).slice(-4)));
     assert.strictEqual(code, 0, `closing its input must end it: ${err}`);
     assert.ok(at - closed < 10000, `fade-out then exit, took ${at - closed}ms`);
     fs.rmSync(path.dirname(file), { recursive: true, force: true });
