@@ -463,7 +463,11 @@ function interruptWatcher(transcript, offset) {
   };
 }
 
-const INTERRUPT_POLL_MS = 500;
+// Esc fires no hook, so this poll is how long the music outlives it: kept short, it is one stat per session.
+const INTERRUPT_POLL_MS = 150;
+// A daemon this one replaced is still fading when we start (macOS's helper decays for 0.3 s after the
+// daemon is gone), and a prompt sent right after Esc heard two streams. Wait for it, bounded.
+const PREDECESSOR_WAIT_MS = 1500, PREDECESSOR_TAIL_MS = 400;
 
 /**
  * Internal mode: plays while any session is working. The player's own loop
@@ -514,7 +518,21 @@ function runDaemon(genre, volume, { reactive = false, volumeSource = null } = {}
   // A call (--mute-on-calls) pauses the music and this daemon waits it out: the
   // turn is still running, so the music comes back when the call ends. Unlike a
   // mute, which stops the daemon, nobody would start another until the next prompt.
-  let pausedForCall = onCall();
+  let prev = Number(process.env.VIBE_AFTER_PID) || 0;
+  const prevDeadline = Date.now() + PREDECESSOR_WAIT_MS;
+  let prevGone = 0;
+  const prevBusy = () => {
+    if (!prev) return false;
+    if (Date.now() > prevDeadline) return !(prev = 0);
+    try {
+      process.kill(prev, 0);
+      return true;
+    } catch (e) {
+      prevGone = prevGone || Date.now();
+      return Date.now() - prevGone < PREDECESSOR_TAIL_MS || !(prev = 0);
+    }
+  };
+  let pausedForCall = onCall() || prevBusy();
   if (!pausedForCall && !player.start(genre, volume, options)) process.exit(0);
 
   // A second signal while fading changes nothing; the fade ends by itself.
@@ -539,7 +557,7 @@ function runDaemon(genre, volume, { reactive = false, volumeSource = null } = {}
     // A volume saved while this plays reaches it now, not at the next prompt.
     if (volumeSource) player.setVolume(volumeSource());
     if (sweep()) {
-      if (onCall()) {
+      if (onCall() || prevBusy()) {
         if (!pausedForCall) {
           pausedForCall = true;
           player.fadeOut(() => {});
@@ -560,12 +578,12 @@ function daemonRunning() {
   return pid !== null && isOurDaemon(pid);
 }
 
-function spawnDaemon(genre, volume, reactive, follow = false) {
+function spawnDaemon(genre, volume, reactive, follow = false, after = null) {
   const args = [CLI_ENTRY, "--daemon", "--genre", genre, "--volume", String(Math.round(volume * 100))];
   if (reactive) args.push("--reactive");
   if (follow) args.push("--follow-volume");
 
-  const child = spawn(process.execPath, args, { detached: true, stdio: "ignore" });
+  const child = spawn(process.execPath, args, { detached: true, stdio: "ignore", env: after ? { ...process.env, VIBE_AFTER_PID: String(after) } : process.env });
   child.unref();
 
   fs.mkdirSync(STATE_DIR, { recursive: true });
@@ -588,13 +606,14 @@ function hookStart(genre, volume, { reactive = false, turn = null, follow = fals
   emitEvent("started", id, project);
   if (working(listSessions()).some((s) => s.id !== id) && daemonRunning()) return readPid();
 
+  const prev = daemonRunning() ? readPid() : null;
   stopDaemon({ keepSessions: true });
   fs.rmSync(INTENSITY_FILE, { force: true }); // Don't inherit the last prompt's activity
   // Signals only: the session is tracked (chimes, events and the report read
   // it) but there is no music to start. Stopping first means a switch to off
   // lands on the next prompt rather than playing until the turn ends.
   if (!music) return null;
-  return spawnDaemon(genre, volume, reactive, follow);
+  return spawnDaemon(genre, volume, reactive, follow, prev);
 }
 
 
