@@ -128,6 +128,16 @@ html{ scroll-behavior:smooth; }
   letter-spacing:.02em; white-space:nowrap;
 }
 .topnav-logo .logo-mark{ vertical-align:-5px; margin-right:6px; }
+/* level bars move only while the page is playing sound; same three frames and 1.2s loop as the Claude Code band logo (mods/vibe logoSvg) */
+.logo-mark .bars rect{ transform-box:fill-box; transform-origin:center; }
+.logo-mark.live .bars rect{ animation:1.2s linear infinite; }
+.logo-mark.live .bars rect:nth-child(1){ animation-name:bar1; }
+.logo-mark.live .bars rect:nth-child(2){ animation-name:bar2; }
+.logo-mark.live .bars rect:nth-child(3){ animation-name:bar3; }
+@keyframes bar1{ 0%,100%{ transform:scaleY(1); } 25%{ transform:scaleY(2); } 50%{ transform:scaleY(.714); } 75%{ transform:scaleY(1.714); } }
+@keyframes bar2{ 0%,100%{ transform:scaleY(1); } 25%{ transform:scaleY(.517); } 50%{ transform:scaleY(1.034); } 75%{ transform:scaleY(.448); } }
+@keyframes bar3{ 0%,100%{ transform:scaleY(1); } 25%{ transform:scaleY(.417); } 50%{ transform:scaleY(1.444); } 75%{ transform:scaleY(.889); } }
+@media (prefers-reduced-motion: reduce){ .logo-mark.live .bars rect{ animation:none; } }
 .topnav-logo em{ font-style:normal; color:var(--pink); text-shadow:0 0 10px rgba(255,46,151,.6); }
 .topnav-links{ display:flex; align-items:center; gap:26px; flex:1; justify-content:center; }
 .topnav-links a{
@@ -449,7 +459,7 @@ footer a{ color:var(--ink-dim); }
 
 <nav class="topnav">
   <div class="wrap topnav-inner">
-    <a class="topnav-logo" href="#top"><svg class="logo-mark" viewBox="60 100 392 340" width="30" height="26" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#a855f7"/><stop offset=".55" stop-color="#ff2e97"/><stop offset="1" stop-color="#ffb454"/></linearGradient></defs><path d="M120 300V272a136 136 0 0 1 272 0V300" fill="none" stroke="url(#lg)" stroke-width="30" stroke-linecap="round"/><rect x="86" y="286" width="76" height="136" rx="32" fill="url(#lg)"/><rect x="350" y="286" width="76" height="136" rx="32" fill="url(#lg)"/><g fill="#00e5ff"><rect x="212" y="326" width="22" height="56" rx="11"/><rect x="245" y="296" width="22" height="116" rx="11"/><rect x="278" y="318" width="22" height="72" rx="11"/></g></svg> VIBE<em>AUDIO</em></a>
+    <a class="topnav-logo" href="#top"><svg class="logo-mark" viewBox="60 100 392 340" width="30" height="26" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#a855f7"/><stop offset=".55" stop-color="#ff2e97"/><stop offset="1" stop-color="#ffb454"/></linearGradient></defs><path d="M120 300V272a136 136 0 0 1 272 0V300" fill="none" stroke="url(#lg)" stroke-width="30" stroke-linecap="round"/><rect x="86" y="286" width="76" height="136" rx="32" fill="url(#lg)"/><rect x="350" y="286" width="76" height="136" rx="32" fill="url(#lg)"/><g class="bars" fill="#00e5ff"><rect x="212" y="326" width="22" height="56" rx="11"/><rect x="245" y="296" width="22" height="116" rx="11"/><rect x="278" y="318" width="22" height="72" rx="11"/></g></svg> VIBE<em>AUDIO</em></a>
     <div class="topnav-links">
       <a href="#genres">Genres</a>
       <a href="#chimes">Chimes</a>
@@ -1310,6 +1320,15 @@ fetch("https://registry.npmjs.org/vibeaudio/latest")
   });
   const d = document.getElementById("calls-demo");
   if (d) d.addEventListener("toggle", () => { if (!d.open) vids.forEach((v) => v.pause()); });
+})();
+</script>
+<script>
+// logo bars move while any audio or video on the page is playing
+(() => {
+  const mark = document.querySelector(".logo-mark");
+  if (!mark) return;
+  const sync = () => mark.classList.toggle("live", [...document.querySelectorAll("audio,video")].some((m) => !m.paused && !m.ended));
+  ["playing", "pause", "ended", "emptied"].forEach((e) => document.addEventListener(e, sync, true)); // media events do not bubble
 })();
 </script>
 </body>
