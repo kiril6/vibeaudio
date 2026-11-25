@@ -11,9 +11,13 @@ for (const [name, generate] of Object.entries(tieredGenerators)) {
     `${name}: the same seed must always render identical audio`
   );
 
-  // Across seeds at least one arrangement must differ, or the seed is inert.
-  const renders = [1, 2, 3, 4, 5, 6, 7, 8].map((s) => generate(3.0, 2, s).toString("base64"));
-  assert.ok(new Set(renders).size > 1, `${name}: different seeds must produce different arrangements`);
+  // Across seeds the arrangements must actually spread out. "More than one
+  // distinct" was the check here, and synthwave and 8bit passed it with three
+  // arrangements for every project on earth (#4). 20 of 24 leaves room for a
+  // chance collision in a finite space; three variants alone give 3.
+  const renders = Array.from({ length: 24 }, (_, s) => generate(3.0, 2, s + 1).toString("base64"));
+  const distinct = new Set(renders).size;
+  assert.ok(distinct >= 20, `${name}: 24 seeds gave only ${distinct} distinct arrangements`);
 }
 console.log("   ✓ Seeds are deterministic per project and varied across projects.");
 
