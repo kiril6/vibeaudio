@@ -20,10 +20,15 @@ const {
 // A drone has no progression to clash with, so the seed picks its colour
 // rather than its harmony: a root, the interval stacked above it, and how
 // bright the noise bed sits.
+//
+// The roots sat at D1/A1/E1 (37-55 Hz), below what laptop speakers play:
+// above 150 Hz the tone was 9-30 dB under the noise bed, so the genre was
+// heard as noise and taken for rain. Two octaves up, chosen by ear over
+// keeping the root and adding overtones.
 const DRONE_VARIANTS = [
-  { root: "D1", partial: 1.5, cutoff: 0.055, label: "deep fifth" },   // D + A
-  { root: "A1", partial: 1.5, cutoff: 0.040, label: "dark fifth" },   // A + E
-  { root: "E1", partial: 1.335, cutoff: 0.070, label: "open fourth" } // E + A
+  { root: "D3", partial: 1.5, cutoff: 0.055, label: "deep fifth" },   // D + A
+  { root: "A3", partial: 1.5, cutoff: 0.040, label: "dark fifth" },   // A + E
+  { root: "E3", partial: 1.335, cutoff: 0.070, label: "open fourth" } // E + A
 ];
 
 function generateDroneLoop(durationSec = 7.0, tier = 2, seed = 0, bar = 0) {
@@ -130,4 +135,4 @@ function generateDroneLoop(durationSec = 7.0, tier = 2, seed = 0, bar = 0) {
   return createWavBuffer({ left, right, sampleRate: SAMPLE_RATE });
 }
 
-module.exports = { generateDroneLoop };
+module.exports = { generateDroneLoop, DRONE_VARIANTS };
