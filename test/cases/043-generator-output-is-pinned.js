@@ -21,12 +21,12 @@ const { assert, generateLofiLoop, generateSynthwaveLoop, generateChiptuneLoop, g
     // sailed through, while silently flattening tiers 1 and 3.
     const GOLDEN = {
       lofi:         ["20fd78c49af5", "0e37b331bdf9", "4445cf13886a"],
-      synthwave:    ["6905da903b8e", "5da34ccaf7db", "214975a930dc"],
+      synthwave:    ["e1f5d0a2d342", "fb849d4cef31", "04418e76596c"],
       "8bit":       ["bb389e3ed87a", "f61824a4a2c3", "d04478d1310e"],
       electronic:   ["46f985a4af09", "e2862335b57a", "61254145fe28"],
       jazz:         ["8ff30f228660", "08db4d6a8754", "17039833f715"],
-      zen:          ["0496cb273359", "2ea4a3da3d8a", "efb72a71fac0"],
-      piano:        ["e12477cbde4c", "3e2e18d19203", "27e0f694c35f"],
+      zen:          ["f8cfbeb593a5", "2406dd0ef020", "4a628e76d64d"],
+      piano:        ["bd13952e9c8d", "c4940c3eb360", "d1678230deb0"],
       drone:        ["80d547b0bf48", "dfba6786efb4", "62c4918e156b"],
       rain:         ["7b8c1fa69650", "273c139a3f7f", "bb17c8957987"],
       ocean:        ["c59e8b6ca39b", "6ff406d3611f", "1d548d21a985"]

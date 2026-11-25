@@ -153,6 +153,14 @@ function generatePianoLoop(durationSec = 7.6, tier = 2, seed = 0, bar = 0) {
     right[totalSamples - 1 - i] *= s;
   }
 
+  // Brought down to jazz's level: at RMS 0.145 (tier 3) the notes overloaded
+  // the speakers, heard as static, and the same file at `afplay -v 0.83` was
+  // clean; 0.80 keeps 24 seeds under the ceiling (test [90]).
+  for (let i = 0; i < totalSamples; i++) {
+    left[i] *= 0.80;
+    right[i] *= 0.80;
+  }
+
   return createWavBuffer({ left, right, sampleRate: SAMPLE_RATE });
 }
 
