@@ -25,6 +25,13 @@ const PROGRESSIONS = [
 const DROP_NOTES = ["C5", "D5", "E5", "G5", "A5", "B5", "C6"];
 const SHIMMER_NOTES = ["E6", "G6", "A6", "B6"];
 
+// How each chord is struck: seconds between one note's onset and the next,
+// negative to roll down from the top. Timing only - the notes are the chord's.
+const STRUMS = [0, 0.025, -0.025, 0.06];
+
+// How early the second chord lands, in seconds: on the half, or pushed ahead.
+const PUSHES = [0, 0.2];
+
 function generateLofiLoop(durationSec = 6.4, tier = 2, seed = 0, bar = 0) {
   const rng = makeRng(seed);
   const progression = rotate(rng, PROGRESSIONS, bar);
@@ -33,11 +40,13 @@ function generateLofiLoop(durationSec = 6.4, tier = 2, seed = 0, bar = 0) {
   const right = new Float64Array(totalSamples);
 
   // Rhodes chord renderer with soft tremolo & harmonic overtones
-  function addRhodesChord(chordNotes, startSec, durSec, vel = 0.18) {
-    const startIdx = Math.floor(startSec * SAMPLE_RATE);
-    const numSamples = Math.floor(durSec * SAMPLE_RATE);
+  function addRhodesChord(chordNotes, startSec, durSec, vel = 0.18, strum = 0) {
+    const order = strum < 0 ? [...chordNotes].reverse() : chordNotes;
 
-    for (const note of chordNotes) {
+    for (const [n, note] of order.entries()) {
+      const offset = n * Math.abs(strum);
+      const startIdx = Math.floor((startSec + offset) * SAMPLE_RATE);
+      const numSamples = Math.floor((durSec - offset) * SAMPLE_RATE);
       const f = noteToFreq(note);
       for (let i = 0; i < numSamples; i++) {
         const idx = startIdx + i;
@@ -87,10 +96,17 @@ function generateLofiLoop(durationSec = 6.4, tier = 2, seed = 0, bar = 0) {
     }
   }
 
+  // The chords sound at every tier, so they are the only layer that can make
+  // tier 1 differ between projects - it had 3 arrangements for every seed. A
+  // stream of their own, so the kalimba below keeps the notes it always had.
+  const strike = ornamentRng(seed ^ 0x61c88647);
+  const strums = progression.map(() => pick(strike, STRUMS));
+  const push = pick(strike, PUSHES);
+
   const chordVel = tier === 1 ? 0.16 : tier === 3 ? 0.22 : 0.19;
   const half = durationSec / 2;
-  addRhodesChord(progression[0], 0.0, half, chordVel);
-  addRhodesChord(progression[1], half, half, chordVel);
+  addRhodesChord(progression[0], 0.0, half - push, chordVel, strums[0]);
+  addRhodesChord(progression[1], half - push, half + push, chordVel, strums[1]);
 
   // Drawn regardless of tier so every tier ornaments the same piece.
   const orn = ornamentRng(seed);

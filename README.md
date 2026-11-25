@@ -77,7 +77,7 @@ export VIBE_SEED=7               # pin the same sound everywhere
 
 That's a deliberate choice. Focus music has one job: **be ignorable.** Music that reinvents itself every run keeps pulling your ear back, which is the opposite of what you want while reading an agent's output. Familiar-per-project gives you variety across contexts and predictability within one — by your third session in a repo, its loop has faded into the furniture.
 
-**How "procedural" actually works** — worth being precise, since it shapes what you'll hear. Each genre is **synthesized from code** (oscillators, chord tables, envelopes rendered to PCM), not shipped as audio files. The seed selects among *hand-written, human-checked* variants — three progressions per genre, each diatonic to that genre's key, plus seeded ornament placement — so it never invents harmony and can't wander out of key. The chosen arrangement is rendered once per project, cached under `~/.vibeaudio/cache/`, and looped. Within a session you're hearing a 6–8 second bar repeat that gains layers as you cross the tier boundaries.
+**How "procedural" actually works** — worth being precise, since it shapes what you'll hear. Each genre is **synthesized from code** (oscillators, chord tables, envelopes rendered to PCM), not shipped as audio files. The seed selects among *hand-written, human-checked* variants — three progressions per genre, each diatonic to that genre's key, plus seeded ornament placement — so it never invents harmony and can't wander out of key. The chosen arrangement is rendered once per project, cached under `~/.vibeaudio/cache/`, and looped. Within a session you're hearing a phrase of three 6–8 second bars on repeat, gaining layers as you cross the tier boundaries.
 
 </details>
 

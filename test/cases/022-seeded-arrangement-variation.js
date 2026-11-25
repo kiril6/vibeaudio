@@ -18,6 +18,15 @@ for (const [name, generate] of Object.entries(tieredGenerators)) {
   const renders = Array.from({ length: 24 }, (_, s) => generate(3.0, 2, s + 1).toString("base64"));
   const distinct = new Set(renders).size;
   assert.ok(distinct >= 20, `${name}: 24 seeds gave only ${distinct} distinct arrangements`);
+
+  // Tier 1 too, which lofi, electronic and jazz collapsed to 3 because every
+  // ornament they had sat behind a tier gate. Full-length loops, since some of
+  // what varies at tier 1 (a later chord's voicing) lands after 3 s. Lower
+  // floor: tier 1 has fewer layers, so fewer combinations to land on.
+  const { generateLoop } = require("../../src/player");
+  const firstTier = Array.from({ length: 24 }, (_, s) => generateLoop(name, 1, s + 1).toString("base64"));
+  const distinctFirst = new Set(firstTier).size;
+  assert.ok(distinctFirst >= 16, `${name}: 24 seeds gave only ${distinctFirst} distinct tier-1 arrangements`);
 }
 console.log("   ✓ Seeds are deterministic per project and varied across projects.");
 

@@ -12,6 +12,7 @@ const {
   sine,
   makeRng,
   rotate,
+  pick,
   ornamentRng,
   pluckEnv,
   createWavBuffer
@@ -34,9 +35,41 @@ const VARIANTS = [
   }
 ];
 
+// Which of the 16 eighth-note steps the pluck plays (1) or rests on (0).
+// Rests only, so no pattern can add a note the figure does not have.
+const GATES = [
+  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+  [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0],
+  [1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1],
+  [1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+  [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0]
+];
+
+// Per-step level: flat, the beat, every other step, and a 3-3-2 figure.
+// Never above 1, so an accent cannot make the pluck louder than it was.
+const ACCENTS = [
+  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+  [1, 0.75, 0.75, 0.75, 1, 0.75, 0.75, 0.75, 1, 0.75, 0.75, 0.75, 1, 0.75, 0.75, 0.75],
+  [1, 0.75, 1, 0.75, 1, 0.75, 1, 0.75, 1, 0.75, 1, 0.75, 1, 0.75, 1, 0.75],
+  [1, 0.75, 0.75, 1, 0.75, 0.75, 1, 0.75, 1, 0.75, 0.75, 1, 0.75, 0.75, 1, 0.75]
+];
+
+// Which 16ths in each beat get a tick: all four, the three after the beat,
+// the 8ths, and a skip figure.
+const TICKS = [
+  [1, 1, 1, 1],
+  [0, 1, 1, 1],
+  [1, 0, 1, 0],
+  [1, 0, 1, 1]
+];
+
 function generateElectronicLoop(durationSec = 6.4, tier = 2, seed = 0, bar = 0) {
   const variant = rotate(makeRng(seed), VARIANTS, bar);
-  const orn = ornamentRng(seed);
+  // The pluck sounds at every tier, so its rhythm is what makes tier 1 differ
+  // between projects - it had 3 arrangements for every seed.
+  const groove = ornamentRng(seed ^ 0x3c6ef372);
+  const gate = pick(groove, GATES);
+  const accent = pick(groove, ACCENTS);
   const bpm = 116;
   const secPerBeat = 60.0 / bpm;
   const totalBeats = Math.floor(durationSec / secPerBeat);
@@ -55,14 +88,14 @@ function generateElectronicLoop(durationSec = 6.4, tier = 2, seed = 0, bar = 0) 
   for (let i = 0; i < totalSamples; i++) {
     const t = i / SAMPLE_RATE;
     const currentStep = Math.floor(t / stepSec) % 16;
-    const activePluck = pluckSeq.find((p) => p.step === currentStep % pluckSeq.length);
+    const activePluck = gate[currentStep] ? pluckSeq.find((p) => p.step === currentStep % pluckSeq.length) : null;
 
     if (activePluck) {
       const f = noteToFreq(activePluck.note);
       const tNote = t % stepSec;
       // Fast exponential decay filter simulation
       const filterCutoff = Math.exp(-tNote * 14.0);
-      const env = pluckEnv(tNote, stepSec, 7.0);
+      const env = pluckEnv(tNote, stepSec, 7.0) * accent[currentStep];
 
       // Resonant pluck wave: mixture of soft pulse and harmonics modulated by filter cutoff
       const osc = softPulse(f * t) * 0.7 + analogSaw(f * t) * 0.3 * filterCutoff;
@@ -100,15 +133,28 @@ function generateElectronicLoop(durationSec = 6.4, tier = 2, seed = 0, bar = 0) 
     right[i] += sub;
   }
 
-  // 3. Subtle Tech Glitch/Percussion Pulse (Rhythmic noise blips) - joins at Tier 2
+  // 3. Tick on every 16th - joins at Tier 2
+  //
+  // This was a 15 ms burst of raw white noise starting at full level, and it
+  // was heard as static as soon as the music escalated (test [89]). A short
+  // tonal blip falling 2.4 to 1.6 kHz keeps the 16th-note pulse with no noise
+  // in it, and its 1 ms fade-in keeps it from clicking.
+  // Tier-gated, so the pattern has a stream of its own.
+  const ticks = pick(ornamentRng(seed ^ 0x1b873593), TICKS);
+  let tickPhase = 0.0;
   for (let i = 0; tier >= 2 && i < totalSamples; i++) {
     const t = i / SAMPLE_RATE;
     const t16 = t % (secPerBeat / 4.0);
-    if (t16 < 0.015) {
-      const n = (orn() * 2.0 - 1.0) * (1.0 - t16 / 0.015);
-      const sample = n * 0.045;
+    const sixteenth = Math.floor(t / (secPerBeat / 4.0)) % 4;
+    if (t16 < 0.03 && ticks[sixteenth]) {
+      const f = 1600 + 800 * Math.exp(-t16 / 0.004);
+      tickPhase += f / SAMPLE_RATE;
+      const env = Math.min(1.0, t16 / 0.001) * Math.exp(-t16 / 0.006);
+      const sample = Math.sin(2 * Math.PI * tickPhase) * env * 0.03;
       left[i] += sample;
       right[i] += sample;
+    } else {
+      tickPhase = 0.0;
     }
   }
 
