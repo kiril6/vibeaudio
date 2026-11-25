@@ -37,6 +37,23 @@ const CHANGES = [
 
 const STAB_NOTES = ["D5", "E5", "G5", "A5", "B5"];
 
+// Where the four comping chords land, in beats: the original, on the beat,
+// anticipating on the swung "and", and laid back. The chords keep their order.
+const COMPING = [
+  [{ startBeat: 0.5, durBeats: 1.2 }, { startBeat: 2.0, durBeats: 1.5 }, { startBeat: 4.5, durBeats: 1.2 }, { startBeat: 6.0, durBeats: 1.5 }],
+  [{ startBeat: 0.0, durBeats: 1.0 }, { startBeat: 1.5, durBeats: 1.5 }, { startBeat: 4.0, durBeats: 1.0 }, { startBeat: 5.5, durBeats: 1.5 }],
+  [{ startBeat: 0.0, durBeats: 1.2 }, { startBeat: 2.66, durBeats: 1.2 }, { startBeat: 4.0, durBeats: 1.2 }, { startBeat: 6.66, durBeats: 1.0 }],
+  [{ startBeat: 1.0, durBeats: 1.5 }, { startBeat: 2.66, durBeats: 1.0 }, { startBeat: 5.0, durBeats: 1.5 }, { startBeat: 6.66, durBeats: 1.0 }]
+];
+
+// Close voicing, or drop-2: the second-highest note an octave down. The
+// same notes either way, so a voicing cannot change the harmony.
+function voice(notes, drop2) {
+  const freqs = notes.map(noteToFreq).sort((a, b) => a - b);
+  if (drop2) freqs[freqs.length - 2] /= 2;
+  return freqs;
+}
+
 function generateJazzLoop(durationSec = 6.26, tier = 2, seed = 0, bar = 0) {
   const rng = makeRng(seed);
   const changes = rotate(rng, CHANGES, bar);
@@ -50,32 +67,34 @@ function generateJazzLoop(durationSec = 6.26, tier = 2, seed = 0, bar = 0) {
   const right = new Float64Array(totalSamples);
 
   // 1. Jazz Piano Comping (ii-V-I-VI Progression: Dmin9 -> G13 -> Cmaj9 -> A7b9)
-  const comping = [
-    { startBeat: 0.5, durBeats: 1.2 },
-    { startBeat: 2.0, durBeats: 1.5 },
-    { startBeat: 4.5, durBeats: 1.2 },
-    { startBeat: 6.0, durBeats: 1.5 }
-  ];
-  const jazzChords = comping.map((slot, i) => ({ ...slot, notes: changes.chords[i] }));
+  //
+  // The comping sounds at every tier, so its rhythm and voicings are what make
+  // tier 1 differ between projects - it had 3 arrangements for every seed. A
+  // stream of their own, so the brushes and stabs below keep what they drew.
+  const compRng = ornamentRng(seed ^ 0x7f4a7c15);
+  const comping = pick(compRng, COMPING);
+  const jazzChords = comping.map((slot, i) => ({ ...slot, freqs: voice(changes.chords[i], compRng() < 0.5) }));
 
   for (const chord of jazzChords) {
     const startIdx = Math.floor(chord.startBeat * secPerBeat * SAMPLE_RATE);
     const numSamples = Math.floor(chord.durBeats * secPerBeat * SAMPLE_RATE);
 
-    for (const note of chord.notes) {
-      const f = noteToFreq(note);
+    for (const f of chord.freqs) {
       for (let i = 0; i < numSamples; i++) {
         const idx = startIdx + i;
         if (idx >= totalSamples) break;
         const t = i / SAMPLE_RATE;
         const attack = Math.min(1.0, t * 45.0);
+        // A chord used to stop dead at the end of its slot, still at ~40% of
+        // its level: a click, and the comping rhythms made it land audibly.
+        const release = Math.min(1.0, (numSamples - i) / (0.02 * SAMPLE_RATE));
         const body = Math.exp(-t * 1.2);
         // Soft warm jazz piano tone
         const sample = (
           sine(f * t) * 0.75 +
           sine(f * 2.0 * t) * 0.20 * body +
           sine(f * 3.0 * t) * 0.05 * Math.exp(-t * 6.0)
-        ) * attack * body * (tier === 1 ? 0.13 : tier === 3 ? 0.18 : 0.16);
+        ) * attack * release * body * (tier === 1 ? 0.13 : tier === 3 ? 0.18 : 0.16);
 
         left[idx] += sample * 0.85;
         right[idx] += sample * 1.15;
