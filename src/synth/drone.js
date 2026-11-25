@@ -20,17 +20,25 @@ const {
 // A drone has no progression to clash with, so the seed picks its colour
 // rather than its harmony: a root, the interval stacked above it, and how
 // bright the noise bed sits.
+//
+// The roots sat at D1/A1/E1 (37-55 Hz), below what laptop speakers play:
+// above 150 Hz the tone was 9-30 dB under the noise bed, so the genre was
+// heard as noise and taken for rain. Two octaves up, chosen by ear over
+// keeping the root and adding overtones.
 const DRONE_VARIANTS = [
-  { root: "D1", partial: 1.5, cutoff: 0.055, label: "deep fifth" },   // D + A
-  { root: "A1", partial: 1.5, cutoff: 0.040, label: "dark fifth" },   // A + E
-  { root: "E1", partial: 1.335, cutoff: 0.070, label: "open fourth" } // E + A
+  { root: "D3", partial: 1.5, cutoff: 0.055, label: "deep fifth" },   // D + A
+  { root: "A3", partial: 1.5, cutoff: 0.040, label: "dark fifth" },   // A + E
+  { root: "E3", partial: 1.335, cutoff: 0.070, label: "open fourth" } // E + A
 ];
 
 function generateDroneLoop(durationSec = 7.0, tier = 2, seed = 0, bar = 0) {
   // Drawn before any tier gating, so gating a layer can't shift these.
   const orn = ornamentRng(seed);
   const variant = rotate(orn, DRONE_VARIANTS, bar);
-  const sweepDepth = 0.55 + orn() * 0.35;
+  // At full depth (0.55-0.9) the bed swelled 6-11 dB twice a loop and was
+  // heard as surf; at 30% it breathes without a rhythm. Same draw, so the
+  // seed still picks it.
+  const sweepDepth = (0.55 + orn() * 0.35) * 0.3;
   const breathOffset = orn() * Math.PI * 2;
 
   const totalSamples = Math.floor(SAMPLE_RATE * durationSec);
@@ -54,7 +62,7 @@ function generateDroneLoop(durationSec = 7.0, tier = 2, seed = 0, bar = 0) {
     const nL = noiseRng() * 2 - 1;
     const nR = noiseRng() * 2 - 1;
 
-    // Cutoff breathes between roughly half and full openness.
+    // Cutoff breathes a little below full openness.
     const sweep = 0.5 + 0.5 * sine(sweepHz * t + breathOffset / (2 * Math.PI));
     const k = variant.cutoff * (1 - sweepDepth + sweepDepth * sweep);
 
@@ -62,9 +70,9 @@ function generateDroneLoop(durationSec = 7.0, tier = 2, seed = 0, bar = 0) {
     lpR += k * (nR - lpR);
 
     // Brown noise is far quieter than white after filtering, so it needs
-    // making up - but only to the level the melodic genres sit at. Measured
-    // against jazz (peak 0.64, RMS 0.108); these land at 0.43-0.61 / 0.084-0.128.
-    const bedGain = tier === 1 ? 1.02 : tier === 3 ? 1.38 : 1.2;
+    // making up - but under the tone: at twice these the bed sat up to 12 dB
+    // over it above 150 Hz, and drone was heard as noise. Chosen by ear.
+    const bedGain = tier === 1 ? 0.51 : tier === 3 ? 0.69 : 0.6;
     left[i] += lpL * bedGain;
     right[i] += lpR * bedGain;
   }
@@ -130,4 +138,4 @@ function generateDroneLoop(durationSec = 7.0, tier = 2, seed = 0, bar = 0) {
   return createWavBuffer({ left, right, sampleRate: SAMPLE_RATE });
 }
 
-module.exports = { generateDroneLoop };
+module.exports = { generateDroneLoop, DRONE_VARIANTS };

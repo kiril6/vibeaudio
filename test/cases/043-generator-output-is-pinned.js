@@ -27,7 +27,7 @@ const { assert, generateLofiLoop, generateSynthwaveLoop, generateChiptuneLoop, g
       jazz:         ["8ff30f228660", "2aa5ccd1104c", "a84538a236d1"],
       zen:          ["f8cfbeb593a5", "2406dd0ef020", "4a628e76d64d"],
       piano:        ["bd13952e9c8d", "c4940c3eb360", "d1678230deb0"],
-      drone:        ["80d547b0bf48", "dfba6786efb4", "62c4918e156b"],
+      drone:        ["02a8069359cc", "2679af8bd7f0", "cf5f9257b2f6"],
       rain:         ["7b8c1fa69650", "273c139a3f7f", "bb17c8957987"],
       ocean:        ["c59e8b6ca39b", "6ff406d3611f", "1d548d21a985"]
     };
