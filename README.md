@@ -858,7 +858,7 @@ Matching is case-insensitive, so `BOSSA` works too.
 
 </details>
 
-> **If any melody distracts you, use `drone`.** Every other genre plays something — notes, a progression, a bass line — and some people can't read while that happens. `drone` holds one tone (low enough to recede, high enough for laptop speakers to play) under a slow-breathing noise bed and never moves: closer to a fan or rainfall than to music. Tiers add weight rather than movement. If you want the fan-and-rainfall idea literally, `rain` and `ocean` are synthesized the same way (seeded noise, no recorded files): rain adds more droplets as the turn runs longer, ocean adds a second swell and then foam.
+> **If any melody distracts you, use `drone`.** Every other genre plays something — notes, a progression, a bass line — and some people can't read while that happens. `drone` holds one tone (low enough to recede, high enough for laptop speakers to play) over a soft, steady noise bed and never moves: closer to a hum or a fan than to music. Tiers add weight rather than movement. If you want nature sounds instead, `rain` and `ocean` are synthesized the same way (seeded noise, no recorded files): rain adds more droplets as the turn runs longer, ocean adds a second swell and then foam.
 >
 > **`piano` is the gentler version of that idea.** It still plays notes — two in eight seconds at tier 1 — but they're single struck tones with silence between them and nothing running underneath. Higher tiers fill the gaps rather than adding a groove. Try it before `drone` if you want *something* there.
 >
