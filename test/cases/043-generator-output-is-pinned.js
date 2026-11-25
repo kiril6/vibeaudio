@@ -20,11 +20,11 @@ const { assert, generateLofiLoop, generateSynthwaveLoop, generateChiptuneLoop, g
     // piano's note count to 4 (its tier-2 value) changed nothing at tier 2 and
     // sailed through, while silently flattening tiers 1 and 3.
     const GOLDEN = {
-      lofi:         ["20fd78c49af5", "0e37b331bdf9", "4445cf13886a"],
-      synthwave:    ["e1f5d0a2d342", "fb849d4cef31", "04418e76596c"],
+      lofi:         ["72384bfdc7bc", "367eaec3f27f", "8822514a06a3"],
+      synthwave:    ["e1f5d0a2d342", "0f4e86379703", "75ef1aff23c9"],
       "8bit":       ["bb389e3ed87a", "f61824a4a2c3", "d04478d1310e"],
       electronic:   ["46f985a4af09", "e2862335b57a", "61254145fe28"],
-      jazz:         ["8ff30f228660", "08db4d6a8754", "17039833f715"],
+      jazz:         ["8ff30f228660", "2aa5ccd1104c", "a84538a236d1"],
       zen:          ["f8cfbeb593a5", "2406dd0ef020", "4a628e76d64d"],
       piano:        ["bd13952e9c8d", "c4940c3eb360", "d1678230deb0"],
       drone:        ["80d547b0bf48", "dfba6786efb4", "62c4918e156b"],

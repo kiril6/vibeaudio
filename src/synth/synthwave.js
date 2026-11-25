@@ -128,7 +128,8 @@ function generateSynthwaveLoop(durationSec = 6.8, tier = 2, seed = 0, bar = 0) {
       if (idx >= totalSamples) break;
       const t = i / SAMPLE_RATE;
       const tNote = t % stepSec;
-      const env = pluckEnv(tNote, stepSec, 8.0);
+      // A slot is not a whole number of steps, so its last note is cut short.
+      const env = pluckEnv(tNote, stepSec, 8.0) * Math.min(1.0, (numSamples - i) / (0.02 * SAMPLE_RATE));
       // The octave changes only on a step boundary, where the pluck is at zero.
       const fStep = bassFigure[Math.floor(t / stepSec) % bassFigure.length] ? f * 2 : f;
       const sample = (triangle(fStep * t) * 0.7 + analogSaw(fStep * t) * 0.3) * env * 0.20;
@@ -151,7 +152,8 @@ function generateSynthwaveLoop(durationSec = 6.8, tier = 2, seed = 0, bar = 0) {
       const noteIdx = Math.floor(t / stepSec) % leadNotes.length;
       const f = noteToFreq(leadNotes[noteIdx]);
       const tNote = t % stepSec;
-      const env = pluckEnv(tNote, stepSec, 6.5);
+      // The arp stops mid-note at its end (6.6 s); ramp it out instead.
+      const env = pluckEnv(tNote, stepSec, 6.5) * Math.min(1.0, (numSamples - i) / (0.02 * SAMPLE_RATE));
       const sample = analogSaw(f * t) * env * 0.085;
 
       const pan = 0.5 + 0.35 * Math.sin(2 * Math.PI * 1.5 * t);
