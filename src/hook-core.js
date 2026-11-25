@@ -58,11 +58,35 @@ const TOOL_TIERS = {
   shell: 3,
   // Cursor
   Delete: 2,
-  Shell: 3
+  Shell: 3,
+  // Gemini CLI (read_file is Codex's name too). Names read from the 0.10.0 bundle.
+  read_many_files: 1, list_directory: 1, glob: 1, search_file_content: 1,
+  google_web_search: 1, web_fetch: 1, save_memory: 1, write_todos: 1,
+  write_file: 2, replace: 2,
+  run_shell_command: 3,
+  // Copilot CLI: its shell tool is lowercase `bash` (seen live); its other tool
+  // names were not verified, so they keep the fallback.
+  bash: 3
 };
 
 function toolTier(toolName) {
   return TOOL_TIERS[toolName] || 2;
+}
+
+// Calmer tool calls in a row before the tier comes down. Rising is immediate;
+// falling on one Read between two Bash runs made the music jump at every loop.
+const CALM_CALLS_TO_FALL = 3;
+
+/**
+ * The intensity file is "<tier> <calm streak>". Pure: given the file's text and
+ * this call's tier, returns the text to write. A tier at or above the current
+ * one takes over and resets the streak; a lower one counts toward falling.
+ */
+function nextIntensity(prevText, tier) {
+  const [prev, calm] = String(prevText || "").trim().split(/\s+/).map((n) => parseInt(n, 10));
+  if (!(prev >= 1 && prev <= 3) || tier >= prev) return `${tier} 0`;
+  const streak = (calm >= 0 ? calm : 0) + 1;
+  return streak >= CALM_CALLS_TO_FALL ? `${tier} 0` : `${prev} ${streak}`;
 }
 
 function readIntensity() {
@@ -114,7 +138,9 @@ function hookTool() {
   const commit = () => {
     try {
       fs.mkdirSync(STATE_DIR, { recursive: true });
-      fs.writeFileSync(INTENSITY_FILE, String(toolTier(payloadToolName(raw))));
+      let prev = "";
+      try { prev = fs.readFileSync(INTENSITY_FILE, "utf8"); } catch (e) { /* first call of the turn */ }
+      fs.writeFileSync(INTENSITY_FILE, nextIntensity(prev, toolTier(payloadToolName(raw))));
     } catch (e) {
       // Never let a hook failure disturb the agent.
     }
@@ -144,4 +170,4 @@ function projectName(dir) {
   return path.basename(String(dir).replace(/[\\/]+$/, "")) || "a session";
 }
 
-module.exports = { STATE_DIR, PID_FILE, INTENSITY_FILE, SESSIONS_DIR, EVENTS_FILE, ANON_SESSION, CLI_ENTRY, TOOL_TIERS, toolTier, readIntensity, parsePayload, payloadToolName, payloadSession, payloadProject, hookTool, MAX_DAEMON_MS, DAEMON_CEILING_MS, projectName };
+module.exports = { STATE_DIR, PID_FILE, INTENSITY_FILE, SESSIONS_DIR, EVENTS_FILE, ANON_SESSION, CLI_ENTRY, TOOL_TIERS, toolTier, nextIntensity, readIntensity, parsePayload, payloadToolName, payloadSession, payloadProject, hookTool, MAX_DAEMON_MS, DAEMON_CEILING_MS, projectName };

@@ -7,12 +7,14 @@ const { fs, path, os, assert, spawn, CLI, TEST_DIR } = require("../helpers");
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "vibe-grokpayload-"));
     const runTool = (payload) =>
       new Promise((resolve) => {
+        // Each call alone: the file now carries a calm streak across calls.
+        fs.rmSync(path.join(home, ".vibeaudio", "intensity"), { force: true });
         const child = spawn(process.execPath, [CLI, "--hook-tool"], {
           env: { ...process.env, HOME: home, USERPROFILE: home },
           stdio: ["pipe", "ignore", "ignore"]
         });
         child.stdin.end(JSON.stringify(payload));
-        child.on("close", () => resolve(fs.readFileSync(path.join(home, ".vibeaudio", "intensity"), "utf8")));
+        child.on("close", () => resolve(fs.readFileSync(path.join(home, ".vibeaudio", "intensity"), "utf8").split(" ")[0]));
       });
 
     // Claude/Codex/Cursor send tool_name; Grok sends toolName. Both must land
