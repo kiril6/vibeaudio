@@ -196,11 +196,12 @@ function generateSynthwaveLoop(durationSec = 6.8, tier = 2, seed = 0, bar = 0) {
     right[totalSamples - 1 - i] *= s;
   }
 
-  // The voicings and the octave bass raised the loudest render's peak by up to
-  // 0.08 (#4); this brings every tier back to or under its old peak and RMS.
+  // 0.90 brought the #4 voicings back to the old peak; the 0.65 on top is the
+  // static fix: at RMS 0.188 the sustained pads overloaded the speakers,
+  // heard as static, and the same file at `afplay -v 0.65` was clean (test [90]).
   for (let i = 0; i < totalSamples; i++) {
-    left[i] *= 0.90;
-    right[i] *= 0.90;
+    left[i] *= 0.90 * 0.65;
+    right[i] *= 0.90 * 0.65;
   }
 
   return createWavBuffer({ left, right, sampleRate: SAMPLE_RATE });

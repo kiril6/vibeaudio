@@ -143,6 +143,14 @@ function generateZenLoop(durationSec = 7.2, tier = 2, seed = 0, bar = 0) {
     right[totalSamples - 1 - i] *= s;
   }
 
+  // Brought down to jazz's level: at RMS 0.185 (tier 3) the bowls overloaded
+  // the speakers, heard as static, and the same file at `afplay -v 0.65` was
+  // clean (test [90]).
+  for (let i = 0; i < totalSamples; i++) {
+    left[i] *= 0.65;
+    right[i] *= 0.65;
+  }
+
   return createWavBuffer({ left, right, sampleRate: SAMPLE_RATE });
 }
 
