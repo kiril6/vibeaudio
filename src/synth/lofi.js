@@ -54,6 +54,8 @@ function generateLofiLoop(durationSec = 6.4, tier = 2, seed = 0, bar = 0) {
         const t = i / SAMPLE_RATE;
 
         const attack = Math.min(1.0, t * 35.0);
+        // The first chord stopped dead where the second begins; ramp it out.
+        const release = Math.min(1.0, (numSamples - i) / (0.02 * SAMPLE_RATE));
         const body = Math.exp(-t * 0.95);
         const tine = Math.exp(-t * 8.5);
 
@@ -65,7 +67,7 @@ function generateLofiLoop(durationSec = 6.4, tier = 2, seed = 0, bar = 0) {
           Math.sin(2 * Math.PI * f * t) * 0.74 +
           Math.sin(2 * Math.PI * 2.0 * f * t) * 0.22 * body +
           Math.sin(2 * Math.PI * 3.0 * f * t) * 0.08 * tine
-        ) * attack * body * vel;
+        ) * attack * release * body * vel;
 
         left[idx] += sample * tremL;
         right[idx] += sample * tremR;

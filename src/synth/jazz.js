@@ -114,7 +114,10 @@ function generateJazzLoop(durationSec = 6.26, tier = 2, seed = 0, bar = 0) {
       if (idx >= totalSamples) break;
       const t = i / SAMPLE_RATE;
       const attack = Math.min(1.0, t * 50.0);
-      const env = Math.exp(-t * 3.2);
+      // Each note stopped dead at 0.95 of a beat, still at ~14% of its level:
+      // a click on every beat from tier 2, heard as static.
+      const release = Math.min(1.0, (numSamples - i) / (0.02 * SAMPLE_RATE));
+      const env = Math.exp(-t * 3.2) * release;
 
       // Acoustic upright bass: fundamental sine + warm triangle pluck
       const sample = (sine(f * t) * 0.70 + triangle(f * t) * 0.30) * attack * env * 0.28;
@@ -163,7 +166,8 @@ function generateJazzLoop(durationSec = 6.26, tier = 2, seed = 0, bar = 0) {
         const idx = startIdx + i;
         if (idx >= totalSamples) break;
         const t = i / SAMPLE_RATE;
-        const env = Math.min(1.0, t * 60.0) * Math.exp(-t * 2.6);
+        const release = Math.min(1.0, (numSamples - i) / (0.02 * SAMPLE_RATE)); // Cut at ~22% otherwise.
+        const env = Math.min(1.0, t * 60.0) * Math.exp(-t * 2.6) * release;
         const sample = (sine(f * t) * 0.8 + sine(f * 2.0 * t) * 0.2) * env * 0.075;
 
         left[idx] += sample * 1.1;
