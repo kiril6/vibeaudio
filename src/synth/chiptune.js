@@ -10,6 +10,8 @@ const {
   triangle,
   makeRng,
   rotate,
+  pick,
+  ornamentRng,
   createWavBuffer
 } = require("./generator");
 
@@ -33,8 +35,53 @@ const VARIANTS = [
   }
 ];
 
+// Orders to walk each four-note chord in: up, down, up-down, down-up, and two
+// broken ones. Every one plays the same chord tones, so none can leave the
+// harmony (#4).
+const ARP_PATTERNS = [
+  [0, 1, 2, 3],
+  [3, 2, 1, 0],
+  [0, 1, 2, 3, 2, 1],
+  [3, 2, 1, 0, 1, 2],
+  [0, 2, 1, 3],
+  [0, 1, 3, 2]
+];
+
+// The bass's four beats under each chord, in semitones above its root: the
+// root alone, root-octave, a fifth on beat 3, and a root-fifth-octave walk.
+const BASS_FIGURES = [
+  [0, 0, 0, 0],
+  [0, 12, 0, 12],
+  [0, 0, 7, 0],
+  [0, 7, 12, 7]
+];
+
+// Which melody events (indices into RHYTHM below) drop an octave: none, the
+// answer after the long note at beat 7, the held notes, the opening phrase.
+// An octave keeps the pitch class, so the lead still agrees with the chord.
+const LEAD_OCTAVE_MASKS = [
+  [],
+  [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
+  [3, 10, 12, 16, 19, 24],
+  [0, 1, 2, 3, 4, 5, 6]
+];
+
+// How much of its slot each lead note holds: legato, or clipped short.
+const LEAD_ARTICULATIONS = [1.0, 0.6];
+
 function generateChiptuneLoop(durationSec = 7.5, tier = 2, seed = 0, bar = 0) {
   const variant = rotate(makeRng(seed), VARIANTS, bar);
+
+  // Ornaments (#4): without them the seed picked a variant and nothing else,
+  // so every project on 8bit played one of three arrangements. Drawn
+  // regardless of tier, in this order. The arpeggio and bass sound at every
+  // tier and share `orn`; the lead joins at tier 2, so it has its own stream.
+  const orn = ornamentRng(seed);
+  const arpPattern = pick(orn, ARP_PATTERNS);
+  const bassFigure = pick(orn, BASS_FIGURES);
+  const leadRng = ornamentRng(seed ^ 0x165667b1);
+  const lowered = new Set(pick(leadRng, LEAD_OCTAVE_MASKS));
+  const articulation = pick(leadRng, LEAD_ARTICULATIONS);
   const bpm = 128;
   const secPerBeat = 60.0 / bpm;
   const totalBeats = Math.floor(durationSec / secPerBeat);
@@ -54,13 +101,14 @@ function generateChiptuneLoop(durationSec = 7.5, tier = 2, seed = 0, bar = 0) {
   ];
   const melodyEvents = RHYTHM.map(([start, dur], i) => ({
     note: variant.motif[i % variant.motif.length],
+    octave: lowered.has(i) ? 0.5 : 1.0,
     start,
-    dur
+    dur: dur * articulation
   }));
 
   // Melody lead joins at Tier 2 (Tier 1 stays on arpeggio + bass only)
   for (const m of tier >= 2 ? melodyEvents : []) {
-    const f = noteToFreq(m.note);
+    const f = noteToFreq(m.note) * m.octave;
     const startIdx = Math.floor(m.start * secPerBeat * SAMPLE_RATE);
     const numSamples = Math.floor(m.dur * secPerBeat * SAMPLE_RATE);
 
@@ -112,7 +160,7 @@ function generateChiptuneLoop(durationSec = 7.5, tier = 2, seed = 0, bar = 0) {
     const beat = Math.floor(t / secPerBeat);
     const chordIdx = Math.floor(beat / 4) % chords.length;
     const chord = chords[chordIdx];
-    const noteIdx = Math.floor(t / arpSpeed) % chord.length;
+    const noteIdx = arpPattern[Math.floor(t / arpSpeed) % arpPattern.length];
     const f = noteToFreq(chord[noteIdx]);
     const sample = softPulse(arpPhase) * (tier === 1 ? 0.09 : 0.075);
 
@@ -136,7 +184,8 @@ function generateChiptuneLoop(durationSec = 7.5, tier = 2, seed = 0, bar = 0) {
     const t = i / SAMPLE_RATE;
     const beat = Math.floor(t / secPerBeat);
     const chordIdx = Math.floor(beat / 4) % bassNotes.length;
-    const f = noteToFreq(bassNotes[chordIdx]);
+    // The interval changes only on a beat, where the envelope is at zero.
+    const f = noteToFreq(bassNotes[chordIdx]) * Math.pow(2, bassFigure[beat % 4] / 12);
     const tNote = (t % secPerBeat);
     const env = Math.min(1.0, tNote * 40.0) * Math.max(0.0, 1.0 - Math.pow(tNote / secPerBeat, 0.6));
     const sample = triangle(f * t) * env * 0.24;
@@ -153,6 +202,13 @@ function generateChiptuneLoop(durationSec = 7.5, tier = 2, seed = 0, bar = 0) {
     right[i] *= s;
     left[totalSamples - 1 - i] *= s;
     right[totalSamples - 1 - i] *= s;
+  }
+
+  // The bass figures and the lowered lead notes raised the loudest render's
+  // peak and RMS a little (#4); this brings every tier back to or under them.
+  for (let i = 0; i < totalSamples; i++) {
+    left[i] *= 0.95;
+    right[i] *= 0.95;
   }
 
   return createWavBuffer({ left, right, sampleRate: SAMPLE_RATE });

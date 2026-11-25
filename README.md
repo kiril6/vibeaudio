@@ -616,12 +616,12 @@ Adds a `PreToolUse` hook so intensity follows **what the agent is doing**, not j
 | Agent is… | Tools | Tier |
 | :--- | :--- | :--- |
 | Looking things up, or waiting on you | `Read`, `Grep`, `Glob`, `WebFetch`, `AskUserQuestion` | 1 — sparse |
-| Changing code | `Edit`, `Write`, `NotebookEdit`, `apply_patch` | 2 — groove enters |
-| Shelling out, or handing work to a subagent | `Bash`, `Agent`, `Skill`, `shell` | 3 — peak |
+| Changing code | `Edit`, `Write`, `NotebookEdit`, `apply_patch`, `replace` | 2 — groove enters |
+| Shelling out, or handing work to a subagent | `Bash`, `Agent`, `Skill`, `shell`, `run_shell_command` | 3 — peak |
 
-Each agent names its tools differently, and all the vocabularies are mapped. **MCP tools stay at tier 2** — they arrive as `mcp__<server>__<tool>` and can't be enumerated, since everyone's servers differ. That's a third of real traffic, and tier 2 is the honest read: real work, rarely the heaviest thing in a turn.
+Each agent names its tools differently: Claude Code, Codex, Cursor and Gemini CLI are mapped, and Copilot CLI's `bash`; any other tool name gets tier 2. **MCP tools stay at tier 2** — they arrive as `mcp__<server>__<tool>` and can't be enumerated, since everyone's servers differ. That's a third of real traffic, and tier 2 is the honest read: real work, rarely the heaviest thing in a turn.
 
-Changes land at the next loop boundary, so it shifts musically rather than cutting mid-bar. Without a tool signal it falls back to time-based escalation.
+Changes land at the next loop boundary, so it shifts musically rather than cutting mid-bar. A heavier tool raises the tier at once; it comes back down only after three calmer calls in a row, so one quick `Read` between two test runs doesn't drop the music. Without a tool signal it falls back to time-based escalation.
 
 **Off by default on purpose** — music that moves every time the agent switches tools is music you *notice*, which is the opposite of what focus audio is for. Try it; if you catch yourself listening instead of reading, reinstall without `--reactive` and the `PreToolUse` hook goes away again.
 
