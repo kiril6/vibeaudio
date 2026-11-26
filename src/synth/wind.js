@@ -15,7 +15,7 @@ const VARIANTS = [
   { low: 800, high: 220, drift: 0.45, whistle: 1250, level: 0.75, label: "gale" },
   { low: 320, high: 140, drift: 0.3, whistle: 720, level: 1.2, label: "eaves" }
 ];
-const BED_GAIN = { 1: 1.0, 2: 1.16, 3: 1.36 };
+const BED_GAIN = { 1: 1.05, 2: 1.3, 3: 1.37 };
 const onePole = (hz) => 1 - Math.exp((-2 * Math.PI * hz) / SAMPLE_RATE);
 
 function generateWindLoop(durationSec = 8.0, tier = 2, seed = 0, bar = 0) {

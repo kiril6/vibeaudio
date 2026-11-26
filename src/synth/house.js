@@ -70,7 +70,7 @@ function generateHouseLoop(durationSec = HOUSE_SECONDS, tier = 2, seed = 0, bar 
     }
   }
   m.echo(BEAT * 0.75, BEAT, 0.18);
-  return m.wav(1.5);
+  return m.wav({ 1: 2.7, 2: 1.6, 3: 1.72 }[tier] || 1.6);
 }
 
 module.exports = { generateHouseLoop, HOUSE_SECONDS };

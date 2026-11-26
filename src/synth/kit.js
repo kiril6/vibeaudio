@@ -10,6 +10,13 @@ const { SAMPLE_RATE, noteToFreq, createWavBuffer } = require("./generator");
 const invert = (chord, k) =>
   chord.map((n, i) => (i < k ? n.slice(0, -1) + (Number(n.slice(-1)) + 1) : n));
 
+/**
+ * Rounds off anything over `knee` (never past knee + 0.12), so raising a
+ * genre's level cannot take away the headroom the stuck heartbeat needs.
+ */
+const soften = (v, knee) =>
+  Math.abs(v) <= knee ? v : Math.sign(v) * (knee + 0.12 * Math.tanh((Math.abs(v) - knee) / 0.12));
+
 function track(seconds) {
   const length = Math.floor(SAMPLE_RATE * seconds);
   const left = new Float64Array(length);
@@ -55,12 +62,12 @@ function track(seconds) {
       const fade = Math.floor(fadeSec * SAMPLE_RATE);
       for (let i = 0; i < length; i++) {
         const g = trim * Math.min(1, i / fade, (length - 1 - i) / fade);
-        left[i] *= g;
-        right[i] *= g;
+        left[i] = soften(left[i] * g, 0.555);
+        right[i] = soften(right[i] * g, 0.555);
       }
       return createWavBuffer({ left, right, sampleRate: SAMPLE_RATE });
     }
   };
 }
 
-module.exports = { track, invert };
+module.exports = { track, invert, soften };

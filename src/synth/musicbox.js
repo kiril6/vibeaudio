@@ -44,7 +44,7 @@ function generateMusicBoxLoop(durationSec = 7.6, tier = 2, seed = 0, bar = 0) {
     m.note(high, 0.1 + i * BEAT + BEAT / 2, 0.8, 0.028, { pan: 1 - pans[i], partials: TINE, decay: 6, attack: 0.002 });
   }
   m.echo(0.29, 0.41, 0.22);
-  return m.wav(2);
+  return m.wav({ 1: 2.27, 2: 2.52, 3: 2.8 }[tier] || 2.52);
 }
 
 module.exports = { generateMusicBoxLoop };

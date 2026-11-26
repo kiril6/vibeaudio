@@ -46,7 +46,7 @@ function generateShoegazeLoop(durationSec = 8.0, tier = 2, seed = 0, bar = 0) {
     }
   }
   m.echo(0.43, 0.61, 0.35);
-  return m.wav(1.35, 0.12);
+  return m.wav({ 1: 1.35, 2: 1.39, 3: 1.5 }[tier] || 1.39, 0.12);
 }
 
 module.exports = { generateShoegazeLoop };

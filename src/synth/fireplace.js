@@ -17,6 +17,7 @@ const {
   ornamentRng,
   createWavBuffer
 } = require("./generator");
+const { soften } = require("./kit");
 
 // The seed picks the fire, not a tune: how dark the bed is, how busy the wood
 // is and how sharp it snaps. `level` evens the three out, since a darker filter
@@ -31,7 +32,7 @@ const CRACKLE_POOL = 90;
 const CRACKLES_BY_TIER = { 1: 0.3, 2: 0.55, 3: 1.0 };
 const POP_POOL = 6;
 const POPS_BY_TIER = { 1: 1, 2: 3, 3: 6 };
-const BED_GAIN = { 1: 0.52, 2: 0.61, 3: 0.72 };
+const BED_GAIN = { 1: 0.64, 2: 0.78, 3: 0.88 };
 
 const onePole = (hz) => 1 - Math.exp((-2 * Math.PI * hz) / SAMPLE_RATE);
 
@@ -94,19 +95,18 @@ function generateFireplaceLoop(durationSec = 7.0, tier = 2, seed = 0, bar = 0) {
     amp: amp * (0.5 + 0.5 * draw() * draw()),
     noise: Math.floor(draw() * 0x100000000)
   });
-  const crackles = Array.from({ length: CRACKLE_POOL }, () => entry(variant.snap, 0.004, 1.05));
-  const pops = Array.from({ length: POP_POOL }, () => entry(1500, 0.012, 0.9));
+  const crackles = Array.from({ length: CRACKLE_POOL }, () => entry(variant.snap, 0.004, 1.28));
+  const pops = Array.from({ length: POP_POOL }, () => entry(1500, 0.012, 1.1));
 
   const count = Math.min(CRACKLE_POOL, Math.round(CRACKLE_POOL * variant.crackles * (CRACKLES_BY_TIER[tier] || 0.55)));
   crackles.slice(0, count).forEach(burst);
   pops.slice(0, POPS_BY_TIER[tier] || POPS_BY_TIER[2]).forEach(burst);
 
-  // Overlapping snaps can stack: round off anything over 0.56, so the stuck
+  // Overlapping snaps can stack: round off anything over 0.52, so the stuck
   // heartbeat mixed on top still has headroom.
-  const soften = (v) => (Math.abs(v) <= 0.56 ? v : Math.sign(v) * (0.56 + 0.12 * Math.tanh((Math.abs(v) - 0.56) / 0.12)));
   for (let i = 0; i < totalSamples; i++) {
-    left[i] = soften(left[i]);
-    right[i] = soften(right[i]);
+    left[i] = soften(left[i], 0.52);
+    right[i] = soften(right[i], 0.52);
   }
 
   // Both ends fade to silence, or the loop point clicks every repeat.

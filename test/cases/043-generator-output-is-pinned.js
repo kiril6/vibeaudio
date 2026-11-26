@@ -30,15 +30,15 @@ const { assert, generateLofiLoop, generateSynthwaveLoop, generateChiptuneLoop, g
       drone:        ["02a8069359cc", "2679af8bd7f0", "cf5f9257b2f6"],
       rain:         ["7b8c1fa69650", "273c139a3f7f", "bb17c8957987"],
       ocean:        ["c59e8b6ca39b", "6ff406d3611f", "1d548d21a985"],
-      fireplace:    ["bfa2b3db6784", "55a40cb863de", "5ebef470c6c1"],
-      wind: ["26794e6cc2af", "9dfe83fa071d", "a48dc68ad010"],
-      stream: ["7cd506c26c13", "1bd56bbe89cd", "0438139963e2"],
-      house: ["b93718d0375c", "6fd4f36b30fe", "65d9a820c1e2"],
-      dubtechno: ["51ab59a31908", "106699c9b0e5", "10c3f8bae96c"],
-      shoegaze: ["d77e84822fe6", "a5d273dc6654", "f69406c2ca83"],
-      gamelan: ["d616d7e23dec", "16f13b88837f", "6de348f515ee"],
-      musicbox: ["7cfd4630f406", "a19502525f5a", "acaa07eff981"],
-      rainpiano: ["eae68342de02", "85e51298ab1f", "b736717bd8be"]
+      fireplace:    ["8a4631c3712a", "f665027d05d3", "66d865818cff"],
+      wind: ["275ac0eabf05", "3c0a14780c68", "5c20addddb00"],
+      stream: ["86c43f55c00d", "3931840171cd", "c87074417046"],
+      house: ["580588bd7cc9", "9fcf4962db34", "8c1c14c77c12"],
+      dubtechno: ["dd69286cd684", "a4dbdb849fb1", "7b430ef1a363"],
+      shoegaze: ["d77e84822fe6", "6fa119bb0fc7", "1f112fea63e6"],
+      gamelan: ["8cc831a81a58", "3f66f2f3e665", "119b09bf8dab"],
+      musicbox: ["3864c62af34b", "3f1e503dd2be", "1838eac4b0fa"],
+      rainpiano: ["9b9f5bcc030f", "5c874454bf9a", "9f37d270ab2a"]
     };
 
     const RENDERERS = {

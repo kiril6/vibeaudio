@@ -8,6 +8,7 @@
  */
 
 const { SAMPLE_RATE, makeRng, rotate, ornamentRng, createWavBuffer } = require("./generator");
+const { soften } = require("./kit");
 
 const VARIANTS = [
   { low: 2600, high: 350, pitch: [450, 1100], bubbles: 1.0, level: 1.0, label: "brook" },
@@ -16,6 +17,7 @@ const VARIANTS = [
 ];
 const POOL = 600;
 const BY_TIER = { 1: 0.3, 2: 0.55, 3: 0.8 };
+const TIER_GAIN = { 1: 1.2, 2: 1.16, 3: 1.07 };
 const BED_GAIN = { 1: 0.21, 2: 0.26, 3: 0.33 };
 const onePole = (hz) => 1 - Math.exp((-2 * Math.PI * hz) / SAMPLE_RATE);
 
@@ -60,6 +62,12 @@ function generateStreamLoop(durationSec = 8.0, tier = 2, seed = 0, bar = 0) {
       left[b.at + j] += v * (1 - b.pan);
       right[b.at + j] += v * b.pan;
     }
+  }
+
+  const level = TIER_GAIN[tier] || TIER_GAIN[2];
+  for (let i = 0; i < total; i++) {
+    left[i] = soften(left[i] * level, 0.62);
+    right[i] = soften(right[i] * level, 0.62);
   }
 
   const fade = Math.floor(0.12 * SAMPLE_RATE);

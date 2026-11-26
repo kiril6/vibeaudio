@@ -41,7 +41,7 @@ function generateDubTechnoLoop(durationSec = DUBTECHNO_SECONDS, tier = 2, seed =
       const at = LEAD + start + hit * BEAT / 2;
       if (at > durationSec - 0.3) continue;
       invert(variant.chords[which], voicing[which]).forEach((n, i) =>
-        m.note(n, at, 0.5, 0.07, { pan: 0.4 + 0.08 * i, partials: STAB_TONE, decay: 10, attack: 0.006 }));
+        m.note(n, at, 0.8, 0.07, { pan: 0.4 + 0.08 * i, partials: STAB_TONE, decay: 5, attack: 0.012 }));
     }
   }
   m.echo(BEAT * echo[0], BEAT * echo[1], 0.45);
@@ -58,7 +58,7 @@ function generateDubTechnoLoop(durationSec = DUBTECHNO_SECONDS, tier = 2, seed =
       m.note(variant.chords[0][variant.chords[0].length - 1], at + BEAT / 4, 0.18, 0.025, { partials: STAB_TONE, decay: 16 });
     }
   }
-  return m.wav(1.7);
+  return m.wav({ 1: 2.05, 2: 1.55, 3: 1.7 }[tier] || 1.55);
 }
 
 module.exports = { generateDubTechnoLoop, DUBTECHNO_SECONDS };

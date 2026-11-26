@@ -46,7 +46,7 @@ function generateGamelanLoop(durationSec = 8.0, tier = 2, seed = 0, bar = 0) {
     }
   });
   m.echo(0.31, 0.47, 0.2);
-  return m.wav(2, 0.1);
+  return m.wav({ 1: 2.2, 2: 2.55, 3: 2.76 }[tier] || 2.55, 0.1);
 }
 
 module.exports = { generateGamelanLoop };
