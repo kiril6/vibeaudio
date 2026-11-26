@@ -14,7 +14,14 @@ const genreAliases = {
   drone: ["noise", "focus", "hum", "whitenoise", "white-noise"],
   piano: ["sparse", "satie", "keys", "minimal"],
   rain: ["storm", "drizzle"],
-  ocean: ["waves", "sea", "surf"]
+  ocean: ["waves", "sea", "surf"],
+  fireplace: ["fire", "hearth", "campfire"],
+  wind: ["breeze"],
+  stream: ["creek", "river"],
+  house: ["deep-house"],
+  dubtechno: ["dub", "dub-techno"],
+  musicbox: ["music-box"],
+  rainpiano: ["rain-and-piano", "rain-piano"]
 };
 for (const [canonical, aliases] of Object.entries(genreAliases)) {
   for (const alias of aliases) {

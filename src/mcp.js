@@ -101,7 +101,7 @@ const TOOLS = [
       properties: {
         genre: {
           type: "string",
-          description: "Music genre: lofi, synthwave, 8bit, electronic, jazz, zen, piano (sparse), drone/rain/ocean (no melody), or random",
+          description: "Music genre: lofi, synthwave, 8bit, electronic, jazz, zen, piano (sparse), drone/rain/ocean/fireplace/wind/stream (no melody), house, dubtechno, shoegaze, gamelan, musicbox, rainpiano, or random",
           enum: [...AVAILABLE_GENRES, "random"]
         },
         volume: {

@@ -57,7 +57,13 @@ const { assert } = require("../setup");
       electronic: [require(path.join(synth, "electronic")).generateElectronicLoop, 6.4],
       jazz: [require(path.join(synth, "jazz")).generateJazzLoop, 6.26],
       zen: [require(path.join(synth, "zen")).generateZenLoop, 7.2],
-      piano: [require(path.join(synth, "piano")).generatePianoLoop, 7.6]
+      piano: [require(path.join(synth, "piano")).generatePianoLoop, 7.6],
+      house: [require(path.join(synth, "house")).generateHouseLoop, 16 * 60 / 122 + 0.12],
+      dubtechno: [require(path.join(synth, "dubtechno")).generateDubTechnoLoop, 16 * 60 / 118 + 0.12],
+      shoegaze: [require(path.join(synth, "shoegaze")).generateShoegazeLoop, 8.0],
+      gamelan: [require(path.join(synth, "gamelan")).generateGamelanLoop, 8.0],
+      musicbox: [require(path.join(synth, "musicbox")).generateMusicBoxLoop, 7.6],
+      rainpiano: [require(path.join(synth, "rainpiano")).generateRainPianoLoop, 7.6]
     };
 
     function trace(generate, duration, tier, seed, bar) {

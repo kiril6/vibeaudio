@@ -8,7 +8,7 @@
 
 const PANE = 'vibeaudio'
 // Keep in step with AVAILABLE_GENRES in src/player.js (a root test checks it).
-const GENRES = ['lofi', 'synthwave', '8bit', 'electronic', 'jazz', 'zen', 'piano', 'drone', 'rain', 'ocean']
+const GENRES = ['lofi', 'synthwave', '8bit', 'electronic', 'jazz', 'zen', 'piano', 'drone', 'rain', 'ocean', 'fireplace', 'wind', 'stream', 'house', 'dubtechno', 'shoegaze', 'gamelan', 'musicbox', 'rainpiano']
 const DEFAULT_MUTE_MINUTES = 60
 const REFRESH_MS = 30000
 const NO_VIBE = 'could not run vibe - install it with: npm i -g vibeaudio'
@@ -46,9 +46,9 @@ const DOCTOR = 'vibeaudio-doctor'
 // site's own neon for a dark theme, a deeper set for a light one, and a middle
 // set when the theme is "auto" and nothing says which the terminal is.
 const PALETTES = {
-  dark: { pink: '#ff2e97', cyan: '#00e5ff', purple: '#a855f7', amber: '#ffb454', genre: { lofi: '#ffb454', synthwave: '#ff2e97', '8bit': '#39ff8d', electronic: '#00e5ff', jazz: '#ff7a45', zen: '#39ffc9', piano: '#7cb8ff', drone: '#c084fc', rain: '#5ab0ff', ocean: '#2dd4bf' } },
-  mid: { pink: '#e6007e', cyan: '#0e91ad', purple: '#9b4de8', amber: '#bf7a00', genre: { lofi: '#bf7a00', synthwave: '#e6007e', '8bit': '#1f9d55', electronic: '#0e91ad', jazz: '#e0541b', zen: '#12a37f', piano: '#3b82d6', drone: '#a05be0', rain: '#2e86de', ocean: '#14a898' } },
-  light: { pink: '#c4006a', cyan: '#00728a', purple: '#7a2fd0', amber: '#96590a', genre: { lofi: '#96590a', synthwave: '#c4006a', '8bit': '#17753f', electronic: '#00728a', jazz: '#b8400f', zen: '#0d7a5f', piano: '#1f5fb0', drone: '#7e3fc0', rain: '#1c64b8', ocean: '#0d7f73' } },
+  dark: { pink: '#ff2e97', cyan: '#00e5ff', purple: '#a855f7', amber: '#ffb454', genre: { lofi: '#ffb454', synthwave: '#ff2e97', '8bit': '#39ff8d', electronic: '#00e5ff', jazz: '#ff7a45', zen: '#39ffc9', piano: '#7cb8ff', drone: '#c084fc', rain: '#5ab0ff', ocean: '#2dd4bf', fireplace: '#ff4d4d', wind: '#b8c7d9', stream: '#4de1ff', house: '#ffd23f', dubtechno: '#8c7bff', shoegaze: '#ff9ad5', gamelan: '#e6b866', musicbox: '#ffc2e2', rainpiano: '#9fb4ff' } },
+  mid: { pink: '#e6007e', cyan: '#0e91ad', purple: '#9b4de8', amber: '#bf7a00', genre: { lofi: '#bf7a00', synthwave: '#e6007e', '8bit': '#1f9d55', electronic: '#0e91ad', jazz: '#e0541b', zen: '#12a37f', piano: '#3b82d6', drone: '#a05be0', rain: '#2e86de', ocean: '#14a898', fireplace: '#d63030', wind: '#6b7f99', stream: '#1597c4', house: '#b88a00', dubtechno: '#6a55e0', shoegaze: '#d65aa6', gamelan: '#a87a2a', musicbox: '#c76a9c', rainpiano: '#5f76cf' } },
+  light: { pink: '#c4006a', cyan: '#00728a', purple: '#7a2fd0', amber: '#96590a', genre: { lofi: '#96590a', synthwave: '#c4006a', '8bit': '#17753f', electronic: '#00728a', jazz: '#b8400f', zen: '#0d7a5f', piano: '#1f5fb0', drone: '#7e3fc0', rain: '#1c64b8', ocean: '#0d7f73', fireplace: '#b02020', wind: '#4a5d75', stream: '#0b6f93', house: '#856200', dubtechno: '#4b37b8', shoegaze: '#a83a7e', gamelan: '#7d5815', musicbox: '#964a72', rainpiano: '#4053a6' } },
 }
 // The status chip: a dark block with neon text on a dark theme. On a light or auto theme
 // it is plain bold text in the theme's ink, since a dark block on white looked heavy.

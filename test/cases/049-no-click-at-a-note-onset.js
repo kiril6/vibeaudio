@@ -32,7 +32,9 @@ const { assert, TEST_DIR } = require("../helpers");
     // 8bit is pulse-based and drone is a noise bed, so both are excluded rather
     // than given a number that would only ever be wrong.
     const { generateLoop } = require("../../src/player");
-    const LIMITS = { synthwave: 0.08, electronic: 0.12, lofi: 0.06, jazz: 0.07, zen: 0.05, piano: 0.06 };
+    const LIMITS = { synthwave: 0.08, electronic: 0.12, lofi: 0.06, jazz: 0.07, zen: 0.05, piano: 0.06,
+      house: 0.09, dubtechno: 0.16, shoegaze: 0.06, gamelan: 0.09, musicbox: 0.12 };
+    // rainpiano is left out: its rain bed is noise, which steps by design.
     for (const [genre, limit] of Object.entries(LIMITS)) {
       for (const tier of [1, 2, 3]) {
         const wav = generateLoop(genre, tier, 42);

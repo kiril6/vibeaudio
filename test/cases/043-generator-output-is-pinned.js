@@ -29,7 +29,16 @@ const { assert, generateLofiLoop, generateSynthwaveLoop, generateChiptuneLoop, g
       piano:        ["bd13952e9c8d", "c4940c3eb360", "d1678230deb0"],
       drone:        ["02a8069359cc", "2679af8bd7f0", "cf5f9257b2f6"],
       rain:         ["7b8c1fa69650", "273c139a3f7f", "bb17c8957987"],
-      ocean:        ["c59e8b6ca39b", "6ff406d3611f", "1d548d21a985"]
+      ocean:        ["c59e8b6ca39b", "6ff406d3611f", "1d548d21a985"],
+      fireplace:    ["8a4631c3712a", "f665027d05d3", "66d865818cff"],
+      wind: ["275ac0eabf05", "3c0a14780c68", "5c20addddb00"],
+      stream: ["86c43f55c00d", "3931840171cd", "c87074417046"],
+      house: ["580588bd7cc9", "9fcf4962db34", "8c1c14c77c12"],
+      dubtechno: ["dd69286cd684", "a4dbdb849fb1", "7b430ef1a363"],
+      shoegaze: ["d77e84822fe6", "6fa119bb0fc7", "1f112fea63e6"],
+      gamelan: ["8cc831a81a58", "3f66f2f3e665", "119b09bf8dab"],
+      musicbox: ["3864c62af34b", "3f1e503dd2be", "1838eac4b0fa"],
+      rainpiano: ["9b9f5bcc030f", "5c874454bf9a", "9f37d270ab2a"]
     };
 
     const RENDERERS = {
@@ -42,7 +51,16 @@ const { assert, generateLofiLoop, generateSynthwaveLoop, generateChiptuneLoop, g
       piano: (t) => require("../../src/synth/piano").generatePianoLoop(7.6, t, 1),
       drone: (t) => require("../../src/synth/drone").generateDroneLoop(7.0, t, 1),
       rain: (t) => require("../../src/synth/rain").generateRainLoop(7.0, t, 1),
-      ocean: (t) => require("../../src/synth/ocean").generateOceanLoop(8.0, t, 1)
+      ocean: (t) => require("../../src/synth/ocean").generateOceanLoop(8.0, t, 1),
+      fireplace: (t) => require("../../src/synth/fireplace").generateFireplaceLoop(7.0, t, 1),
+      wind: (t) => require("../../src/synth/wind").generateWindLoop(8.0, t, 1),
+      stream: (t) => require("../../src/synth/stream").generateStreamLoop(8.0, t, 1),
+      house: (t) => require("../../src/synth/house").generateHouseLoop(16 * 60 / 122 + 0.12, t, 1),
+      dubtechno: (t) => require("../../src/synth/dubtechno").generateDubTechnoLoop(16 * 60 / 118 + 0.12, t, 1),
+      shoegaze: (t) => require("../../src/synth/shoegaze").generateShoegazeLoop(8.0, t, 1),
+      gamelan: (t) => require("../../src/synth/gamelan").generateGamelanLoop(8.0, t, 1),
+      musicbox: (t) => require("../../src/synth/musicbox").generateMusicBoxLoop(7.6, t, 1),
+      rainpiano: (t) => require("../../src/synth/rainpiano").generateRainPianoLoop(7.6, t, 1)
     };
 
     // Every genre the player can produce must be pinned, or a new one slips
@@ -69,7 +87,7 @@ const { assert, generateLofiLoop, generateSynthwaveLoop, generateChiptuneLoop, g
       assert.strictEqual(new Set(hashes).size, 3, `${genre} must render three distinct tiers`);
     }
 
-    console.log("   ✓ All 10 genres × 3 tiers render exactly as pinned — audio drift now fails the suite.");
+    console.log("   ✓ All 19 genres × 3 tiers render exactly as pinned — audio drift now fails the suite.");
   }
 
 

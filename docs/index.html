@@ -63,6 +63,15 @@
   --c-drone:#c084fc;
   --c-rain:#5ab0ff;
   --c-ocean:#2dd4bf;
+  --c-house:#ffd23f;
+  --c-dubtechno:#8c7bff;
+  --c-shoegaze:#ff9ad5;
+  --c-gamelan:#e6b866;
+  --c-musicbox:#ffc2e2;
+  --c-rainpiano:#9fb4ff;
+  --c-fireplace:#ff4d4d;
+  --c-wind:#b8c7d9;
+  --c-stream:#4de1ff;
 
   --display:"Audiowide", "Arial Narrow", sans-serif;
   --mono:"JetBrains Mono", ui-monospace, "SF Mono", monospace;
@@ -495,7 +504,7 @@ footer a{ color:var(--ink-dim); }
       <p class="sub">Every note synthesized on the spot — no MP3s, no audio assets. Your project gets its own arrangement, tiers escalate as the agent digs in, and a chime tells you when it's your turn again.</p>
       <div class="hero-actions">
         <button class="btn btn-primary" id="hero-play" aria-pressed="false">▶ Hear it</button>
-        <a class="btn" href="#genres">Browse all 10 genres</a>
+        <a class="btn" href="#genres">Browse all 19 genres</a>
       </div>
       <div class="kbd-hint" aria-hidden="true">
         <span>Press <kbd>Space</kbd> to play/pause · <kbd>Esc</kbd> to stop</span>
@@ -582,7 +591,7 @@ footer a{ color:var(--ink-dim); }
 
 <section class="wrap" id="genres">
   <span class="eyebrow">listen</span>
-  <h2 style="font-size:30px;">Ten genres, all synthesized.</h2>
+  <h2 style="font-size:30px;">Nineteen genres, all synthesized.</h2>
   <p style="color:var(--ink-dim);max-width:56ch;margin-top:10px;">Click a genre to hear a full simulated turn — gentle intro, main groove, deep focus, then the success chime. Only one plays at a time.</p>
   <div class="genre-grid" id="genre-grid"></div>
   <div class="cta-band">
@@ -829,9 +838,18 @@ footer a{ color:var(--ink-dim); }
     { id:"jazz", name:"Midnight Jazz", emoji:"🎷", vibe:"ii-V-I piano chords & walking upright bass" },
     { id:"zen", name:"Zen Ambient", emoji:"🎋", vibe:"Meditative singing bowls & floating pads" },
     { id:"piano", name:"Sparse Piano", emoji:"🎹", vibe:"Single struck notes & long silences", note:"Gentler than drone — still plays something." },
+    { id:"house", name:"House", emoji:"🏠", vibe:"Soft four-on-the-floor & chord stabs" },
+    { id:"dubtechno", name:"Dub Techno", emoji:"🔁", vibe:"Echoing minor chords over a muted pulse" },
+    { id:"shoegaze", name:"Shoegaze Pads", emoji:"🌀", vibe:"Slow detuned washes, no drums" },
+    { id:"gamelan", name:"Gamelan", emoji:"🔔", vibe:"Interlocking bronze metallophones" },
+    { id:"musicbox", name:"Music Box", emoji:"🎠", vibe:"High, unhurried tines" },
+    { id:"rainpiano", name:"Rain & Piano", emoji:"☔", vibe:"Sparse piano with rain behind it" },
     { id:"drone", name:"Deep Drone", emoji:"🌫️", vibe:"Held tone & filtered noise" },
     { id:"rain", name:"Rain", emoji:"🌧️", vibe:"Band-passed rainfall & distant droplets" },
-    { id:"ocean", name:"Ocean", emoji:"🌊", vibe:"Low surf on a slow rising swell" }
+    { id:"ocean", name:"Ocean", emoji:"🌊", vibe:"Low surf on a slow rising swell" },
+    { id:"fireplace", name:"Fireplace", emoji:"🔥", vibe:"Warm bed, crackles & the odd pop" },
+    { id:"wind", name:"Wind", emoji:"🍃", vibe:"Drifting, gently gusting air" },
+    { id:"stream", name:"Stream", emoji:"💧", vibe:"Running water & small bubbles" }
   ];
 
   var CHIMES = [
@@ -1015,7 +1033,7 @@ footer a{ color:var(--ink-dim); }
 
   // ---- Genre grid ----
   var grid = document.getElementById("genre-grid");
-  var NO_MELODY = { drone:1, rain:1, ocean:1 };
+  var NO_MELODY = { drone:1, rain:1, ocean:1, fireplace:1, wind:1, stream:1 };
   var groupShown = false;
   GENRES.forEach(function(g){
     if (NO_MELODY[g.id] && !groupShown){
