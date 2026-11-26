@@ -42,7 +42,8 @@ const { assert } = require("../helpers");
       return found;
     }
 
-    const CASES = [["synthwave", [1, 2, 3]], ["jazz", [1, 2, 3]], ["lofi", [1]]];
+    const CASES = [["synthwave", [1, 2, 3]], ["jazz", [1, 2, 3]], ["lofi", [1]],
+      ["house", [1, 2, 3]], ["dubtechno", [1, 2, 3]], ["shoegaze", [1, 2, 3]], ["gamelan", [1, 2, 3]], ["musicbox", [1, 2, 3]]];
     for (const [genre, tiers] of CASES) {
       for (const seed of [1, 7, 42]) {
         for (const tier of tiers) {

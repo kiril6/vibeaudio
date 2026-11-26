@@ -59,7 +59,12 @@ const tieredGenerators = {
   "8bit": generateChiptuneLoop,
   electronic: generateElectronicLoop,
   jazz: generateJazzLoop,
-  zen: generateZenLoop
+  zen: generateZenLoop,
+  house: require("../src/synth/house").generateHouseLoop,
+  dubtechno: require("../src/synth/dubtechno").generateDubTechnoLoop,
+  shoegaze: require("../src/synth/shoegaze").generateShoegazeLoop,
+  gamelan: require("../src/synth/gamelan").generateGamelanLoop,
+  musicbox: require("../src/synth/musicbox").generateMusicBoxLoop
 };
 const { resolveGenre, isKnownGenre, AVAILABLE_GENRES, CACHE_DIR } = require("../src/player");
 const fs = require("fs");

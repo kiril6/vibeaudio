@@ -14,7 +14,7 @@
 
 **[Install](#-install)** · **[Agent hooks](#-agent-hooks-no-wrapper-needed)** · **[Genres](#-music-genres)** · **[Flags](#-options--flags)** · **[Troubleshooting](#-troubleshooting)** · **[Uninstall](#-uninstall)**
 
-> **🔊 [Listen to every genre →](https://kiril6.github.io/vibeaudio/)** — hear all 10 genres, the tier escalation, and the three chimes, rendered from the real synth.
+> **🔊 [Listen to every genre →](https://kiril6.github.io/vibeaudio/)** — hear all 19 genres, the tier escalation, and the three chimes, rendered from the real synth.
 
 > **In a hurry?** `npm i -g vibeaudio`, then `vibe --install-hooks`. Your next prompt has music.
 >
@@ -572,7 +572,7 @@ plus where the time went by project and, for windows up to two weeks, by day. "Y
 
 ### The chime is in the music's key
 
-The success chime is the tonic chord of whatever key your genre sits in — C major for lofi, 8bit, jazz and piano, D minor for synthwave and electronic, D major for zen, A minor for drone — so it lands as the resolution of the piece rather than a bell over it. `rain`, `ocean` and `random` have no single key to match and keep the original C major chime.
+The success chime is the tonic chord of whatever key your genre sits in — C major for lofi, 8bit, jazz, piano, musicbox and rainpiano, D minor for synthwave, electronic and dubtechno, D major for zen, shoegaze and gamelan, A minor for drone and house — so it lands as the resolution of the piece rather than a bell over it. `rain`, `ocean`, `fireplace`, `wind`, `stream` and `random` have no single key to match and keep the original C major chime.
 
 ### Your own chime: `vibe --success-chime`
 
@@ -810,7 +810,7 @@ VIBE_VOLUME = "25"
 Restart the app afterwards — this one is read from the environment the server was launched with, so unlike the saved default it can't change under a running client.
 
 #### Exposed MCP Tools:
-* `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `rain`, `ocean`, `random`; `volume`: `5-100`; `project_dir`: the workspace's absolute path, optional).
+* `vibe_play`: Start procedural focus music (`genre`: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `rain`, `ocean`, `fireplace`, `wind`, `stream`, `house`, `dubtechno`, `shoegaze`, `gamelan`, `musicbox`, `rainpiano`, `random`; `volume`: `5-100`; `project_dir`: the workspace's absolute path, optional).
 * `vibe_stop`: Stop music and play the completion chime (`outcome`: `success` or `failure`).
 * `vibe_status`: Return current playback state and active tier, and which project the arrangement comes from.
 
@@ -822,7 +822,7 @@ Playback stops automatically if the desktop client disconnects, and caps out aft
 
 ## 🎨 Music Genres
 
-VibeAudio includes **10 procedural sound styles** synthesized entirely in code:
+VibeAudio includes **19 procedural sound styles** synthesized entirely in code:
 
 | Genre | Style | Vibe |
 | :--- | :--- | :--- |
@@ -836,7 +836,16 @@ VibeAudio includes **10 procedural sound styles** synthesized entirely in code:
 | `drone` | 🌫️ **Deep Drone** | A held tone and filtered noise — **no melody at all** |
 | `rain` | 🌧️ **Rain** | Band-passed rainfall with sparse droplets — **no melody at all** |
 | `ocean` | 🌊 **Ocean** | Low surf on a slow swell that rises and drains — **no melody at all** |
-| `random` | 🎲 **Shuffle Mode** | Picks a surprise genre for the run — **never `drone`, `rain` or `ocean`** |
+| `fireplace` | 🔥 **Fireplace** | A warm, still bed with irregular crackles and pops — **no melody at all** |
+| `wind` | 🍃 **Wind** | Drifting, gently gusting air with a faint whistle later on — **no melody at all** |
+| `stream` | 💧 **Stream** | Running water and many small bubbles — **no melody at all** |
+| `house` | 🏠 **House** | Soft four-on-the-floor, offbeat bass and chord stabs |
+| `dubtechno` | 🔁 **Dub Techno** | Echoing minor chords over a muted pulse |
+| `shoegaze` | 🌀 **Shoegaze Pads** | Slow detuned washes with a melody swelling in, no drums |
+| `gamelan` | 🔔 **Gamelan** | Interlocking bronze metallophones on a five-note scale |
+| `musicbox` | 🎠 **Music Box** | High, unhurried tines |
+| `rainpiano` | ☔ **Rain & Piano** | The sparse piano with rain behind it |
+| `random` | 🎲 **Shuffle Mode** | Picks a surprise genre for the run — **never `drone`, `rain`, `ocean`, `fireplace`, `wind` or `stream`** |
 
 <details>
 <summary><b>Genre aliases</b> — you can ask for a genre the way you'd say it (<code>chill</code>, <code>retrowave</code>, <code>bossa</code>, <code>ambient</code>…)</summary>
@@ -853,16 +862,23 @@ VibeAudio includes **10 procedural sound styles** synthesized entirely in code:
 | `drone` | `noise`, `focus`, `hum`, `whitenoise`, `white-noise` |
 | `rain` | `storm`, `drizzle` |
 | `ocean` | `waves`, `sea`, `surf` |
+| `fireplace` | `fire`, `hearth`, `campfire` |
+| `wind` | `breeze` |
+| `stream` | `creek`, `river` |
+| `house` | `deep-house` |
+| `dubtechno` | `dub`, `dub-techno` |
+| `musicbox` | `music-box` |
+| `rainpiano` | `rain-and-piano`, `rain-piano` |
 
 Matching is case-insensitive, so `BOSSA` works too.
 
 </details>
 
-> **If any melody distracts you, use `drone`.** Every other genre plays something — notes, a progression, a bass line — and some people can't read while that happens. `drone` holds one tone (low enough to recede, high enough for laptop speakers to play) over a soft, steady noise bed and never moves: closer to a hum or a fan than to music. Tiers add weight rather than movement. If you want nature sounds instead, `rain` and `ocean` are synthesized the same way (seeded noise, no recorded files): rain adds more droplets as the turn runs longer, ocean adds a second swell and then foam.
+> **If any melody distracts you, use `drone`.** The melodic genres play something — notes, a progression, a bass line — and some people can't read while that happens. `drone` holds one tone (low enough to recede, high enough for laptop speakers to play) over a soft, steady noise bed and never moves: closer to a hum or a fan than to music. Tiers add weight rather than movement. If you want nature sounds instead, `rain`, `ocean` and `fireplace` are synthesized the same way (seeded noise, no recorded files): rain adds more droplets as the turn runs longer, ocean adds a second swell and then foam, fireplace adds more crackles and pops over a heavier bed, wind gains weight and a faint whistle, stream more bubbles.
 >
 > **`piano` is the gentler version of that idea.** It still plays notes — two in eight seconds at tier 1 — but they're single struck tones with silence between them and nothing running underneath. Higher tiers fill the gaps rather than adding a groove. Try it before `drone` if you want *something* there.
 >
-> For the same reason **`random` never picks `drone`, `rain` or `ocean`**. Shuffle is for a surprise *mood*, and drone isn't one — landing on a fan noise when you asked for variety reads as broken audio, not as range. Ask for it by name (or `noise` / `focus`) when you want it.
+> For the same reason **`random` never picks `drone`, `rain`, `ocean`, `fireplace`, `wind` or `stream`**. Shuffle is for a surprise *mood*, and drone isn't one — landing on a fan noise when you asked for variety reads as broken audio, not as range. Ask for it by name (or `noise` / `focus`) when you want it.
 
 ### Usage Examples:
 ```bash
@@ -881,7 +897,7 @@ vibe --genre jazz --volume 25
 Saved to `~/.vibeaudio/config.json` and read by all three ways of running VibeAudio — wrapper, agent hooks, MCP. It applies on your next prompt.
 
 ```bash
-vibe --genre jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, random
+vibe --genre jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, fireplace, wind, stream, house, dubtechno, shoegaze, gamelan, musicbox, rainpiano, random
 vibe --volume 25           # or --whisper / --quiet / --loud
 vibe --chime-volume 70
 vibe --status              # what's saved, and what's overriding it
@@ -906,7 +922,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 
 | Flag | Description | Default |
 | :--- | :--- | :--- |
-| `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `rain`, `ocean`, `random`. With no command after it, saves your default | `lofi` |
+| `-g, --genre <name>` | Music style: `lofi`, `synthwave`, `8bit`, `electronic`, `jazz`, `zen`, `piano`, `drone`, `rain`, `ocean`, `fireplace`, `wind`, `stream`, `house`, `dubtechno`, `shoegaze`, `gamelan`, `musicbox`, `rainpiano`, `random`. With no command after it, saves your default | `lofi` |
 | `-v, --volume <5-100>` | Set playback volume. With no command after it, saves your default | `40` |
 | `-cv, --chime-volume <5-100>` | Set independent completion chime volume | `volume × 1.1`, kept within 35–65 |
 | `--grace <ms>` | Silence window before music starts | `1500` |
@@ -953,7 +969,7 @@ The full order, highest first: **a flag** → **an environment variable** → **
 **Defaults live in `~/.vibeaudio/config.json` now** — `vibe --genre jazz` is the short way to set one. These override it for a single shell, which is what you want for one terminal that should sound different, or for a machine you don't want writing config at all:
 
 ```bash
-export VIBE_GENRE=jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, random
+export VIBE_GENRE=jazz          # lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, fireplace, wind, stream, house, dubtechno, shoegaze, gamelan, musicbox, rainpiano, random
 export VIBE_VOLUME=25           # Background music at 25%
 export VIBE_CHIME_VOLUME=70     # Crisp completion chime at 70%
 export VIBE_GRACE_MS=3000       # Wait 3s of thinking before any music

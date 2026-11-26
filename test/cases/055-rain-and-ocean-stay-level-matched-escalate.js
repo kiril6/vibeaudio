@@ -1,14 +1,17 @@
 const { measure, assert, TEST_DIR } = require("../helpers");
 
 (async () => {
-  // [55] rain and ocean: noise-based, level-matched, tiered, seamless.
+  // [55] the noise genres: noise-based, level-matched, tiered, seamless.
   {
-    console.log("\n\x1b[1m[55] Rain and ocean stay level-matched, escalate and loop\x1b[0m");
+    console.log("\n\x1b[1m[55] Noise genres stay level-matched, escalate and loop\x1b[0m");
     const { generateRainLoop } = require("../../src/synth/rain");
     const { generateOceanLoop } = require("../../src/synth/ocean");
+    const { generateFireplaceLoop } = require("../../src/synth/fireplace");
+    const { generateWindLoop } = require("../../src/synth/wind");
+    const { generateStreamLoop } = require("../../src/synth/stream");
     const jazzRef = measure(require("../../src/synth/jazz").generateJazzLoop(6.26, 2, 42));
 
-    for (const [name, gen, dur] of [["rain", generateRainLoop, 7.0], ["ocean", generateOceanLoop, 8.0]]) {
+    for (const [name, gen, dur] of [["rain", generateRainLoop, 7.0], ["ocean", generateOceanLoop, 8.0], ["fireplace", generateFireplaceLoop, 7.0], ["wind", generateWindLoop, 8.0], ["stream", generateStreamLoop, 8.0]]) {
       // Every curated variant, not just the seed's: they filter differently and
       // one of them being 3x too hot is exactly how these go wrong.
       for (let bar = 0; bar < 3; bar++) {
@@ -25,7 +28,7 @@ const { measure, assert, TEST_DIR } = require("../helpers");
       }
       assert.ok(!gen(dur, 2, 7).equals(gen(dur, 2, 42)), `${name}: the seed must change the arrangement`);
     }
-    console.log("   ✓ Rain and ocean: deterministic, three tiers, all bars near the other genres' level, seamless.");
+    console.log("   ✓ Noise genres: deterministic, three tiers, all bars near the other genres' level, seamless.");
   }
 
 

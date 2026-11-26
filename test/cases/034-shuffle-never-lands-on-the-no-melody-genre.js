@@ -6,7 +6,7 @@ const { assert, TEST_DIR } = require("../helpers");
   {
     const { resolveGenre: resolve, SHUFFLE_GENRES, AVAILABLE_GENRES: ALL } = require("../../src/player");
 
-    const NON_MELODIC = ["drone", "rain", "ocean"];
+    const NON_MELODIC = ["drone", "rain", "ocean", "fireplace", "wind", "stream"];
     for (const g of NON_MELODIC) assert.ok(!SHUFFLE_GENRES.includes(g), `${g} must be out of the shuffle pool`);
     assert.strictEqual(SHUFFLE_GENRES.length, ALL.length - NON_MELODIC.length, "shuffle must drop exactly the non-melodic genres");
 
@@ -23,7 +23,7 @@ const { assert, TEST_DIR } = require("../helpers");
     for (const name of ["rain", "storm", "ocean", "surf"]) {
       assert.ok(["rain", "ocean"].includes(resolve(name)), `${name} must still be reachable on purpose`);
     }
-    console.log("   ✓ random stays musical; drone, rain and ocean remain reachable by name and alias.");
+    console.log("   ✓ random stays musical; the no-melody genres remain reachable by name and alias.");
   }
 
 

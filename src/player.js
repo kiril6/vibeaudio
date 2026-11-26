@@ -18,6 +18,15 @@ const { generateZenLoop } = require("./synth/zen");
 const { generateDroneLoop } = require("./synth/drone");
 const { generateRainLoop } = require("./synth/rain");
 const { generateOceanLoop } = require("./synth/ocean");
+const { generateFireplaceLoop } = require("./synth/fireplace");
+const { generateWindLoop } = require("./synth/wind");
+const { generateStreamLoop } = require("./synth/stream");
+const { generateHouseLoop, HOUSE_SECONDS } = require("./synth/house");
+const { generateDubTechnoLoop, DUBTECHNO_SECONDS } = require("./synth/dubtechno");
+const { generateShoegazeLoop } = require("./synth/shoegaze");
+const { generateGamelanLoop } = require("./synth/gamelan");
+const { generateMusicBoxLoop } = require("./synth/musicbox");
+const { generateRainPianoLoop } = require("./synth/rainpiano");
 const { generatePianoLoop } = require("./synth/piano");
 const { generateJazzLoop } = require("./synth/jazz");
 const { generateSuccessChime, generateFailureChime, generateAttentionChime, generateStuckChime, DEFAULT_CHIME_KEY, SUCCESS_CHIME_NOTES } = require("./synth/chime");
@@ -61,7 +70,7 @@ function synthFingerprint(dir = path.join(__dirname, "synth")) {
 }
 
 const CACHE_DIR = path.join(CACHE_ROOT, `v${pkg.version}-${synthFingerprint()}`);
-const AVAILABLE_GENRES = ["lofi", "synthwave", "8bit", "electronic", "jazz", "zen", "piano", "drone", "rain", "ocean"];
+const AVAILABLE_GENRES = ["lofi", "synthwave", "8bit", "electronic", "jazz", "zen", "piano", "drone", "rain", "ocean", "fireplace", "wind", "stream", "house", "dubtechno", "shoegaze", "gamelan", "musicbox", "rainpiano"];
 
 /**
  * What `random` may land on. The non-melodic genres are deliberately excluded:
@@ -69,7 +78,7 @@ const AVAILABLE_GENRES = ["lofi", "synthwave", "8bit", "electronic", "jazz", "ze
  * in the same series as the others. Rolling one by chance reads as broken
  * audio rather than as variety, so each stays opt-in by name (or by alias).
  */
-const NON_MELODIC_GENRES = ["drone", "rain", "ocean"];
+const NON_MELODIC_GENRES = ["drone", "rain", "ocean", "fireplace", "wind", "stream"];
 const SHUFFLE_GENRES = AVAILABLE_GENRES.filter((g) => !NON_MELODIC_GENRES.includes(g));
 
 // Next loop starts slightly before the current one ends, so the per-loop
@@ -284,6 +293,18 @@ const GENRE_ALIASES = {
   waves: "ocean",
   sea: "ocean",
   surf: "ocean",
+  fire: "fireplace",
+  hearth: "fireplace",
+  campfire: "fireplace",
+  breeze: "wind",
+  creek: "stream",
+  river: "stream",
+  "deep-house": "house",
+  dub: "dubtechno",
+  "dub-techno": "dubtechno",
+  "music-box": "musicbox",
+  "rain-and-piano": "rainpiano",
+  "rain-piano": "rainpiano",
   sparse: "piano",
   satie: "piano",
   keys: "piano",
@@ -341,6 +362,24 @@ function generateLoop(genre, tier, seed, bar = 0) {
       return generateRainLoop(7.0, tier, seed, bar);
     case "ocean":
       return generateOceanLoop(8.0, tier, seed, bar);
+    case "fireplace":
+      return generateFireplaceLoop(7.0, tier, seed, bar);
+    case "wind":
+      return generateWindLoop(8.0, tier, seed, bar);
+    case "stream":
+      return generateStreamLoop(8.0, tier, seed, bar);
+    case "house":
+      return generateHouseLoop(HOUSE_SECONDS, tier, seed, bar);
+    case "dubtechno":
+      return generateDubTechnoLoop(DUBTECHNO_SECONDS, tier, seed, bar);
+    case "shoegaze":
+      return generateShoegazeLoop(8.0, tier, seed, bar);
+    case "gamelan":
+      return generateGamelanLoop(8.0, tier, seed, bar);
+    case "musicbox":
+      return generateMusicBoxLoop(7.6, tier, seed, bar);
+    case "rainpiano":
+      return generateRainPianoLoop(7.6, tier, seed, bar);
     case "lofi":
     default:
       return generateLofiLoop(6.4, tier, seed, bar);
@@ -746,7 +785,13 @@ const GENRE_KEYS = {
   synthwave: "D minor",
   electronic: "D minor",
   zen: "D major",
-  drone: "A minor"
+  drone: "A minor",
+  house: "A minor",
+  dubtechno: "D minor",
+  shoegaze: "D major",
+  gamelan: "D major",
+  musicbox: "C major",
+  rainpiano: "C major"
 };
 
 function chimeKeyFor(genre) {

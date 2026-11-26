@@ -68,9 +68,18 @@ const GENRES = [
   { name: "🎷 Midnight Jazz", desc: "ii-V-I piano chords & walking upright bass", id: "jazz" },
   { name: "🎋 Zen Ambient", desc: "Meditative singing bowls & floating celestial pads", id: "zen" },
   { name: "🎹 Sparse Piano", desc: "Single struck notes & long silences — Satie-ish", id: "piano" },
+  { name: "🏠 House", desc: "Soft four-on-the-floor & chord stabs", id: "house" },
+  { name: "🔁 Dub Techno", desc: "Echoing chords over a muted pulse", id: "dubtechno" },
+  { name: "🌀 Shoegaze Pads", desc: "Slow detuned washes, no drums", id: "shoegaze" },
+  { name: "🔔 Gamelan", desc: "Interlocking bronze metallophones", id: "gamelan" },
+  { name: "🎠 Music Box", desc: "High, unhurried tines", id: "musicbox" },
+  { name: "☔ Rain & Piano", desc: "Sparse piano with rain behind it", id: "rainpiano" },
   { name: "🌫️ Deep Drone", desc: "Held tone & filtered noise — no melody at all", id: "drone" },
   { name: "🌧️ Rain", desc: "Soft rainfall & distant droplets — no melody at all", id: "rain" },
   { name: "🌊 Ocean", desc: "Slow surf rising and draining — no melody at all", id: "ocean" },
+  { name: "🔥 Fireplace", desc: "Warm crackling fire & the odd pop — no melody at all", id: "fireplace" },
+  { name: "🍃 Wind", desc: "Drifting gusts — no melody at all", id: "wind" },
+  { name: "💧 Stream", desc: "Running water & small bubbles — no melody at all", id: "stream" },
   { name: "🎲 Shuffle / Random", desc: "Picks a surprise vibe each time", id: "random" }
 ];
 

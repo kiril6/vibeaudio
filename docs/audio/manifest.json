@@ -68,5 +68,68 @@
     "tier3StartMs": 47280,
     "chimeStartMs": 71040,
     "totalMs": 72640
+  },
+  "house": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 23607,
+    "tier3StartMs": 47213,
+    "chimeStartMs": 70940,
+    "totalMs": 72540
+  },
+  "dubtechno": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 24407,
+    "tier3StartMs": 48813,
+    "chimeStartMs": 73340,
+    "totalMs": 74940
+  },
+  "shoegaze": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 23640,
+    "tier3StartMs": 47280,
+    "chimeStartMs": 71040,
+    "totalMs": 72640
+  },
+  "gamelan": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 23640,
+    "tier3StartMs": 47280,
+    "chimeStartMs": 71040,
+    "totalMs": 72640
+  },
+  "musicbox": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 22440,
+    "tier3StartMs": 44880,
+    "chimeStartMs": 67440,
+    "totalMs": 69040
+  },
+  "rainpiano": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 22440,
+    "tier3StartMs": 44880,
+    "chimeStartMs": 67440,
+    "totalMs": 69040
+  },
+  "fireplace": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 20640,
+    "tier3StartMs": 41280,
+    "chimeStartMs": 62040,
+    "totalMs": 63640
+  },
+  "wind": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 23640,
+    "tier3StartMs": 47280,
+    "chimeStartMs": 71040,
+    "totalMs": 72640
+  },
+  "stream": {
+    "tier1StartMs": 0,
+    "tier2StartMs": 23640,
+    "tier3StartMs": 47280,
+    "chimeStartMs": 71040,
+    "totalMs": 72640
   }
 }

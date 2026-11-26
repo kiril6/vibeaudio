@@ -25,6 +25,6 @@ single short sentence. Do nothing else.
 - `calls on|off`: `node "${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js" --mute-on-calls` or `node "${CLAUDE_PLUGIN_ROOT}/bin/vibeaudio.js" --no-mute-on-calls`
   These save the user's default and reach the hooks on the next prompt - there
   is nothing to reinstall.
-  Genres: lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, random.
+  Genres: lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, fireplace, wind, stream, house, dubtechno, shoegaze, gamelan, musicbox, rainpiano, random.
 
 For anything else, show the user the list above instead of running a command.

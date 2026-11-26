@@ -394,7 +394,7 @@ function controlCommands() {
 - \`calls on|off\`: \`${cli} --mute-on-calls\` or \`${cli} --no-mute-on-calls\`
   These save the user's default and reach the hooks on the next prompt - there
   is nothing to reinstall, so do not run --install-hooks for these.
-  Genres: lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, random.
+  Genres: lofi, synthwave, 8bit, electronic, jazz, zen, piano, drone, rain, ocean, fireplace, wind, stream, house, dubtechno, shoegaze, gamelan, musicbox, rainpiano, random.
 
 For anything else, show the user the list above instead of running a command.
 `;
